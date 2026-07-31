@@ -47,6 +47,8 @@ public class TPflash extends Flash {
   private static final double LIQUID_LIQUID_CRITICAL_TEMPERATURE_SPAN = 150.0;
   /** Minimum water feed fraction for ordinary water-rich endpoint refinement. */
   private static final double WATER_RICH_REFINEMENT_FEED_FRACTION_LIMIT = 0.01;
+  /** Maximum accepted component material-balance residual for water-rich endpoint refinement. */
+  private static final double WATER_RICH_MATERIAL_BALANCE_TOLERANCE = 1.0e-8;
   /** Maximum accepted log-fugacity residual when selecting an alternate cubic root. */
   private static final double PHASE_ROOT_EQUILIBRIUM_TOLERANCE = 1.0e-8;
   /** Cubic phase roots evaluated by the post-convergence aqueous root check. */
@@ -877,10 +879,13 @@ public class TPflash extends Flash {
    * The ordinary flash searches only the cubic gas/oil roots and can therefore leave a substantial water fraction
    * dissolved in a hydrocarbon-labelled phase even when a lower-Gibbs aqueous split exists. An existing aqueous phase
    * label is not by itself proof of equilibrium: phase typing can identify a water-rich phase after the ordinary
-   * gas/oil iteration has stopped. Such an endpoint is refined only when its component fugacity residual exceeds
-   * {@link #PHASE_ROOT_EQUILIBRIUM_TOLERANCE}. The one-mol-percent feed guard keeps trace-water process flashes on the
-   * existing fast path. A cloned multiphase candidate replaces the ordinary state only through the same strict
-   * phase-fraction, distinct-composition, and Gibbs-energy checks used by the liquid-liquid rescue.
+   * gas/oil iteration has stopped. Such an endpoint is refined when its component fugacity residual exceeds
+   * {@link #PHASE_ROOT_EQUILIBRIUM_TOLERANCE} or its component material balance exceeds
+   * {@link #WATER_RICH_MATERIAL_BALANCE_TOLERANCE}. The one-mol-percent feed guard keeps trace-water process flashes on
+   * the existing fast path. A cloned multiphase candidate normally replaces the ordinary state only when it lowers
+   * Gibbs energy. If the reference state is non-conservative, Gibbs energies are not comparable; a candidate may then
+   * replace it only after passing strict phase-fraction, composition-normalization, material-balance, fugacity, and
+   * distinct-composition checks.
    * </p>
    */
   private void rescueWaterRichEndpoint() {
@@ -904,7 +909,9 @@ public class TPflash extends Flash {
     if (waterFeedFraction < WATER_RICH_REFINEMENT_FEED_FRACTION_LIMIT) {
       return;
     }
-    if (hasAqueousPhase
+    boolean materialBalanceInvalid =
+        maximumComponentMaterialBalanceResidual(system) > WATER_RICH_MATERIAL_BALANCE_TOLERANCE;
+    if (hasAqueousPhase && !materialBalanceInvalid
         && maximumLogFugacityResidualWithReplacement(0, system.getPhase(0)) < PHASE_ROOT_EQUILIBRIUM_TOLERANCE) {
       return;
     }
@@ -914,7 +921,9 @@ public class TPflash extends Flash {
     try {
       candidate.setMultiPhaseCheck(true);
       new TPflash(candidate, candidate.doSolidPhaseCheck()).run();
-      if (candidate.getNumberOfPhases() == 2 && isLowerGibbsMultiphaseCandidate(candidate, referenceGibbsEnergy)) {
+      if (candidate.getNumberOfPhases() == 2
+          && (isLowerGibbsMultiphaseCandidate(candidate, referenceGibbsEnergy)
+              || (materialBalanceInvalid && isBalancedEquilibriumCandidate(candidate)))) {
         copyFlashStateFrom(candidate);
       }
     } catch (Exception ex) {
@@ -1115,6 +1124,80 @@ public class TPflash extends Flash {
     }
     double gibbsTolerance = Math.max(1.0e-6, Math.abs(referenceGibbsEnergy) * 1.0e-8);
     return candidate.getGibbsEnergy() < referenceGibbsEnergy - gibbsTolerance;
+  }
+
+  /**
+   * Checks whether a two-phase candidate closes material balance and component fugacity equality.
+   *
+   * @param candidate candidate system to inspect
+   * @return true when material and equilibrium residuals satisfy the water-rich endpoint tolerances
+   */
+  private boolean isBalancedEquilibriumCandidate(SystemInterface candidate) {
+    double betaTotal = 0.0;
+    for (int phaseIndex = 0; phaseIndex < candidate.getNumberOfPhases(); phaseIndex++) {
+      if (candidate.getBeta(phaseIndex) <= 10.0 * phaseFractionMinimumLimit) {
+        return false;
+      }
+      betaTotal += candidate.getBeta(phaseIndex);
+      double compositionTotal = 0.0;
+      for (int componentIndex = 0;
+          componentIndex < candidate.getPhase(phaseIndex).getNumberOfComponents();
+          componentIndex++) {
+        compositionTotal += candidate.getPhase(phaseIndex).getComponent(componentIndex).getx();
+      }
+      if (Math.abs(compositionTotal - 1.0) > WATER_RICH_MATERIAL_BALANCE_TOLERANCE) {
+        return false;
+      }
+    }
+    if (Math.abs(betaTotal - 1.0) > 1.0e-6 || !hasDistinctPhaseCompositions(candidate)) {
+      return false;
+    }
+    if (maximumComponentMaterialBalanceResidual(candidate)
+        > WATER_RICH_MATERIAL_BALANCE_TOLERANCE) {
+      return false;
+    }
+    double maximumFugacityResidual = 0.0;
+    for (int componentIndex = 0;
+        componentIndex < candidate.getPhase(0).getNumberOfComponents(); componentIndex++) {
+      if (candidate.getPhase(0).getComponent(componentIndex).getz() <= 1.0e-50) {
+        continue;
+      }
+      double firstLogFugacity = Math.log(Math.max(
+          candidate.getPhase(0).getComponent(componentIndex).getx(), Double.MIN_NORMAL))
+          + Math.log(candidate.getPhase(0).getComponent(componentIndex)
+              .getFugacityCoefficient());
+      double secondLogFugacity = Math.log(Math.max(
+          candidate.getPhase(1).getComponent(componentIndex).getx(), Double.MIN_NORMAL))
+          + Math.log(candidate.getPhase(1).getComponent(componentIndex)
+              .getFugacityCoefficient());
+      if (!Double.isFinite(firstLogFugacity) || !Double.isFinite(secondLogFugacity)) {
+        return false;
+      }
+      maximumFugacityResidual = Math.max(maximumFugacityResidual,
+          Math.abs(firstLogFugacity - secondLogFugacity));
+    }
+    return maximumFugacityResidual < PHASE_ROOT_EQUILIBRIUM_TOLERANCE;
+  }
+
+  /**
+   * Calculates the maximum absolute component material-balance residual.
+   *
+   * @param candidate system to inspect
+   * @return maximum absolute difference between feed and phase-recombined composition
+   */
+  private double maximumComponentMaterialBalanceResidual(SystemInterface candidate) {
+    double maximumResidual = 0.0;
+    for (int componentIndex = 0;
+        componentIndex < candidate.getPhase(0).getNumberOfComponents(); componentIndex++) {
+      double recoveredFeed = 0.0;
+      for (int phaseIndex = 0; phaseIndex < candidate.getNumberOfPhases(); phaseIndex++) {
+        recoveredFeed += candidate.getBeta(phaseIndex)
+            * candidate.getPhase(phaseIndex).getComponent(componentIndex).getx();
+      }
+      maximumResidual = Math.max(maximumResidual, Math.abs(
+          candidate.getPhase(0).getComponent(componentIndex).getz() - recoveredFeed));
+    }
+    return maximumResidual;
   }
 
   /**
