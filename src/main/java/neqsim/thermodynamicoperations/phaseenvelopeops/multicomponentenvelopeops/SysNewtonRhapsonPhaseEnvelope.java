@@ -31,6 +31,12 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
   double ds = 0;
   double dTmax = 10;
   double dPmax = 10;
+  private static final int MAXIMUM_STEP_REDUCTIONS = 15;
+  private static final double MAXIMUM_LOG_STEP = 0.25;
+  private static final double MINIMUM_PHYSICAL_TEMPERATURE_K = 50.0;
+  private static final double MAXIMUM_PHYSICAL_TEMPERATURE_K = 1500.0;
+  private static final double MINIMUM_PHYSICAL_PRESSURE_BARA = 1.0e-8;
+  private static final double MAXIMUM_PHYSICAL_PRESSURE_BARA = 1.0e5;
   double TC1 = 0;
   double TC2 = 0;
   double PC1 = 0;
@@ -331,6 +337,40 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
    *
    * @param np a int
    */
+  /**
+   * Limits a continuation step so neither temperature nor pressure moves further than {@code dTmax}/{@code dPmax}.
+   *
+   * <p>
+   * Mirrors the limit the points beyond the fourth already apply, expressed on the logarithmic variables the
+   * sensitivity vector uses. The original step's sign is preserved.
+   * </p>
+   *
+   * @param step unlimited continuation step
+   * @return step limited to the maximum temperature and pressure change
+   */
+  private double limitStepToMaximumChange(double step) {
+    if (!Double.isFinite(step)) {
+      return step;
+    }
+    int sign = Integer.signum(Math.round(Math.round(step * 100000000)));
+    double limited = step;
+    double temperatureSensitivity = dxds.get(numberOfComponents, 0);
+    double pressureSensitivity = dxds.get(numberOfComponents + 1, 0);
+    if ((1 + dTmax / system.getTemperature()) < Math.exp(temperatureSensitivity * limited)) {
+      limited = Math.log(1 + dTmax / system.getTemperature()) / temperatureSensitivity;
+    } else if ((1 - dTmax / system.getTemperature()) > Math.exp(temperatureSensitivity * limited)) {
+      limited = Math.log(1 - dTmax / system.getTemperature()) / temperatureSensitivity;
+    } else if ((1 + dPmax / system.getPressure()) < Math.exp(pressureSensitivity * limited)) {
+      limited = Math.log(1 + dPmax / system.getPressure()) / pressureSensitivity;
+    } else if ((1 - dPmax / system.getPressure()) > Math.exp(pressureSensitivity * limited)) {
+      limited = Math.log(1 - dPmax / system.getPressure()) / pressureSensitivity;
+    }
+    if (!Double.isFinite(limited)) {
+      return step;
+    }
+    return sign * Math.abs(limited);
+  }
+
   public void calcInc(int np) {
     // First we need the sensitivity vector dX/dS
     // calculates the sensitivity vector and stores the xgij matrix
@@ -350,6 +390,11 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
       dxds = Jac.solve(fvec);
       double dp = 0.1;
       ds = dp / dxds.get(numberOfComponents + 1, 0);
+      // ds is scaled by the pressure sensitivity, so a near-zero sensitivity at the first point makes the step
+      // explode and drags every other variable with it. On a water-dominated fluid this threw the temperature to
+      // 10290 K on the very first step, which then drove the Huron-Vidal mixing rule out of range. The later
+      // points already limit the step to dTmax/dPmax; apply the same limit here.
+      ds = limitStepToMaximumChange(ds);
 
       Xgij.setMatrix(0, numberOfComponents + 1, np - 1, np - 1, u.copy());
       u.plusEquals(dxds.times(ds));
@@ -449,16 +494,27 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
 
     // finds the estimate of the next point of the envelope that corresponds
     // to all the equations
+    Matrix lastSolvedCoefficients = null;
     for (int j = 0; j < neq; j++) {
       xg = Xgij.getMatrix(j, j, 0, 3);
       try {
         xcoef = a.solve(xg.transpose());
       } catch (Exception ex) {
+        if (xcoefOld == null) {
+          // First continuation step: only one point is stored, so the four-point cubic system is singular and
+          // there is no previous fit to reuse. Reaching for xcoefOld here threw a NullPointerException that
+          // aborted the envelope before a single point was recorded. Leaving u[j] untouched is the zero-order
+          // predictor: the corrector still advances the specified variable from the current point.
+          continue;
+        }
         xcoef = xcoefOld.copy();
       }
+      lastSolvedCoefficients = xcoef;
       u.set(j, 0, xcoef.get(0, 0) + sny * (xcoef.get(1, 0) + sny * (xcoef.get(2, 0) + sny * xcoef.get(3, 0))));
     }
-    xcoefOld = xcoef.copy();
+    if (lastSolvedCoefficients != null) {
+      xcoefOld = lastSolvedCoefficients.copy();
+    }
   }
 
   /**
@@ -501,6 +557,9 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
         try {
           xcoef = a.solve(xg.transpose());
         } catch (Exception ex) {
+          if (xcoefOld == null) {
+            continue;
+          }
           xcoef = xcoefOld.copy();
         }
         u.set(j, 0, xcoef.get(0, 0) + sny * (xcoef.get(1, 0) + sny * (xcoef.get(2, 0) + sny * xcoef.get(3, 0))));
@@ -659,6 +718,43 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
    *
    * @param np the point number along the envelope
    */
+  /**
+   * Scales a Newton update so the resulting temperature and pressure stay inside the physical domain.
+   *
+   * <p>
+   * The unknowns hold {@code ln T} and {@code ln P}, so an oversized correction is an exponential jump. Halving the
+   * update until the state is representable keeps the EOS evaluable; a step that is already physical is returned
+   * unchanged, so a well-conditioned continuation is unaffected.
+   * </p>
+   *
+   * @param dx proposed Newton update
+   * @return the update, possibly scaled down
+   */
+  private Matrix dampedToPhysicalDomain(Matrix dx) {
+    if (Double.isNaN(dx.norm2()) || Double.isInfinite(dx.norm2())) {
+      return dx;
+    }
+    double damping = 1.0;
+    for (int backtrack = 0; backtrack < 20; backtrack++) {
+      double logTemperatureStep = damping * dx.get(numberOfComponents, 0);
+      double logPressureStep = damping * dx.get(numberOfComponents + 1, 0);
+      double temperature = Math.exp(u.get(numberOfComponents, 0) - logTemperatureStep);
+      double pressure = Math.exp(u.get(numberOfComponents + 1, 0) - logPressureStep);
+      // A trust region on the logarithmic variables as well as the domain check: without it a single Newton
+      // iteration jumped the temperature from 600 K to 1323 K, which is inside the domain but nowhere near the
+      // boundary being traced, and the continuation then recorded that runaway state as its only point.
+      boolean withinTrustRegion = Math.abs(logTemperatureStep) <= MAXIMUM_LOG_STEP
+          && Math.abs(logPressureStep) <= MAXIMUM_LOG_STEP;
+      if (withinTrustRegion && Double.isFinite(temperature) && Double.isFinite(pressure)
+          && temperature > MINIMUM_PHYSICAL_TEMPERATURE_K && temperature < MAXIMUM_PHYSICAL_TEMPERATURE_K
+          && pressure > MINIMUM_PHYSICAL_PRESSURE_BARA && pressure < MAXIMUM_PHYSICAL_PRESSURE_BARA) {
+        return damping == 1.0 ? dx : dx.times(damping);
+      }
+      damping *= 0.5;
+    }
+    return dx.times(damping);
+  }
+
   public void solve(int np) {
     Matrix dx;
     double dxOldNorm = 1e10;
@@ -672,38 +768,36 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
       setJac();
 
       dx = Jac.solve(fvec);
+      // Undamped Newton. On an ill-conditioned first point the full step throws the temperature far outside the
+      // physical domain (observed: 11362 K), and the next init() blows up inside the EOS before the existing
+      // norm-based recovery below ever gets to look at the step. Backtrack until the state is physical again;
+      // when the full step is already fine this leaves it untouched.
+      dx = dampedToPhysicalDomain(dx);
       u.minusEquals(dx);
 
-      if (Double.isNaN(dx.norm2()) || Double.isInfinite(dx.norm2())) {
-        if (iter2 >= 15) {
-          // Signal non-convergence with NaN
-          ds = Double.NaN;
-          u.set(numberOfComponents, 0, ds);
-          u.set(numberOfComponents + 1, 0, ds);
-        }
-        // if the norm is NAN reduce step and try again
-        iter2++;
-        u = uold.copy();
-        ds *= 0.3;
-        calcInc2(np);
-        solve(np);
-      } else if (dxOldNorm < dx.norm2()) {
-        if (iter2 == 0) {
+      // "Reduce the step and try again" used to recurse into solve(np), and the enclosing do-while then carried on
+      // after the recursive call returned. With a bad first point that nests up to 50 iterations per level with no
+      // depth bound, which is why the continuation appeared to hang rather than fail. Retrying inside this loop
+      // keeps the same recovery but bounds the work.
+      boolean stepDiverged = Double.isNaN(dx.norm2()) || Double.isInfinite(dx.norm2());
+      boolean normGrew = !stepDiverged && dxOldNorm < dx.norm2();
+      if (stepDiverged || normGrew) {
+        if (normGrew && iter2 == 0) {
           uolder = uold.copy();
         }
-        if (iter2 >= 15) {
+        if (iter2 >= MAXIMUM_STEP_REDUCTIONS) {
           // Signal non-convergence with NaN
           ds = Double.NaN;
           u.set(numberOfComponents, 0, ds);
           u.set(numberOfComponents + 1, 0, ds);
+          break;
         }
-        // if the norm does not reduce there is a danger of entering trivial solution
-        // reduce step and try again to avoid it
         iter2++;
         u = uold.copy();
         ds *= 0.3;
         calcInc2(np);
-        solve(np);
+        dxOldNorm = 1e10;
+        continue;
       }
 
       if (Double.isNaN(dx.norm2())) {
@@ -717,5 +811,88 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
     init();
 
     uold = u.copy();
+  }
+
+  /**
+   * Corrects the current two-phase state at fixed temperature without taking a continuation step.
+   *
+   * <p>
+   * This local corrector is used when a secondary-phase stability sign change has been bracketed between two traced
+   * envelope points. The logarithmic K-values and pressure remain Newton variables, while log(T) replaces the natural
+   * continuation specification. A residual-reducing line search prevents the corrector from jumping to the trivial
+   * {@code K=1} solution when the initial state is close to a critical or three-phase point.
+   * </p>
+   *
+   * @param temperatureK fixed temperature in kelvin
+   * @param maximumIterations positive Newton iteration limit
+   * @param tolerance residual and correction norm tolerance
+   * @return {@code true} when the fixed-temperature boundary equations converged
+   */
+  public boolean solveAtFixedTemperature(double temperatureK, int maximumIterations, double tolerance) {
+    if (!Double.isFinite(temperatureK) || temperatureK <= 0.0 || maximumIterations < 1 || !Double.isFinite(tolerance)
+        || tolerance <= 0.0) {
+      throw new IllegalArgumentException("invalid fixed-temperature corrector configuration");
+    }
+    setu();
+    speceq = numberOfComponents;
+    specVal = Math.log(temperatureK);
+    u.set(speceq, 0, specVal);
+
+    for (int localIteration = 0; localIteration < maximumIterations; localIteration++) {
+      init();
+      setfvec();
+      double residualNorm = fvec.norm2();
+      if (Double.isFinite(residualNorm) && residualNorm <= tolerance) {
+        norm = residualNorm;
+        uold = u.copy();
+        return true;
+      }
+      setJac();
+      Matrix correction;
+      try {
+        correction = Jac.solve(fvec);
+      } catch (RuntimeException error) {
+        return false;
+      }
+      double correctionNorm = correction.norm2();
+      if (!Double.isFinite(correctionNorm)) {
+        return false;
+      }
+
+      Matrix current = u.copy();
+      boolean accepted = false;
+      double damping = 1.0;
+      for (int lineSearch = 0; lineSearch < 12; lineSearch++) {
+        u = current.minus(correction.times(damping));
+        u.set(speceq, 0, specVal);
+        try {
+          init();
+          setfvec();
+          double trialResidual = fvec.norm2();
+          if (Double.isFinite(trialResidual) && trialResidual < residualNorm) {
+            accepted = true;
+            norm = Math.max(trialResidual, damping * correctionNorm);
+            break;
+          }
+        } catch (RuntimeException error) {
+          // Try a shorter Newton step.
+        }
+        damping *= 0.5;
+      }
+      if (!accepted) {
+        u = current;
+        init();
+        return false;
+      }
+      if (norm <= tolerance) {
+        uold = u.copy();
+        return true;
+      }
+    }
+    init();
+    setfvec();
+    norm = fvec.norm2();
+    uold = u.copy();
+    return Double.isFinite(norm) && norm <= tolerance;
   }
 }

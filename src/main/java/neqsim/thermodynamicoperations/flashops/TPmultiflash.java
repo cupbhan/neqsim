@@ -24,6 +24,39 @@ import neqsim.thermo.system.SystemInterface;
  * @version $Id: $Id
  */
 public class TPmultiflash extends TPflash {
+  /** Explicit outcome of the most recent phase-fraction solve. */
+  public enum SolveStatus {
+    /** The phase-fraction solver has not run. */
+    NOT_RUN(false),
+    /** No phase-fraction solve was required for the final stable state. */
+    NOT_REQUIRED(true),
+    /** Residual and gradient tolerances were both satisfied. */
+    CONVERGED(true),
+    /** Iteration stopped without satisfying the convergence tolerances. */
+    STALLED(false),
+    /** The Newton matrix could not be solved, including after the enhanced-mode retry. */
+    SINGULAR_OR_ILL_CONDITIONED(false),
+    /** A phase reached the removal limit in an accepted converged solve. */
+    PHASE_REMOVED_AT_CONVERGENCE(true),
+    /** A phase-removal request came from an iterate that was not trusted as converged. */
+    INVALID_PHASE_REMOVAL_DURING_ITERATION(false);
+
+    private final boolean converged;
+
+    SolveStatus(boolean converged) {
+      this.converged = converged;
+    }
+
+    /**
+     * Returns whether this status represents an accepted converged result.
+     *
+     * @return true for accepted converged outcomes
+     */
+    public boolean isConverged() {
+      return converged;
+    }
+  }
+
   /** Serialization version UID. */
   private static final long serialVersionUID = 1000;
   /** Logger object for class. */
@@ -43,6 +76,21 @@ public class TPmultiflash extends TPflash {
   boolean postFlashStabilityChecked = false;
   boolean enhancedStabilityChecked = false;
   private int rerunDepth = 0;
+  private SolveStatus lastSolveBetaStatus = SolveStatus.NOT_RUN;
+  private int lastSolveBetaIterations = 0;
+  private double lastSolveBetaResidual = Double.NaN;
+  private double lastSolveBetaGradientResidual = Double.NaN;
+  private String lastSolveBetaMessage = "phase-fraction solver has not run";
+  private SolveStatus solveStatus = SolveStatus.NOT_RUN;
+  private String solveStatusMessage = "multiphase flash has not run";
+  private int solveBetaAttemptCount = 0;
+  private int convergedSolveBetaCount = 0;
+  private int stalledSolveBetaCount = 0;
+  private int singularSolveBetaCount = 0;
+  private int invalidPhaseRemovalCount = 0;
+  private int convergedPhaseRemovalCount = 0;
+  private double finalMassBalanceResidual = Double.NaN;
+  private boolean phaseCleanupSkipped = false;
 
   double[] multTerm;
   double[] multTerm2;
@@ -68,6 +116,202 @@ public class TPmultiflash extends TPflash {
     Erow = new double[system.getPhase(0).getNumberOfComponents()];
     multTerm = new double[system.getPhase(0).getNumberOfComponents()];
     multTerm2 = new double[system.getPhase(0).getNumberOfComponents()];
+  }
+
+  /**
+   * Returns the explicit outcome of the most recent {@link #solveBeta()} call.
+   *
+   * @return latest phase-fraction solve status
+   */
+  public SolveStatus getLastSolveBetaStatus() {
+    return lastSolveBetaStatus;
+  }
+
+  /**
+   * Returns the number of Newton updates attempted by the most recent phase-fraction solve.
+   *
+   * @return iteration count
+   */
+  public int getLastSolveBetaIterations() {
+    return lastSolveBetaIterations;
+  }
+
+  /**
+   * Returns the final Newton step norm from the most recent phase-fraction solve.
+   *
+   * @return final step residual
+   */
+  public double getLastSolveBetaResidual() {
+    return lastSolveBetaResidual;
+  }
+
+  /**
+   * Returns the final objective-gradient norm from the most recent phase-fraction solve.
+   *
+   * @return final gradient residual
+   */
+  public double getLastSolveBetaGradientResidual() {
+    return lastSolveBetaGradientResidual;
+  }
+
+  /**
+   * Returns a concise diagnostic for the most recent phase-fraction solve.
+   *
+   * @return status diagnostic
+   */
+  public String getLastSolveBetaMessage() {
+    return lastSolveBetaMessage;
+  }
+
+  /**
+   * Returns the overall outcome of the most recent top-level multiphase flash.
+   *
+   * <p>
+   * This differs from {@link #getLastSolveBetaStatus()}: phase discovery can make a speculative phase-fraction attempt,
+   * reject it, and retain an earlier validated solution. The last attempt remains visible while this status describes
+   * the final accepted state.
+   * </p>
+   *
+   * @return overall multiphase flash status
+   */
+  public SolveStatus getSolveStatus() {
+    return solveStatus;
+  }
+
+  /**
+   * Returns a concise diagnostic for the overall multiphase flash status.
+   *
+   * @return overall status diagnostic
+   */
+  public String getSolveStatusMessage() {
+    return solveStatusMessage;
+  }
+
+  /**
+   * Returns the number of phase-fraction solve attempts made by the latest top-level flash.
+   *
+   * @return attempt count
+   */
+  public int getSolveBetaAttemptCount() {
+    return solveBetaAttemptCount;
+  }
+
+  /**
+   * Returns the number of stalled speculative or final phase-fraction attempts.
+   *
+   * @return stalled attempt count
+   */
+  public int getStalledSolveBetaCount() {
+    return stalledSolveBetaCount;
+  }
+
+  /**
+   * Returns the final maximum component material-balance residual.
+   *
+   * @return maximum absolute material-balance residual
+   */
+  public double getFinalMassBalanceResidual() {
+    return finalMassBalanceResidual;
+  }
+
+  /**
+   * Returns whether low-beta phase cleanup was skipped because the preceding solve was not validated.
+   *
+   * @return true when destructive phase cleanup was blocked
+   */
+  public boolean isPhaseCleanupSkipped() {
+    return phaseCleanupSkipped;
+  }
+
+  private void resetSolveDiagnostics() {
+    solveStatus = SolveStatus.NOT_RUN;
+    solveStatusMessage = "multiphase flash is running";
+    solveBetaAttemptCount = 0;
+    convergedSolveBetaCount = 0;
+    stalledSolveBetaCount = 0;
+    singularSolveBetaCount = 0;
+    invalidPhaseRemovalCount = 0;
+    convergedPhaseRemovalCount = 0;
+    finalMassBalanceResidual = Double.NaN;
+    phaseCleanupSkipped = false;
+  }
+
+  private void recordSolveBetaOutcome() {
+    solveBetaAttemptCount++;
+    if (lastSolveBetaStatus == SolveStatus.CONVERGED) {
+      convergedSolveBetaCount++;
+    } else if (lastSolveBetaStatus == SolveStatus.PHASE_REMOVED_AT_CONVERGENCE) {
+      convergedSolveBetaCount++;
+      convergedPhaseRemovalCount++;
+    } else if (lastSolveBetaStatus == SolveStatus.STALLED) {
+      stalledSolveBetaCount++;
+    } else if (lastSolveBetaStatus == SolveStatus.SINGULAR_OR_ILL_CONDITIONED) {
+      singularSolveBetaCount++;
+    } else if (lastSolveBetaStatus == SolveStatus.INVALID_PHASE_REMOVAL_DURING_ITERATION) {
+      invalidPhaseRemovalCount++;
+    }
+  }
+
+  private void finalizeSolveDiagnostics() {
+    finalMassBalanceResidual = calculateMassBalanceResidual();
+    if (solveBetaAttemptCount == 0) {
+      solveStatus = SolveStatus.NOT_REQUIRED;
+      solveStatusMessage = "final state required no multiphase phase-fraction solve";
+      return;
+    }
+
+    boolean finalStateValid = Double.isFinite(finalMassBalanceResidual) && finalMassBalanceResidual <= 1.0e-8
+        && hasValidPhaseFractions();
+    if (convergedSolveBetaCount > 0 && finalStateValid) {
+      solveStatus = convergedPhaseRemovalCount > 0 ? SolveStatus.PHASE_REMOVED_AT_CONVERGENCE : SolveStatus.CONVERGED;
+      solveStatusMessage = "final state validated after " + solveBetaAttemptCount + " phase-fraction attempts; "
+          + stalledSolveBetaCount + " stalled speculative attempts retained as diagnostics";
+      return;
+    }
+
+    if (singularSolveBetaCount > 0) {
+      solveStatus = SolveStatus.SINGULAR_OR_ILL_CONDITIONED;
+    } else if (invalidPhaseRemovalCount > 0) {
+      solveStatus = SolveStatus.INVALID_PHASE_REMOVAL_DURING_ITERATION;
+    } else {
+      solveStatus = SolveStatus.STALLED;
+    }
+    solveStatusMessage = "no validated final multiphase state; attempts=" + solveBetaAttemptCount + ", converged="
+        + convergedSolveBetaCount + ", stalled=" + stalledSolveBetaCount + ", singular=" + singularSolveBetaCount
+        + ", invalidPhaseRemoval=" + invalidPhaseRemovalCount + ", massBalanceResidual=" + finalMassBalanceResidual;
+  }
+
+  private boolean hasValidPhaseFractions() {
+    double betaSum = 0.0;
+    for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+      double beta = system.getBeta(phase);
+      if (!Double.isFinite(beta) || beta < 0.0 || beta > 1.0) {
+        return false;
+      }
+      betaSum += beta;
+    }
+    return Math.abs(betaSum - 1.0) <= 1.0e-8;
+  }
+
+  private double calculateMassBalanceResidual() {
+    if (system.getNumberOfPhases() == 0) {
+      return Double.NaN;
+    }
+    double maximumResidual = 0.0;
+    for (int component = 0; component < system.getPhase(0).getNumberOfComponents(); component++) {
+      double reconstructed = 0.0;
+      for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+        double beta = system.getBeta(phase);
+        double moleFraction = system.getPhase(phase).getComponent(component).getx();
+        if (!Double.isFinite(beta) || !Double.isFinite(moleFraction)) {
+          return Double.NaN;
+        }
+        reconstructed += beta * moleFraction;
+      }
+      maximumResidual = Math.max(maximumResidual,
+          Math.abs(reconstructed - system.getPhase(0).getComponent(component).getz()));
+    }
+    return maximumResidual;
   }
 
   /**
@@ -213,6 +457,13 @@ public class TPmultiflash extends TPflash {
     double err = 1.0;
     double gradResidual = 1.0;
     int iter = 1;
+    boolean matrixSolveFailed = false;
+    String matrixFailureMessage = "";
+    lastSolveBetaStatus = SolveStatus.NOT_RUN;
+    lastSolveBetaIterations = 0;
+    lastSolveBetaResidual = Double.NaN;
+    lastSolveBetaGradientResidual = Double.NaN;
+    lastSolveBetaMessage = "phase-fraction solver is running";
     do {
       iter++;
       for (int k = 0; k < system.getNumberOfPhases(); k++) {
@@ -234,11 +485,15 @@ public class TPmultiflash extends TPflash {
           try {
             ans = dQdBM.solve(dQM).transpose();
           } catch (Exception ex2) {
-            logger.error(ex2.getMessage());
+            matrixSolveFailed = true;
+            matrixFailureMessage = ex2.getMessage();
+            logger.error("Phase-fraction Newton matrix solve failed after regularized retry: {}", ex2.getMessage());
             break;
           }
         } else {
-          logger.error(ex.getMessage());
+          matrixSolveFailed = true;
+          matrixFailureMessage = ex.getMessage();
+          logger.error("Phase-fraction Newton matrix solve failed: {}", ex.getMessage());
           break;
         }
       }
@@ -270,6 +525,37 @@ public class TPmultiflash extends TPflash {
       system.init(1);
       err = ans.normF();
     } while (((err > 1e-12 || gradResidual > 1e-10) && iter < 50) || iter < 3);
+    lastSolveBetaIterations = Math.max(0, iter - 1);
+    lastSolveBetaResidual = err;
+    lastSolveBetaGradientResidual = gradResidual;
+    // removePhase is meant to report "a phase vanished in the converged solution". It is reset every inner
+    // iteration and set by ANY iterate that clamps a beta to phaseFractionMinimumLimit, so on exit it really
+    // reports whether the LAST iterate happened to clamp. When the Newton solve above did not converge that
+    // iterate carries no physical meaning, yet the caller's loop treats removePhase as a termination signal
+    // and the low-beta purge afterwards deletes the clamped phase. On the wet field fluid above 200 bara this
+    // discards an aqueous phase holding more than half the feed. Only trust the flag on a converged solve;
+    // the threshold sits in a six-decade gap (converged err ~1e-13, stalled err 3.7e-3 to 25) and the outcome
+    // is unchanged for 1e-4, 1e-6 and 1e-8.
+    if (matrixSolveFailed) {
+      lastSolveBetaStatus = SolveStatus.SINGULAR_OR_ILL_CONDITIONED;
+      lastSolveBetaMessage = matrixFailureMessage == null || matrixFailureMessage.trim().isEmpty()
+          ? "phase-fraction Newton matrix could not be solved"
+          : matrixFailureMessage;
+    } else if (removePhase && err > 1e-6) {
+      lastSolveBetaStatus = SolveStatus.INVALID_PHASE_REMOVAL_DURING_ITERATION;
+      lastSolveBetaMessage = "phase removal was requested by an unconverged phase-fraction iterate";
+      removePhase = false;
+    } else if (removePhase) {
+      lastSolveBetaStatus = SolveStatus.PHASE_REMOVED_AT_CONVERGENCE;
+      lastSolveBetaMessage = "phase fraction reached the removal limit in an accepted solve";
+    } else if (err <= 1e-12 && gradResidual <= 1e-10) {
+      lastSolveBetaStatus = SolveStatus.CONVERGED;
+      lastSolveBetaMessage = "phase-fraction residual and gradient tolerances satisfied";
+    } else {
+      lastSolveBetaStatus = SolveStatus.STALLED;
+      lastSolveBetaMessage = "phase-fraction iteration stopped before satisfying residual and gradient tolerances";
+    }
+    recordSolveBetaOutcome();
     // logger.info("iterations " + iter);
     return err;
   }
@@ -2121,6 +2407,23 @@ public class TPmultiflash extends TPflash {
   /** {@inheritDoc} */
   @Override
   public void run() {
+    boolean topLevelRun = rerunDepth == 0;
+    if (topLevelRun) {
+      resetSolveDiagnostics();
+    }
+    try {
+      runInternal();
+    } finally {
+      if (topLevelRun) {
+        finalizeSolveDiagnostics();
+        if (phaseCleanupSkipped) {
+          solveStatusMessage += "; low-beta phase cleanup was skipped";
+        }
+      }
+    }
+  }
+
+  private void runInternal() {
     int aqueousPhaseNumber = 0;
     enhancedStabilityChecked = false;
     // logger.info("Starting multiphase-flash....");
@@ -2425,6 +2728,16 @@ public class TPmultiflash extends TPflash {
       // Other phases classified as AQUEOUS should be reclassified as OIL with ions removed
       // Also applies to systems with ions even without chemical reactions
       ensureSingleAqueousPhase();
+
+      // A failed beta solve must not feed the destructive low-beta purge below. This checkpoint evaluates the current
+      // active state before any phase is removed. Speculative failures remain visible in the counters, but an earlier
+      // converged solve may still be accepted when the final material balance and phase fractions are valid.
+      finalizeSolveDiagnostics();
+      if (!solveStatus.isConverged()) {
+        phaseCleanupSkipped = true;
+        logger.warn("Skipping low-beta phase cleanup after {}: {}", solveStatus, solveStatusMessage);
+        return;
+      }
 
       boolean hasRemovedPhase = false;
       for (int i = 0; i < system.getNumberOfPhases(); i++) {

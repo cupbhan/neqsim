@@ -26,7 +26,10 @@ runs the full workflow including PR creation.
 
 Java library for thermodynamic fluid properties and process simulation.
 Developed at NTNU, maintained by Equinor. Apache-2.0 license.
-`com.equinor.neqsim:neqsim` version 3.16.0 — **must compile with Java 8**.
+`com.equinor.neqsim:neqsim` version 3.16.0. Core sources remain Java 8
+source-compatible; the default artifact targets Java 17 and `pomJava8.xml`
+produces the supported `-Java8` artifact. The independent MCP server targets
+Java 21.
 
 ## Repo Map
 
@@ -338,7 +341,9 @@ Full package path: `neqsim.process.equipment.<package>.<Class>`
 
 ## Key Constraints
 
-- **Java 8 only** — no `var`, `List.of()`, `Map.of()`, `String.repeat()`, text blocks, records
+- **Core `src/` remains Java 8 source-compatible** — no `var`, `List.of()`, `Map.of()`,
+  `String.repeat()`, text blocks, or records there; the default core artifact
+  targets Java 17 and `neqsim-mcp-server/` is an explicit Java 21 boundary
 - **Temperature in Kelvin** — constructors take `(T_kelvin, P_bara)`
 - **Always set mixing rule** — simulations fail silently without it
 - **Unique equipment names** — `ProcessSystem` enforces unique names

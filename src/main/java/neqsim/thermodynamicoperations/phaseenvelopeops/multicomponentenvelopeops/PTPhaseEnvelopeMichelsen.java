@@ -75,6 +75,10 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   private static final int FIRST_POINT_ATTEMPTS = 5;
   /** Temperature step (K) used when searching for the first point. */
   private static final double FIRST_POINT_STEP = 2.0;
+  private static final double FIRST_POINT_SCAN_MINIMUM_K = 200.0;
+  private static final double FIRST_POINT_SCAN_MAXIMUM_K = 1000.0;
+  private static final double FIRST_POINT_SCAN_STEP_K = 20.0;
+  private static final double MINIMUM_NON_TRIVIAL_LOG_K = 0.5;
   /** Maximum envelope points per branch to prevent infinite loops. */
   private static final int MAX_ENVELOPE_ITERATIONS = 9980;
   /** Maximum points per quality line. */
@@ -94,6 +98,32 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   private double dPmax = 10.0;
   private double phaseFraction = 1e-10;
   private boolean bubblePointFirst = true;
+  private int maximumEnvelopeIterations = MAX_ENVELOPE_ITERATIONS;
+  private boolean iterationLimitReached = false;
+
+  /**
+   * Why a continuation pass stopped adding points.
+   *
+   * <p>
+   * Only {@link #PRESSURE_FLOOR} and {@link #CONTINUATION_END} are physical ends of the traced branch. Every other
+   * value means the branch was cut short by a solver or domain limit, so the traced curve is a truncated piece of the
+   * real boundary and must not be reported as a closed envelope.
+   * </p>
+   */
+  public enum TerminationReason {
+    /** The branch came back down below the minimum pressure after passing the cricondentherm. */
+    PRESSURE_FLOOR,
+    /** The branch ran into the configured maximum pressure while still climbing. */
+    PRESSURE_CEILING,
+    /** The restart pass reached the temperature where the first pass had already traced the boundary. */
+    RESTART_OVERLAP,
+    /** The continuation used up its iteration budget. */
+    ITERATION_LIMIT,
+    /** The continuation stopped on its own without hitting a configured limit. */
+    CONTINUATION_END
+  }
+
+  private final List<TerminationReason> terminationReasons = new ArrayList<TerminationReason>();
 
   // --- System reference ---
   private SystemInterface system;
@@ -117,6 +147,8 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   private ArrayList<Double> bubblePointDensities = new ArrayList<Double>();
   private ArrayList<Double> dewPointEntropies = new ArrayList<Double>();
   private ArrayList<Double> bubblePointEntropies = new ArrayList<Double>();
+  /** Exact continuation states retained for secondary-phase stability analysis. */
+  private ArrayList<BoundaryStateSeed> boundaryStateSeeds = new ArrayList<BoundaryStateSeed>();
 
   // --- Output arrays (built after run) ---
   private double[] dewTempArray = new double[0];
@@ -162,6 +194,12 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   private double[] threePhaseRegionT = new double[0];
   /** Pressures of envelope points where 3+ phases detected. */
   private double[] threePhaseRegionP = new double[0];
+  /** Non-destructive secondary-phase stability diagnostics along the traced boundary. */
+  private List<SecondaryStabilitySample> secondaryStabilitySamples = Collections.emptyList();
+  /** Adjacent samples that bracket entry to or exit from a three-phase region. */
+  private List<SecondaryStabilityBracket> secondaryStabilityBrackets = Collections.emptyList();
+  /** Refined two-phase/three-phase transition candidates. */
+  private List<ThreePhasePointCandidate> threePhasePointCandidates = Collections.emptyList();
 
   /**
    * Default constructor.
@@ -229,8 +267,93 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
    * avoids the recursive restart used in legacy implementations.
    * </p>
    */
+  /**
+   * Reports whether the two phases currently differ, so the trivial {@code K = 1} root is rejected.
+   *
+   * <p>
+   * A saturation flash on a water-dominated feed readily "converges" with both phases equal to the feed. That state
+   * satisfies the equations but is not a phase boundary, and the continuation Jacobian is singular there, so the
+   * envelope then fails to advance at all. Measured on the real 23-component fluid: the trivial root reports an
+   * {@code ln K} spread of 0 with an incipient water fraction identical to the feed, while a genuine dew point reports
+   * a spread near 80.
+   * </p>
+   *
+   * @return {@code true} when the phase compositions differ enough to be a real split
+   */
+  private boolean hasNonTrivialPhaseSplit() {
+    if (system.getNumberOfPhases() < 2) {
+      return false;
+    }
+    double maximumAbsoluteLogK = 0.0;
+    for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
+      double vapourFraction = system.getPhase(0).getComponent(i).getx();
+      double liquidFraction = system.getPhase(1).getComponent(i).getx();
+      if (!(vapourFraction > 0.0) || !(liquidFraction > 0.0)) {
+        continue;
+      }
+      maximumAbsoluteLogK = Math.max(maximumAbsoluteLogK, Math.abs(Math.log(vapourFraction / liquidFraction)));
+    }
+    return maximumAbsoluteLogK > MINIMUM_NON_TRIVIAL_LOG_K;
+  }
+
+  /**
+   * Searches a wide temperature range for a first saturation point when the Wilson-anchored guess is too far off.
+   *
+   * <p>
+   * Used only as a fallback. The scan sweeps outward from the current estimate in both directions so a true saturation
+   * temperature several hundred kelvin below the guess is still reachable, and rejects a flash that returned its own
+   * starting value untouched, which is how a non-converging saturation flash reports success.
+   * </p>
+   *
+   * @param testOps operations bound to the working system
+   * @param beta specified phase fraction; below 0.5 selects the bubble-point flash
+   * @return converged saturation temperature in K, or NaN when the scan found none
+   */
+  private double scanForFirstSaturationPoint(ThermodynamicOperations testOps, double beta) {
+    double centre = system.getTemperature();
+    if (!(centre > FIRST_POINT_SCAN_MINIMUM_K) || !(centre < FIRST_POINT_SCAN_MAXIMUM_K)) {
+      centre = 0.5 * (FIRST_POINT_SCAN_MINIMUM_K + FIRST_POINT_SCAN_MAXIMUM_K);
+    }
+    int steps = (int) Math.ceil((FIRST_POINT_SCAN_MAXIMUM_K - FIRST_POINT_SCAN_MINIMUM_K) / FIRST_POINT_SCAN_STEP_K);
+    for (int offset = 0; offset <= steps; offset++) {
+      for (int direction = 0; direction < 2; direction++) {
+        if (offset == 0 && direction == 1) {
+          continue;
+        }
+        double start = centre + (direction == 0 ? offset : -offset) * FIRST_POINT_SCAN_STEP_K;
+        if (start < FIRST_POINT_SCAN_MINIMUM_K || start > FIRST_POINT_SCAN_MAXIMUM_K) {
+          continue;
+        }
+        try {
+          // The failed attempts that led here leave the phases in a broken state (NaN compressibility), which
+          // makes every later flash fail no matter the temperature. Re-seed before each probe.
+          system.setTemperature(start);
+          system.setPressure(lowPres);
+          system.init(0);
+          resetKValuesWithWilson();
+          if (beta < 0.5) {
+            testOps.bubblePointTemperatureFlash();
+          } else {
+            testOps.dewPointTemperatureFlash();
+          }
+        } catch (Exception ignored) {
+          continue;
+        }
+        double converged = system.getTemperature();
+        if (!Double.isNaN(converged) && converged > FIRST_POINT_SCAN_MINIMUM_K && converged < FIRST_POINT_SCAN_MAXIMUM_K
+            && Math.abs(converged - start) > 1.0e-6 && hasNonTrivialPhaseSplit()) {
+          return converged;
+        }
+      }
+    }
+    return Double.NaN;
+  }
+
   @Override
   public void run() {
+    iterationLimitReached = false;
+    terminationReasons.clear();
+    boundaryStateSeeds.clear();
     double initialTemp = system.getTemperature();
     double initialPres = system.getPressure();
 
@@ -306,6 +429,12 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
 
       // Estimate initial temperature using Wilson correlation
       double temp = tempKWilson(phaseFraction, lowPres);
+      // Diagnostic override: lets a probe seed the first point on a known branch to separate "the continuation
+      // cannot march" from "the continuation starts on the wrong saturation branch". Never set in production.
+      String seedOverride = System.getProperty("neqsim.probe.seedTemperatureK");
+      if (seedOverride != null) {
+        temp = Double.parseDouble(seedOverride);
+      }
       if (Double.isNaN(temp)) {
         temp = system.getPhase(0).getComponent(speceq).getTC() - 20.0;
       }
@@ -337,6 +466,22 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
         }
       }
       if (!firstPointConverged) {
+        // The Wilson estimate anchors on the extreme-Tc component, which is meaningless once a nearly immiscible
+        // component such as water dominates the composition: for a 65% water heavy oil it overshoots the true dew
+        // temperature by roughly 300 K, while the march above only searches 20 K upward. Fall back to a wide
+        // bidirectional scan. This runs only after the original attempts have already failed, so fluids that
+        // converged before keep converging on exactly the same first point.
+        double scanned = scanForFirstSaturationPoint(testOps, phaseFraction);
+        if (System.getProperty("neqsim.probe.firstPoint") != null) {
+          System.err.printf("[probe] pass=%d beta=%.3g lowPres=%.4g wilsonTemp=%.2f scan=%s%n", pass, phaseFraction,
+              lowPres, temp, Double.isNaN(scanned) ? "FAILED" : String.format("%.2f K", scanned));
+        }
+        if (!Double.isNaN(scanned)) {
+          temp = scanned;
+          firstPointConverged = true;
+        }
+      }
+      if (!firstPointConverged) {
         logger.warn("Could not converge first envelope point for pass={}, beta={}", pass, phaseFraction);
         continue;
       }
@@ -355,11 +500,19 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
 
       // === Main continuation loop ===
       int np;
-      for (np = 1; np < MAX_ENVELOPE_ITERATIONS; np++) {
+      for (np = 1; np < maximumEnvelopeIterations; np++) {
         try {
           nonLinSolver.calcInc(np);
           nonLinSolver.solve(np);
         } catch (Exception e0) {
+          if (System.getProperty("neqsim.probe.firstPoint") != null) {
+            System.err.printf("[probe] continuation failed at np=%d T=%.2f P=%.4f : %s: %s%n", np,
+                system.getTemperature(), system.getPressure(), e0.getClass().getSimpleName(), e0.getMessage());
+            StackTraceElement[] frames = e0.getStackTrace();
+            for (int f = 0; f < Math.min(4, frames.length); f++) {
+              System.err.println("[probe]     at " + frames[f]);
+            }
+          }
           if (pass == 0) {
             // Primary trace crashed: schedule restart from opposite side
             needRestart = true;
@@ -451,12 +604,15 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
 
         // === Exit criteria ===
         if (currentP < minPressure && passedCricoT) {
+          terminationReasons.add(TerminationReason.PRESSURE_FLOOR);
           break;
         }
         if (currentP > maxPressure) {
+          terminationReasons.add(TerminationReason.PRESSURE_CEILING);
           break;
         }
         if (pass == 1 && restartTmin > 0 && currentT > restartTmin) {
+          terminationReasons.add(TerminationReason.RESTART_OVERLAP);
           break;
         }
 
@@ -474,14 +630,24 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
             dewPointEnthalpies.add(enthalpy);
             dewPointDensities.add(density);
             dewPointEntropies.add(entropy);
+            boundaryStateSeeds.add(BoundaryStateSeed.capture(EnvelopeSegment.PhaseType.DEW, system));
           } else {
             bubblePointTemperatures.add(currentT);
             bubblePointPressures.add(currentP);
             bubblePointEnthalpies.add(enthalpy);
             bubblePointDensities.add(density);
             bubblePointEntropies.add(entropy);
+            boundaryStateSeeds.add(BoundaryStateSeed.capture(EnvelopeSegment.PhaseType.BUBBLE, system));
           }
         }
+      }
+      if (np >= maximumEnvelopeIterations) {
+        iterationLimitReached = true;
+        terminationReasons.add(TerminationReason.ITERATION_LIMIT);
+        logger.warn("Phase-envelope continuation stopped at configured iteration limit {} on pass {}",
+            maximumEnvelopeIterations, pass);
+      } else if (terminationReasons.size() <= pass) {
+        terminationReasons.add(TerminationReason.CONTINUATION_END);
       }
 
       // Set critical point on the system
@@ -520,13 +686,43 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   }
 
   /**
-   * Check whether the phase envelope is closed, meaning both dew and bubble branches have been successfully traced with
-   * at least 3 points each.
+   * Check whether the phase envelope is closed.
    *
-   * @return true if both branches have at least 3 points
+   * <p>
+   * Both branches must carry at least three points, the two branches must be joined by at least one critical point, and
+   * no pass may have been cut short by a solver or domain limit. Having points on both sides is not on its own evidence
+   * of closure: a branch that ran into the maximum pressure while still climbing produces exactly that signature while
+   * leaving most of the boundary untraced.
+   * </p>
+   *
+   * @return true if both branches were traced to a physical end and joined at a critical point
    */
   public boolean isEnvelopeClosed() {
-    return dewTempArray.length >= 3 && bubTempArray.length >= 3;
+    return dewTempArray.length >= 3 && bubTempArray.length >= 3 && !criticalPoints.isEmpty() && !isTruncated();
+  }
+
+  /**
+   * Check whether any continuation pass was cut short by a solver or domain limit.
+   *
+   * <p>
+   * A restart pass that runs into the temperature range the first pass already traced is not truncated: the two passes
+   * met, which is how a closed envelope finishes.
+   * </p>
+   *
+   * @return true if a pass stopped at the pressure ceiling or ran out of iterations
+   */
+  public boolean isTruncated() {
+    return terminationReasons.contains(TerminationReason.PRESSURE_CEILING)
+        || terminationReasons.contains(TerminationReason.ITERATION_LIMIT);
+  }
+
+  /**
+   * Getter for the reason each continuation pass stopped.
+   *
+   * @return one entry per executed pass, in pass order
+   */
+  public List<TerminationReason> getTerminationReasons() {
+    return Collections.unmodifiableList(terminationReasons);
   }
 
   /**
@@ -810,8 +1006,9 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
 
   /**
    * Perform stability analysis along the traced phase envelope to detect potential three-phase (VLLE) regions. At each
-   * sampled point on the envelope, a multi-phase TP flash is performed with the system's overall composition z to check
-   * if more than two equilibrium phases exist.
+   * sampled point on the envelope, both a multi-phase TP flash and an independent tangent-plane minimization are
+   * performed. The latter is required because a conventional TP flash can miss an incipient water or hydrocarbon phase
+   * before its amount becomes numerically visible.
    *
    * <p>
    * This is a post-processing step that should be called after the envelope has been traced (after {@link #run()}). It
@@ -835,31 +1032,168 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   public void checkStabilityAlongEnvelope() {
     ArrayList<Double> threePhaseTemps = new ArrayList<Double>();
     ArrayList<Double> threePhasePress = new ArrayList<Double>();
+    ArrayList<SecondaryStabilitySample> samples = new ArrayList<SecondaryStabilitySample>();
 
-    // Sample up to 100 points from each branch to keep computation tractable
-    int dewStep = Math.max(1, dewTempArray.length / 50);
-    int bubStep = Math.max(1, bubTempArray.length / 50);
-
-    // Check dew curve points
-    for (int i = 0; i < dewTempArray.length; i += dewStep) {
-      int phases = checkPhaseCount(dewTempArray[i], dewPresArray[i]);
-      if (phases > 2) {
-        threePhaseTemps.add(dewTempArray[i]);
-        threePhasePress.add(dewPresArray[i]);
+    int sampleStep = Math.max(1, boundaryStateSeeds.size() / 100);
+    for (int seedIndex = 0; seedIndex < boundaryStateSeeds.size(); seedIndex += sampleStep) {
+      BoundaryStateSeed seed = boundaryStateSeeds.get(seedIndex);
+      if (seed == null) {
+        continue;
       }
-    }
-
-    // Check bubble curve points
-    for (int i = 0; i < bubTempArray.length; i += bubStep) {
-      int phases = checkPhaseCount(bubTempArray[i], bubPresArray[i]);
-      if (phases > 2) {
-        threePhaseTemps.add(bubTempArray[i]);
-        threePhasePress.add(bubPresArray[i]);
+      SecondaryStabilitySample sample = checkSecondaryStability(seed);
+      samples.add(sample);
+      if (sample.indicatesThreePhaseRegion()) {
+        threePhaseTemps.add(seed.temperature);
+        threePhasePress.add(seed.pressure);
       }
     }
 
     threePhaseRegionT = toDoubleArray(threePhaseTemps);
     threePhaseRegionP = toDoubleArray(threePhasePress);
+    secondaryStabilitySamples = Collections.unmodifiableList(samples);
+    secondaryStabilityBrackets = buildSecondaryStabilityBrackets(samples);
+    threePhasePointCandidates = Collections.emptyList();
+  }
+
+  private List<SecondaryStabilityBracket> buildSecondaryStabilityBrackets(List<SecondaryStabilitySample> samples) {
+    ArrayList<SecondaryStabilityBracket> brackets = new ArrayList<SecondaryStabilityBracket>();
+    for (int sampleIndex = 1; sampleIndex < samples.size(); sampleIndex++) {
+      SecondaryStabilitySample first = samples.get(sampleIndex - 1);
+      SecondaryStabilitySample second = samples.get(sampleIndex);
+      boolean contiguous = first.getBranch() == second.getBranch()
+          && Math.abs(first.getTemperature() - second.getTemperature()) <= JUMP_BREAK_FACTOR * dTmax
+          && Math.abs(first.getPressure() - second.getPressure()) <= JUMP_BREAK_FACTOR * dPmax;
+      if (contiguous && first.getFailureMessage() == null && second.getFailureMessage() == null
+          && first.isPrimaryBoundaryValid() && second.isPrimaryBoundaryValid()
+          && first.getIncipientPhase() == IncipientPhaseStabilityAnalyzer.CandidatePhase.AQUEOUS
+          && second.getIncipientPhase() == IncipientPhaseStabilityAnalyzer.CandidatePhase.AQUEOUS
+          && Double.isFinite(first.getStabilityFunction()) && Double.isFinite(second.getStabilityFunction())
+          && first.indicatesThreePhaseRegion() != second.indicatesThreePhaseRegion()) {
+        brackets.add(new SecondaryStabilityBracket(first, second));
+      }
+    }
+    return Collections.unmodifiableList(brackets);
+  }
+
+  private SecondaryStabilitySample checkSecondaryStability(BoundaryStateSeed seed) {
+    int equilibriumPhaseCount = checkPhaseCount(seed.temperature, seed.pressure);
+    try {
+      if (seed.motherPhase == IncipientPhaseStabilityAnalyzer.CandidatePhase.AQUEOUS
+          || seed.primaryIncipientPhase == IncipientPhaseStabilityAnalyzer.CandidatePhase.AQUEOUS
+          || seed.motherPhase == seed.primaryIncipientPhase) {
+        return SecondaryStabilitySample.failure(seed.branch, seed.temperature, seed.pressure, equilibriumPhaseCount,
+            "conventional hydrocarbon boundary does not contain distinct gas and oil phase families");
+      }
+      SystemInterface mother = singleMotherPhase(seed);
+      IncipientPhaseStabilityAnalyzer analyzer = new IncipientPhaseStabilityAnalyzer(mother).setMaximumIterations(300)
+          .setDampingFactor(0.35);
+      IncipientPhaseStabilityAnalyzer.Candidate primary = analyzer.analyzeCandidate(seed.primaryIncipientPhase,
+          seed.primaryComposition);
+      IncipientPhaseStabilityAnalyzer.Candidate aqueous = analyzer
+          .analyzeCandidate(IncipientPhaseStabilityAnalyzer.CandidatePhase.AQUEOUS, aqueousSeed(mother));
+      return SecondaryStabilitySample.success(seed.branch, seed.temperature, seed.pressure, equilibriumPhaseCount,
+          seed.motherPhase, seed.primaryIncipientPhase, primary.getStabilityFunction(), primary.isConverged(),
+          aqueous.getPhase(), aqueous.getStabilityFunction(), aqueous.getTangentPlaneDistance(),
+          aqueous.getStationarityResidual(), seed.beta, seed.logK);
+    } catch (RuntimeException error) {
+      return SecondaryStabilitySample.failure(seed.branch, seed.temperature, seed.pressure, equilibriumPhaseCount,
+          error.getMessage());
+    }
+  }
+
+  private SystemInterface singleMotherPhase(BoundaryStateSeed seed) {
+    SystemInterface mother = system.clone();
+    mother.setNumberOfPhases(1);
+    mother.setTemperature(seed.temperature);
+    mother.setPressure(seed.pressure);
+    mother.setPhaseType(0,
+        seed.motherPhase == IncipientPhaseStabilityAnalyzer.CandidatePhase.GAS ? neqsim.thermo.phase.PhaseType.GAS
+            : neqsim.thermo.phase.PhaseType.OIL);
+    for (int componentIndex = 0; componentIndex < mother.getPhase(0).getNumberOfComponents(); componentIndex++) {
+      mother.getPhase(0).getComponent(componentIndex)
+          .setx(Math.max(mother.getPhase(0).getComponent(componentIndex).getz(), 1.0e-100));
+    }
+    mother.getPhase(0).normalize();
+    mother.init(1);
+    return mother;
+  }
+
+  private static double[] aqueousSeed(SystemInterface mother) {
+    double[] composition = new double[mother.getPhase(0).getNumberOfComponents()];
+    double total = 0.0;
+    for (int componentIndex = 0; componentIndex < composition.length; componentIndex++) {
+      neqsim.thermo.component.ComponentInterface component = mother.getPhase(0).getComponent(componentIndex);
+      if (component.getComponentName().equalsIgnoreCase("water")) {
+        composition[componentIndex] = Math.max(component.getz(), 0.99);
+      } else if (component.isHydrocarbon()) {
+        composition[componentIndex] = Math.max(component.getz() * 1.0e-8, 1.0e-100);
+      } else {
+        composition[componentIndex] = Math.max(component.getz(), 1.0e-100);
+      }
+      total += composition[componentIndex];
+    }
+    for (int componentIndex = 0; componentIndex < composition.length; componentIndex++) {
+      composition[componentIndex] /= total;
+    }
+    return composition;
+  }
+
+  private static double[] logKVector(SystemInterface boundaryState) {
+    double[] logK = new double[boundaryState.getPhase(0).getNumberOfComponents()];
+    for (int componentIndex = 0; componentIndex < logK.length; componentIndex++) {
+      double k = boundaryState.getPhase(0).getComponent(componentIndex).getK();
+      logK[componentIndex] = k > 0.0 && Double.isFinite(k) ? Math.log(k) : Double.NaN;
+    }
+    return logK;
+  }
+
+  private SecondaryStabilitySample checkSecondaryStabilityAtFixedTemperature(EnvelopeSegment.PhaseType branch,
+      double temperature, double pressureGuess, double beta, double[] initialLogK) {
+    try {
+      SystemInterface restricted = system.clone();
+      restricted.setMultiPhaseCheck(false);
+      restricted.setMaxNumberOfPhases(2);
+      if (restricted.getNumberOfPhases() != 2) {
+        restricted.setNumberOfPhases(2);
+      }
+      restricted.setTemperature(temperature);
+      restricted.setPressure(pressureGuess);
+      restricted.setBeta(Math.max(1.0e-10, Math.min(1.0 - 1.0e-10, beta)));
+      if (initialLogK.length != restricted.getPhase(0).getNumberOfComponents()) {
+        throw new IllegalArgumentException("initial log(K) vector has wrong component count");
+      }
+      for (int componentIndex = 0; componentIndex < initialLogK.length; componentIndex++) {
+        double k = Math.exp(initialLogK[componentIndex]);
+        restricted.getPhase(0).getComponent(componentIndex).setK(k);
+        restricted.getPhase(1).getComponent(componentIndex).setK(k);
+      }
+      SysNewtonRhapsonPhaseEnvelope corrector = new SysNewtonRhapsonPhaseEnvelope(restricted, 2,
+          restricted.getPhase(0).getNumberOfComponents());
+      if (!corrector.solveAtFixedTemperature(temperature, 40, 1.0e-8)) {
+        return SecondaryStabilitySample.failure(branch, temperature, pressureGuess, -1,
+            "fixed-temperature two-phase corrector did not converge");
+      }
+      restricted.init(1);
+      double correctedPressure = restricted.getPressure();
+      double[] correctedLogK = logKVector(restricted);
+      double maximumAbsoluteLogK = 0.0;
+      for (double value : correctedLogK) {
+        maximumAbsoluteLogK = Math.max(maximumAbsoluteLogK, Math.abs(value));
+      }
+      double maximumLocalPressureChange = Math.max(2.0 * dPmax, 0.35 * pressureGuess);
+      if (maximumAbsoluteLogK < 1.0e-4) {
+        return SecondaryStabilitySample.failure(branch, temperature, pressureGuess, -1,
+            "fixed-temperature corrector reached the trivial K=1 solution");
+      }
+      if (!Double.isFinite(correctedPressure) || correctedPressure <= 0.0
+          || Math.abs(correctedPressure - pressureGuess) > maximumLocalPressureChange) {
+        return SecondaryStabilitySample.failure(branch, temperature, pressureGuess, -1,
+            "fixed-temperature corrector left the local pressure bracket");
+      }
+      return checkSecondaryStability(BoundaryStateSeed.capture(branch, restricted));
+    } catch (RuntimeException error) {
+      return SecondaryStabilitySample.failure(branch, temperature, pressureGuess, -1, error.getMessage());
+    }
   }
 
   /**
@@ -905,6 +1239,419 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   }
 
   /**
+   * Returns tangent-plane stability samples collected along the conventional two-phase boundary.
+   *
+   * @return immutable samples, empty until {@link #checkStabilityAlongEnvelope()} is called
+   */
+  public List<SecondaryStabilitySample> getSecondaryStabilitySamples() {
+    return secondaryStabilitySamples;
+  }
+
+  /** @return adjacent stability samples that bracket a two-phase/three-phase topology transition */
+  public List<SecondaryStabilityBracket> getSecondaryStabilityBrackets() {
+    return secondaryStabilityBrackets;
+  }
+
+  /**
+   * Refines every coarse topology bracket while projecting each trial back onto the two-phase boundary.
+   *
+   * @param maximumBisections maximum fixed-temperature bisections per bracket
+   * @param temperatureToleranceK terminal temperature width in kelvin
+   * @param pressureToleranceBara terminal pressure width in bara
+   * @return immutable refined transition candidates
+   */
+  public List<ThreePhasePointCandidate> refineSecondaryStabilityBrackets(int maximumBisections,
+      double temperatureToleranceK, double pressureToleranceBara) {
+    if (maximumBisections < 1 || !Double.isFinite(temperatureToleranceK) || temperatureToleranceK <= 0.0
+        || !Double.isFinite(pressureToleranceBara) || pressureToleranceBara <= 0.0) {
+      throw new IllegalArgumentException("invalid three-phase bracket refinement configuration");
+    }
+    ArrayList<ThreePhasePointCandidate> refined = new ArrayList<ThreePhasePointCandidate>();
+    for (SecondaryStabilityBracket bracket : secondaryStabilityBrackets) {
+      SecondaryStabilitySample twoPhase = bracket.getTwoPhaseSide();
+      SecondaryStabilitySample threePhase = bracket.getThreePhaseSide();
+      String failureMessage = null;
+      int iterations = 0;
+      while (iterations < maximumBisections
+          && (Math.abs(twoPhase.getTemperature() - threePhase.getTemperature()) > temperatureToleranceK
+              || Math.abs(twoPhase.getPressure() - threePhase.getPressure()) > pressureToleranceBara)) {
+        iterations++;
+        double temperature = 0.5 * (twoPhase.getTemperature() + threePhase.getTemperature());
+        double pressureGuess = 0.5 * (twoPhase.getPressure() + threePhase.getPressure());
+        SecondaryStabilitySample midpoint = refineBracketMidpoint(twoPhase, threePhase, temperature, pressureGuess);
+        if (midpoint.getFailureMessage() != null) {
+          failureMessage = midpoint.getFailureMessage();
+          break;
+        }
+        if (midpoint.indicatesThreePhaseRegion()) {
+          threePhase = midpoint;
+        } else {
+          twoPhase = midpoint;
+        }
+      }
+      boolean toleranceSatisfied = Math
+          .abs(twoPhase.getTemperature() - threePhase.getTemperature()) <= temperatureToleranceK
+          && Math.abs(twoPhase.getPressure() - threePhase.getPressure()) <= pressureToleranceBara;
+      refined.add(new ThreePhasePointCandidate(twoPhase, threePhase, iterations, toleranceSatisfied, failureMessage));
+    }
+    threePhasePointCandidates = Collections.unmodifiableList(refined);
+    return threePhasePointCandidates;
+  }
+
+  private SecondaryStabilitySample refineBracketMidpoint(SecondaryStabilitySample twoPhase,
+      SecondaryStabilitySample threePhase, double temperature, double pressureGuess) {
+    double branchBeta = twoPhase.getBranch() == EnvelopeSegment.PhaseType.DEW ? 1.0 - 1.0e-10 : 1.0e-10;
+    double[][] logKSeeds = new double[][] { interpolateLogK(twoPhase.getLogK(), threePhase.getLogK()),
+        twoPhase.getLogK(), threePhase.getLogK() };
+    double[] betaSeeds = new double[] { 0.5 * (twoPhase.getBeta() + threePhase.getBeta()), branchBeta,
+        1.0 - branchBeta };
+    SecondaryStabilitySample lastFailure = null;
+    for (double[] logKSeed : logKSeeds) {
+      for (double betaSeed : betaSeeds) {
+        SecondaryStabilitySample attempt = checkSecondaryStabilityAtFixedTemperature(twoPhase.getBranch(), temperature,
+            pressureGuess, betaSeed, logKSeed);
+        if (attempt.getFailureMessage() == null) {
+          return attempt;
+        }
+        lastFailure = attempt;
+      }
+    }
+    return lastFailure == null ? SecondaryStabilitySample.failure(twoPhase.getBranch(), temperature, pressureGuess, -1,
+        "no fixed-temperature corrector seed was available") : lastFailure;
+  }
+
+  private static double[] interpolateLogK(double[] first, double[] second) {
+    if (first.length == 0 || first.length != second.length) {
+      throw new IllegalArgumentException("cannot interpolate incompatible log(K) vectors");
+    }
+    double[] midpoint = new double[first.length];
+    for (int componentIndex = 0; componentIndex < first.length; componentIndex++) {
+      midpoint[componentIndex] = 0.5 * (first[componentIndex] + second[componentIndex]);
+    }
+    return midpoint;
+  }
+
+  /** @return most recently refined transition candidates */
+  public List<ThreePhasePointCandidate> getThreePhasePointCandidates() {
+    return threePhasePointCandidates;
+  }
+
+  /** A coarse bracket around one entry to or exit from a three-phase region. */
+  public static final class SecondaryStabilityBracket implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+    private final SecondaryStabilitySample first;
+    private final SecondaryStabilitySample second;
+
+    private SecondaryStabilityBracket(SecondaryStabilitySample first, SecondaryStabilitySample second) {
+      this.first = first;
+      this.second = second;
+    }
+
+    /** @return first adjacent sample */
+    public SecondaryStabilitySample getFirst() {
+      return first;
+    }
+
+    /** @return second adjacent sample */
+    public SecondaryStabilitySample getSecond() {
+      return second;
+    }
+
+    /** @return sample on the conventional two-phase side */
+    public SecondaryStabilitySample getTwoPhaseSide() {
+      return first.indicatesThreePhaseRegion() ? second : first;
+    }
+
+    /** @return sample on the detected three-phase side */
+    public SecondaryStabilitySample getThreePhaseSide() {
+      return first.indicatesThreePhaseRegion() ? first : second;
+    }
+  }
+
+  /** One refined candidate where a two-phase boundary enters or exits a three-phase region. */
+  public static final class ThreePhasePointCandidate implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+    private final SecondaryStabilitySample twoPhaseSide;
+    private final SecondaryStabilitySample threePhaseSide;
+    private final int iterations;
+    private final boolean toleranceSatisfied;
+    private final String failureMessage;
+
+    private ThreePhasePointCandidate(SecondaryStabilitySample twoPhaseSide, SecondaryStabilitySample threePhaseSide,
+        int iterations, boolean toleranceSatisfied, String failureMessage) {
+      this.twoPhaseSide = twoPhaseSide;
+      this.threePhaseSide = threePhaseSide;
+      this.iterations = iterations;
+      this.toleranceSatisfied = toleranceSatisfied;
+      this.failureMessage = failureMessage;
+    }
+
+    /** @return midpoint temperature estimate in kelvin */
+    public double getTemperature() {
+      return 0.5 * (twoPhaseSide.getTemperature() + threePhaseSide.getTemperature());
+    }
+
+    /** @return midpoint pressure estimate in bara */
+    public double getPressure() {
+      return 0.5 * (twoPhaseSide.getPressure() + threePhaseSide.getPressure());
+    }
+
+    /** @return final temperature bracket width in kelvin */
+    public double getTemperatureWidth() {
+      return Math.abs(twoPhaseSide.getTemperature() - threePhaseSide.getTemperature());
+    }
+
+    /** @return final pressure bracket width in bara */
+    public double getPressureWidth() {
+      return Math.abs(twoPhaseSide.getPressure() - threePhaseSide.getPressure());
+    }
+
+    /** @return incipient phase on the detected three-phase side */
+    public IncipientPhaseStabilityAnalyzer.CandidatePhase getIncipientPhase() {
+      return threePhaseSide.getIncipientPhase();
+    }
+
+    /** @return number of bisection/correction attempts */
+    public int getIterations() {
+      return iterations;
+    }
+
+    /** @return true when no correction failed and both requested bracket tolerances were reached */
+    public boolean isConverged() {
+      return failureMessage == null && toleranceSatisfied;
+    }
+
+    /** @return true when both requested temperature and pressure widths were reached */
+    public boolean isToleranceSatisfied() {
+      return toleranceSatisfied;
+    }
+
+    /** @return failure diagnostic, or {@code null} */
+    public String getFailureMessage() {
+      return failureMessage;
+    }
+
+    /** @return last point classified on the conventional two-phase side */
+    public SecondaryStabilitySample getTwoPhaseSide() {
+      return twoPhaseSide;
+    }
+
+    /** @return last point classified on the three-phase side */
+    public SecondaryStabilitySample getThreePhaseSide() {
+      return threePhaseSide;
+    }
+  }
+
+  /** One non-destructive stability diagnostic at a traced PT boundary point. */
+  public static final class SecondaryStabilitySample implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+    private static final double INSTABILITY_TOLERANCE = -1.0e-8;
+
+    private final EnvelopeSegment.PhaseType branch;
+    private final double temperature;
+    private final double pressure;
+    private final int equilibriumPhaseCount;
+    private final IncipientPhaseStabilityAnalyzer.CandidatePhase motherPhase;
+    private final IncipientPhaseStabilityAnalyzer.CandidatePhase primaryIncipientPhase;
+    private final double primaryBoundaryStabilityFunction;
+    private final boolean primaryBoundaryConverged;
+    private final IncipientPhaseStabilityAnalyzer.CandidatePhase incipientPhase;
+    private final double stabilityFunction;
+    private final double tangentPlaneDistance;
+    private final double stationarityResidual;
+    private final double beta;
+    private final double[] logK;
+    private final String failureMessage;
+
+    private SecondaryStabilitySample(EnvelopeSegment.PhaseType branch, double temperature, double pressure,
+        int equilibriumPhaseCount, IncipientPhaseStabilityAnalyzer.CandidatePhase motherPhase,
+        IncipientPhaseStabilityAnalyzer.CandidatePhase primaryIncipientPhase, double primaryBoundaryStabilityFunction,
+        boolean primaryBoundaryConverged, IncipientPhaseStabilityAnalyzer.CandidatePhase incipientPhase,
+        double stabilityFunction, double tangentPlaneDistance, double stationarityResidual, double beta, double[] logK,
+        String failureMessage) {
+      this.branch = branch;
+      this.temperature = temperature;
+      this.pressure = pressure;
+      this.equilibriumPhaseCount = equilibriumPhaseCount;
+      this.motherPhase = motherPhase;
+      this.primaryIncipientPhase = primaryIncipientPhase;
+      this.primaryBoundaryStabilityFunction = primaryBoundaryStabilityFunction;
+      this.primaryBoundaryConverged = primaryBoundaryConverged;
+      this.incipientPhase = incipientPhase;
+      this.stabilityFunction = stabilityFunction;
+      this.tangentPlaneDistance = tangentPlaneDistance;
+      this.stationarityResidual = stationarityResidual;
+      this.beta = beta;
+      this.logK = logK.clone();
+      this.failureMessage = failureMessage;
+    }
+
+    private static SecondaryStabilitySample success(EnvelopeSegment.PhaseType branch, double temperature,
+        double pressure, int equilibriumPhaseCount, IncipientPhaseStabilityAnalyzer.CandidatePhase motherPhase,
+        IncipientPhaseStabilityAnalyzer.CandidatePhase primaryIncipientPhase, double primaryBoundaryStabilityFunction,
+        boolean primaryBoundaryConverged, IncipientPhaseStabilityAnalyzer.CandidatePhase incipientPhase,
+        double stabilityFunction, double tangentPlaneDistance, double stationarityResidual, double beta,
+        double[] logK) {
+      return new SecondaryStabilitySample(branch, temperature, pressure, equilibriumPhaseCount, motherPhase,
+          primaryIncipientPhase, primaryBoundaryStabilityFunction, primaryBoundaryConverged, incipientPhase,
+          stabilityFunction, tangentPlaneDistance, stationarityResidual, beta, logK, null);
+    }
+
+    private static SecondaryStabilitySample failure(EnvelopeSegment.PhaseType branch, double temperature,
+        double pressure, int equilibriumPhaseCount, String failureMessage) {
+      return new SecondaryStabilitySample(branch, temperature, pressure, equilibriumPhaseCount, null, null, Double.NaN,
+          false, null, Double.NaN, Double.NaN, Double.NaN, Double.NaN, new double[0], failureMessage);
+    }
+
+    /** @return dew or bubble branch */
+    public EnvelopeSegment.PhaseType getBranch() {
+      return branch;
+    }
+
+    /** @return temperature in K */
+    public double getTemperature() {
+      return temperature;
+    }
+
+    /** @return pressure in bara */
+    public double getPressure() {
+      return pressure;
+    }
+
+    /** @return stable multiphase TP-flash phase count, or {@code -1} on failure */
+    public int getEquilibriumPhaseCount() {
+      return equilibriumPhaseCount;
+    }
+
+    /** @return fixed-composition mother phase used for the TPD reference */
+    public IncipientPhaseStabilityAnalyzer.CandidatePhase getMotherPhase() {
+      return motherPhase;
+    }
+
+    /** @return hydrocarbon phase already known to be incipient on the conventional boundary */
+    public IncipientPhaseStabilityAnalyzer.CandidatePhase getPrimaryIncipientPhase() {
+      return primaryIncipientPhase;
+    }
+
+    /** @return stability function of the primary hydrocarbon incipient phase */
+    public double getPrimaryBoundaryStabilityFunction() {
+      return primaryBoundaryStabilityFunction;
+    }
+
+    /** @return true when the primary hydrocarbon stationary iteration converged */
+    public boolean isPrimaryBoundaryConverged() {
+      return primaryBoundaryConverged;
+    }
+
+    /** @return true when the saved continuation point still satisfies the primary zero-TPD boundary */
+    public boolean isPrimaryBoundaryValid() {
+      return primaryBoundaryConverged && Double.isFinite(primaryBoundaryStabilityFunction)
+          && Math.abs(primaryBoundaryStabilityFunction) <= 1.0e-4;
+    }
+
+    /** @return lowest-TPD non-trivial candidate phase, or {@code null} */
+    public IncipientPhaseStabilityAnalyzer.CandidatePhase getIncipientPhase() {
+      return incipientPhase;
+    }
+
+    /** @return Michelsen stability function {@code 1 - sum(W)} */
+    public double getStabilityFunction() {
+      return stabilityFunction;
+    }
+
+    /** @return tangent-plane distance at the stationary trial */
+    public double getTangentPlaneDistance() {
+      return tangentPlaneDistance;
+    }
+
+    /** @return aqueous stationary-point logarithmic residual */
+    public double getStationarityResidual() {
+      return stationarityResidual;
+    }
+
+    /** @return phase-0 mole fraction used by the reconstructed two-phase boundary state */
+    public double getBeta() {
+      return beta;
+    }
+
+    /** @return logarithmic K-values of the reconstructed two-phase boundary state */
+    public double[] getLogK() {
+      return logK.clone();
+    }
+
+    /** @return failure diagnostic, or {@code null} */
+    public String getFailureMessage() {
+      return failureMessage;
+    }
+
+    /** @return true when a valid primary boundary has negative aqueous TPD */
+    public boolean indicatesThreePhaseRegion() {
+      return failureMessage == null && isPrimaryBoundaryValid()
+          && incipientPhase == IncipientPhaseStabilityAnalyzer.CandidatePhase.AQUEOUS
+          && Double.isFinite(stabilityFunction) && stabilityFunction < INSTABILITY_TOLERANCE;
+    }
+  }
+
+  /** Exact two-phase continuation state used to reproduce a primary incipient boundary without another TP flash. */
+  private static final class BoundaryStateSeed {
+    private final EnvelopeSegment.PhaseType branch;
+    private final double temperature;
+    private final double pressure;
+    private final double beta;
+    private final IncipientPhaseStabilityAnalyzer.CandidatePhase motherPhase;
+    private final IncipientPhaseStabilityAnalyzer.CandidatePhase primaryIncipientPhase;
+    private final double[] primaryComposition;
+    private final double[] logK;
+
+    private BoundaryStateSeed(EnvelopeSegment.PhaseType branch, double temperature, double pressure, double beta,
+        IncipientPhaseStabilityAnalyzer.CandidatePhase motherPhase,
+        IncipientPhaseStabilityAnalyzer.CandidatePhase primaryIncipientPhase, double[] primaryComposition,
+        double[] logK) {
+      this.branch = branch;
+      this.temperature = temperature;
+      this.pressure = pressure;
+      this.beta = beta;
+      this.motherPhase = motherPhase;
+      this.primaryIncipientPhase = primaryIncipientPhase;
+      this.primaryComposition = primaryComposition;
+      this.logK = logK;
+    }
+
+    private static BoundaryStateSeed capture(EnvelopeSegment.PhaseType branch, SystemInterface boundaryState) {
+      int componentCount = boundaryState.getPhase(0).getNumberOfComponents();
+      double[] overall = new double[componentCount];
+      double[] first = new double[componentCount];
+      double[] second = new double[componentCount];
+      double firstDistance = 0.0;
+      double secondDistance = 0.0;
+      for (int componentIndex = 0; componentIndex < componentCount; componentIndex++) {
+        overall[componentIndex] = boundaryState.getPhase(0).getComponent(componentIndex).getz();
+        first[componentIndex] = boundaryState.getPhase(0).getComponent(componentIndex).getx();
+        second[componentIndex] = boundaryState.getPhase(1).getComponent(componentIndex).getx();
+        firstDistance += Math.abs(first[componentIndex] - overall[componentIndex]);
+        secondDistance += Math.abs(second[componentIndex] - overall[componentIndex]);
+      }
+      boolean firstIsMother = firstDistance <= secondDistance;
+      int motherIndex = firstIsMother ? 0 : 1;
+      int incipientIndex = firstIsMother ? 1 : 0;
+      return new BoundaryStateSeed(branch, boundaryState.getTemperature(), boundaryState.getPressure(),
+          boundaryState.getBeta(), phaseFamily(boundaryState.getPhase(motherIndex).getType()),
+          phaseFamily(boundaryState.getPhase(incipientIndex).getType()), firstIsMother ? second : first,
+          logKVector(boundaryState));
+    }
+
+    private static IncipientPhaseStabilityAnalyzer.CandidatePhase phaseFamily(neqsim.thermo.phase.PhaseType phaseType) {
+      if (phaseType == neqsim.thermo.phase.PhaseType.GAS) {
+        return IncipientPhaseStabilityAnalyzer.CandidatePhase.GAS;
+      }
+      if (phaseType == neqsim.thermo.phase.PhaseType.AQUEOUS) {
+        return IncipientPhaseStabilityAnalyzer.CandidatePhase.AQUEOUS;
+      }
+      return IncipientPhaseStabilityAnalyzer.CandidatePhase.OIL;
+    }
+  }
+
+  /**
    * Reset K-values on the system using the Wilson correlation at the configured low pressure. Called before the restart
    * pass to ensure fresh initial estimates after a crash.
    */
@@ -938,6 +1685,7 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
     bubblePointEnthalpies.add(Double.NaN);
     bubblePointDensities.add(Double.NaN);
     bubblePointEntropies.add(Double.NaN);
+    boundaryStateSeeds.add(null);
   }
 
   /**
@@ -1236,6 +1984,23 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
    */
   public void setDPmax(double dPmax) {
     this.dPmax = dPmax;
+  }
+
+  /**
+   * Set a hard continuation-iteration limit for each pass.
+   *
+   * @param maximumEnvelopeIterations maximum iterations per continuation pass
+   */
+  public void setMaximumEnvelopeIterations(int maximumEnvelopeIterations) {
+    if (maximumEnvelopeIterations < 10) {
+      throw new IllegalArgumentException("maximumEnvelopeIterations must be at least 10");
+    }
+    this.maximumEnvelopeIterations = maximumEnvelopeIterations;
+  }
+
+  /** @return true when a continuation pass stopped at the configured hard iteration limit */
+  public boolean isIterationLimitReached() {
+    return iterationLimitReached;
   }
 
   // ==================== Result getters ====================

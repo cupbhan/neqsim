@@ -17,6 +17,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import neqsim.thermo.ThermodynamicConstantsInterface;
+import neqsim.thermo.component.Component;
+import neqsim.thermo.component.ComponentInterface;
 import neqsim.thermo.phase.PhaseEosInterface;
 import neqsim.thermo.system.SystemInterface;
 
@@ -168,6 +170,8 @@ public class JsonFluidReadWrite {
     }
 
     SystemInterface fluid = createFluidByEOS(eosType, prcorr);
+    boolean preservePseudoDatabaseNames = root.has("polarModel")
+        && "HV".equalsIgnoreCase(root.get("polarModel").getAsString());
 
     // Parse components array
     if (!root.has("components")) {
@@ -207,21 +211,24 @@ public class JsonFluidReadWrite {
 
       // Set critical properties on all phases
       for (int phase = 0; phase < fluid.getMaxNumberOfPhases(); phase++) {
-        fluid.getPhase(phase).getComponent(neqsimName).setTC(data.criticalTemperature);
-        fluid.getPhase(phase).getComponent(neqsimName).setPC(data.criticalPressure);
-        fluid.getPhase(phase).getComponent(neqsimName).setAcentricFactor(data.acentricFactor);
-        fluid.getPhase(phase).getComponent(neqsimName).setMolarMass(data.molarMass / 1000.0);
-        fluid.getPhase(phase).getComponent(neqsimName).setNormalBoilingPoint(data.normalBoilingPoint);
-        fluid.getPhase(phase).getComponent(neqsimName).setCriticalVolume(data.criticalVolume);
-        fluid.getPhase(phase).getComponent(neqsimName).setParachorParameter(data.parachor);
+        ComponentInterface runtimeComponent = fluid.getPhase(phase).getComponent(neqsimName);
+        runtimeComponent.setTC(data.criticalTemperature);
+        runtimeComponent.setPC(data.criticalPressure);
+        runtimeComponent.setAcentricFactor(data.acentricFactor);
+        runtimeComponent.setMolarMass(data.molarMass / 1000.0);
+        runtimeComponent.setNormalBoilingPoint(data.normalBoilingPoint);
+        runtimeComponent.setCriticalVolume(data.criticalVolume);
+        runtimeComponent.setParachorParameter(data.parachor);
         double volShift = data.volumeShiftSurface != 0.0 ? data.volumeShiftSurface : data.volumeShift;
-        fluid.getPhase(phase).getComponent(neqsimName).setVolumeCorrectionConst(volShift);
-        fluid.getPhase(phase).getComponent(neqsimName).setRacketZ(0.29056 - 0.08775 * data.acentricFactor);
+        runtimeComponent.setVolumeCorrectionConst(volShift);
+        runtimeComponent.setRacketZ(0.29056 - 0.08775 * data.acentricFactor);
       }
 
       // Rename pseudo-components back to the original name
       if (data.isPseudo) {
-        fluid.changeComponentName(neqsimName, data.name);
+        if (!preservePseudoDatabaseNames) {
+          fluid.changeComponentName(neqsimName, data.name);
+        }
         componentNames.set(componentNames.size() - 1, data.name);
       }
     }
@@ -229,6 +236,7 @@ public class JsonFluidReadWrite {
     // Initialize mixing rule and volume correction
     fluid.setMixingRule(2);
     fluid.useVolumeCorrection(true);
+    applyComponentAlphaParameters(fluid, root);
     fluid.init(0);
 
     // Apply binary interaction coefficients
@@ -385,6 +393,21 @@ public class JsonFluidReadWrite {
       compObj.addProperty("parachor", fluid.getComponent(i).getParachorParameter());
       compObj.addProperty("isPseudo", fluid.getComponent(i).isIsTBPfraction());
 
+      int attractiveTerm = fluid.getComponent(i).getAttractiveTermNumber();
+      double[] mathiasCopeman = null;
+      if (attractiveTerm == 4) {
+        mathiasCopeman = fluid.getComponent(i).getMatiascopemanParams();
+      } else if (attractiveTerm == 13 && fluid.getComponent(i) instanceof Component) {
+        mathiasCopeman = ((Component) fluid.getComponent(i)).getMatiascopemanParamsPR();
+      }
+      if (mathiasCopeman != null) {
+        JsonArray coefficients = new JsonArray();
+        for (int coefficient = 0; coefficient < Math.min(3, mathiasCopeman.length); coefficient++) {
+          coefficients.add(mathiasCopeman[coefficient]);
+        }
+        compObj.add("mathiasCopemanCoefficients", coefficients);
+      }
+
       if (fluid.getComponent(i).isIsTBPfraction()) {
         compObj.addProperty("density", fluid.getComponent(i).getNormalLiquidDensity());
       }
@@ -501,6 +524,10 @@ public class JsonFluidReadWrite {
       } else {
         return new neqsim.thermo.system.SystemPrEos(refT, refP);
       }
+    } else if ("CPA".equals(eosType)) {
+      return new neqsim.thermo.system.SystemSrkCPAstatoil(refT, refP);
+    } else if ("ELECTROLYTE-CPA".equals(eosType) || "ELECTROLYTE-CPA-EOS".equals(eosType)) {
+      return new neqsim.thermo.system.SystemElectrolyteCPAstatoil(refT, refP);
     } else {
       // Default to SRK
       return new neqsim.thermo.system.SystemSrkEos(refT, refP);
@@ -537,7 +564,99 @@ public class JsonFluidReadWrite {
     data.parachor = getDoubleOrDefault(comp, "parachor", 0.0);
     data.isPseudo = comp.has("isPseudo") && comp.get("isPseudo").getAsBoolean();
     data.density = getDoubleOrDefault(comp, "density", 0.0);
+    if (comp.has("mathiasCopemanCoefficients")) {
+      JsonArray coefficients = comp.getAsJsonArray("mathiasCopemanCoefficients");
+      if (coefficients.size() != 3) {
+        throw new IllegalArgumentException(
+            "Component '" + data.name + "' Mathias-Copeman coefficients must contain exactly three values.");
+      }
+      data.mathiasCopemanCoefficients = new double[3];
+      for (int index = 0; index < 3; index++) {
+        data.mathiasCopemanCoefficients[index] = coefficients.get(index).getAsDouble();
+        if (!Double.isFinite(data.mathiasCopemanCoefficients[index])) {
+          throw new IllegalArgumentException(
+              "Component '" + data.name + "' Mathias-Copeman coefficient must be finite.");
+        }
+      }
+    }
     return data;
+  }
+
+  private static void applyMathiasCopeman(ComponentInterface component, double[] coefficients, String eosType) {
+    if (coefficients == null) {
+      return;
+    }
+    if ("PR".equals(eosType)) {
+      if (!(component instanceof Component)) {
+        throw new IllegalArgumentException(
+            "PR component " + component.getComponentName() + " cannot accept Mathias-Copeman parameters.");
+      }
+      Component concrete = (Component) component;
+      for (int index = 0; index < coefficients.length; index++) {
+        concrete.setMatiascopemanParamsPR(index, coefficients[index]);
+      }
+      component.setAttractiveTerm(13);
+      return;
+    }
+    component.setMatiascopemanParams(coefficients.clone());
+    component.setAttractiveTerm(4);
+  }
+
+  /**
+   * Reapply per-component alpha parameters after all components have been added.
+   *
+   * <p>
+   * {@code SystemThermo.addComponent} reapplies the system default attractive term to every component. Imported PVTsim
+   * fluids can mix explicit Mathias-Copeman components with default-alpha pseudo-components, so this method must be
+   * called after any later water/CO2/N2 blend additions as well as during the initial JSON read.
+   * </p>
+   *
+   * @param fluid finalized fluid containing all requested components
+   * @param definition original neqsim-fluid JSON definition
+   */
+  public static void applyComponentAlphaParameters(SystemInterface fluid, JsonObject definition) {
+    if (definition == null || !definition.has("components")) {
+      return;
+    }
+    String eosType = definition.has("eos") ? definition.get("eos").getAsString().toUpperCase() : "SRK";
+    JsonArray components = definition.getAsJsonArray("components");
+    for (int index = 0; index < components.size(); index++) {
+      JsonObject componentDefinition = components.get(index).getAsJsonObject();
+      if (!componentDefinition.has("mathiasCopemanCoefficients")) {
+        continue;
+      }
+      ComponentData data = parseComponent(componentDefinition);
+      String sourceName = data.name;
+      int runtimeIndex = findRuntimeComponentIndex(fluid, data);
+      if (runtimeIndex < 0) {
+        throw new IllegalArgumentException(
+            "Mathias-Copeman component '" + sourceName + "' is missing from the runtime fluid.");
+      }
+      for (int phase = 0; phase < fluid.getMaxNumberOfPhases(); phase++) {
+        ComponentInterface runtimeComponent = fluid.getPhase(phase).getComponent(runtimeIndex);
+        if (runtimeComponent == null) {
+          throw new IllegalArgumentException(
+              "Mathias-Copeman component '" + sourceName + "' is missing from runtime phase " + phase + ".");
+        }
+        applyMathiasCopeman(runtimeComponent, data.mathiasCopemanCoefficients, eosType);
+      }
+    }
+  }
+
+  private static int findRuntimeComponentIndex(SystemInterface fluid, ComponentData data) {
+    String mappedName = mapToNeqSimName(data.name);
+    String[] candidates = data.isPseudo ? new String[] { data.name, mappedName, data.name + "_PC", mappedName + "_PC" }
+        : new String[] { data.name, mappedName };
+    for (String candidate : candidates) {
+      if (!fluid.hasComponent(candidate, false)) {
+        continue;
+      }
+      ComponentInterface component = fluid.getPhase(0).getComponent(candidate);
+      if (component != null) {
+        return component.getComponentNumber();
+      }
+    }
+    return -1;
   }
 
   /**
@@ -572,10 +691,12 @@ public class JsonFluidReadWrite {
     case "iC4":
       return "i-butane";
     case "C4":
+    case "nC4":
       return "n-butane";
     case "iC5":
       return "i-pentane";
     case "C5":
+    case "nC5":
       return "n-pentane";
     case "C6":
       return "n-hexane";
@@ -809,5 +930,7 @@ public class JsonFluidReadWrite {
     boolean isPseudo;
     /** Liquid density in kg/m3 (for pseudo-components). */
     double density;
+    /** Optional PVTsim Mathias-Copeman alpha coefficients C1-C3. */
+    double[] mathiasCopemanCoefficients;
   }
 }

@@ -95,6 +95,10 @@ public class TPflash extends Flash {
    * the start of {@link #runInternal()}. Used as the collapse target when the spurious-multiphase rescue triggers.
    */
   private PhaseType referenceSinglePhaseType = null;
+  private TPmultiflash.SolveStatus lastMultiphaseSolveStatus = TPmultiflash.SolveStatus.NOT_RUN;
+  private String lastMultiphaseSolveMessage = "multiphase flash has not run";
+  private int lastMultiphaseSolveAttemptCount = 0;
+  private double lastMultiphaseMassBalanceResidual = Double.NaN;
 
   /**
    * Constructor for TPflash.
@@ -127,6 +131,70 @@ public class TPflash extends Flash {
   public TPflash(SystemInterface system, boolean checkForSolids) {
     this(system);
     solidCheck = checkForSolids;
+  }
+
+  /**
+   * Returns the overall status reported by the most recent nested multiphase flash.
+   *
+   * @return nested multiphase solve status, or {@code NOT_RUN} when none was requested
+   */
+  public TPmultiflash.SolveStatus getLastMultiphaseSolveStatus() {
+    return lastMultiphaseSolveStatus;
+  }
+
+  /**
+   * Returns the diagnostic message reported by the most recent nested multiphase flash.
+   *
+   * @return nested multiphase solve diagnostic
+   */
+  public String getLastMultiphaseSolveMessage() {
+    return lastMultiphaseSolveMessage;
+  }
+
+  /**
+   * Returns the number of phase-fraction attempts made by the most recent nested multiphase flash.
+   *
+   * @return phase-fraction attempt count
+   */
+  public int getLastMultiphaseSolveAttemptCount() {
+    return lastMultiphaseSolveAttemptCount;
+  }
+
+  /**
+   * Returns the final material-balance residual reported by the most recent nested multiphase flash.
+   *
+   * @return maximum absolute component material-balance residual
+   */
+  public double getLastMultiphaseMassBalanceResidual() {
+    return lastMultiphaseMassBalanceResidual;
+  }
+
+  /**
+   * Returns whether the most recent nested multiphase solve is safe to pass to post-processing.
+   *
+   * <p>
+   * A {@code NOT_RUN} status is accepted because ordinary single- or two-phase flashes do not always require a nested
+   * multiphase operation. Every status produced by an attempted multiphase solve must explicitly report convergence.
+   * </p>
+   *
+   * @return true when no nested solve was required or its final state was validated
+   */
+  public boolean isLastMultiphaseSolveAccepted() {
+    return lastMultiphaseSolveStatus == TPmultiflash.SolveStatus.NOT_RUN || lastMultiphaseSolveStatus.isConverged();
+  }
+
+  private void resetMultiphaseSolveDiagnostics() {
+    lastMultiphaseSolveStatus = TPmultiflash.SolveStatus.NOT_RUN;
+    lastMultiphaseSolveMessage = "multiphase flash has not run";
+    lastMultiphaseSolveAttemptCount = 0;
+    lastMultiphaseMassBalanceResidual = Double.NaN;
+  }
+
+  private void recordMultiphaseSolveDiagnostics(TPmultiflash operation) {
+    lastMultiphaseSolveStatus = operation.getSolveStatus();
+    lastMultiphaseSolveMessage = operation.getSolveStatusMessage();
+    lastMultiphaseSolveAttemptCount = operation.getSolveBetaAttemptCount();
+    lastMultiphaseMassBalanceResidual = operation.getFinalMassBalanceResidual();
   }
 
   /**
@@ -356,6 +424,7 @@ public class TPflash extends Flash {
    */
   @Override
   public void run() {
+    resetMultiphaseSolveDiagnostics();
     if (system.isForcePhaseTypes() && system.getMaxNumberOfPhases() == 1) {
       system.setNumberOfPhases(1);
       return;
@@ -565,6 +634,12 @@ public class TPflash extends Flash {
           // logger.info("one phase flash is stable - checking multiphase flash....");
           TPmultiflash operation = new TPmultiflash(system, system.doSolidPhaseCheck());
           operation.run();
+          recordMultiphaseSolveDiagnostics(operation);
+          if (!isLastMultiphaseSolveAccepted()) {
+            logger.warn("Skipping TPflash multiphase post-processing after {}: {}", lastMultiphaseSolveStatus,
+                lastMultiphaseSolveMessage);
+            return;
+          }
           rescueSinglePhaseMultiphaseEndpoint();
         }
         if (solidCheck) {
@@ -732,6 +807,12 @@ public class TPflash extends Flash {
     if (system.doMultiPhaseCheck()) {
       TPmultiflash operation = new TPmultiflash(system, system.doSolidPhaseCheck());
       operation.run();
+      recordMultiphaseSolveDiagnostics(operation);
+      if (!isLastMultiphaseSolveAccepted()) {
+        logger.warn("Skipping TPflash multiphase post-processing after {}: {}", lastMultiphaseSolveStatus,
+            lastMultiphaseSolveMessage);
+        return;
+      }
       rescueSinglePhaseMultiphaseEndpoint();
       // rescueSpuriousMultiphaseEndpoint() is called once at the end of runInternal()
       // after orderByDensity(), so it is intentionally not repeated here.
