@@ -13,12 +13,16 @@
     <properties>
         <quarkus.version>3.37.0</quarkus.version>
         <mcp-server.version>1.13.0</mcp-server.version>
+        <reproducible-build-maven-plugin.version>0.17</reproducible-build-maven-plugin.version>
         <!-- Keep in sync with ../pom.xml <revision> property until a parent/module build is used. -->
         <revision>3.17.0</revision>
         <neqsim.version>${revision}</neqsim.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Keep Maven and Quarkus archive entry timestamps stable across clean builds. -->
+        <project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
+        <quarkus.package.output-timestamp>${project.build.outputTimestamp}</quarkus.package.output-timestamp>
     </properties>
 
     <!-- Use -Plocal-dev when iterating against the workspace build:
@@ -104,6 +108,23 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>3.8.0</version>
+                <configuration>
+                    <java>
+                        <eclipse>
+                            <version>4.35</version>
+                            <file>../.config/neqsim_formatter.xml</file>
+                        </eclipse>
+                        <includes>
+                            <include>src/main/java/**/*.java</include>
+                            <include>src/test/java/**/*.java</include>
+                        </includes>
+                    </java>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-maven-plugin</artifactId>
                 <version>${quarkus.version}</version>
@@ -115,6 +136,30 @@
                             <goal>generate-code</goal>
                             <goal>generate-code-tests</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Quarkus builds the uber JAR in parallel. Its entry contents are stable,
+                 but the central-directory order is not. Canonicalize that order and
+                 archive metadata after Quarkus has produced the runner JAR. -->
+            <plugin>
+                <groupId>io.github.zlika</groupId>
+                <artifactId>reproducible-build-maven-plugin</artifactId>
+                <version>${reproducible-build-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>canonicalize-runner-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>strip-jar</goal>
+                        </goals>
+                        <configuration>
+                            <includes>
+                                <include>.*-runner[.]jar</include>
+                            </includes>
+                            <zipDateTime>20260101000000</zipDateTime>
+                            <fixZipExternalFileAttributes>true</fixZipExternalFileAttributes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

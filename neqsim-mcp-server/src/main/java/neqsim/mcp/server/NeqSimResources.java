@@ -8,13 +8,12 @@ import neqsim.mcp.runners.CapabilitiesRunner;
 import neqsim.mcp.runners.DataCatalogRunner;
 
 /**
- * MCP resources exposing NeqSim example and schema catalogs, component data, design standards,
- * equation of state models, and material properties.
+ * MCP resources exposing NeqSim example and schema catalogs, component data, design standards, equation of state
+ * models, and material properties.
  *
  * <p>
- * Static resources provide full catalog listings. Resource templates allow clients to fetch
- * individual items by URI pattern. These are read-only data endpoints that agents can browse to
- * discover available data before invoking tools.
+ * Static resources provide full catalog listings. Resource templates allow clients to fetch individual items by URI
+ * pattern. These are read-only data endpoints that agents can browse to discover available data before invoking tools.
  * </p>
  */
 @ApplicationScoped
@@ -25,8 +24,7 @@ public class NeqSimResources {
    *
    * @return JSON listing all example categories, names, and descriptions
    */
-  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://example-catalog", name = "Example Catalog",
-      description = "Full catalog of NeqSim examples for flash calculations and process simulations")
+  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://example-catalog", name = "Example Catalog", description = "Full catalog of NeqSim examples for flash calculations and process simulations")
   public String exampleCatalog() {
     return ExampleCatalog.getCatalogJson();
   }
@@ -36,8 +34,7 @@ public class NeqSimResources {
    *
    * @return JSON listing schemas for all tool inputs and outputs
    */
-  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://schema-catalog", name = "Schema Catalog",
-      description = "JSON schemas for all NeqSim MCP tool inputs and outputs")
+  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://schema-catalog", name = "Schema Catalog", description = "JSON schemas for all NeqSim MCP tool inputs and outputs")
   public String schemaCatalog() {
     return SchemaCatalog.getCatalogJson();
   }
@@ -47,8 +44,7 @@ public class NeqSimResources {
    *
    * @return JSON listing setup templates for schema-backed MCP workflows
    */
-  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://setup-templates", name = "Setup Templates",
-      description = "Discoverable setup templates for NeqSim MCP workflows")
+  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://setup-templates", name = "Setup Templates", description = "Discoverable setup templates for NeqSim MCP workflows")
   public String setupTemplates() {
     return CapabilitiesRunner.getSetupTemplates();
   }
@@ -60,8 +56,7 @@ public class NeqSimResources {
    * @param name the example name
    * @return resource contents with the example JSON
    */
-  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://examples/{category}/{name}",
-      name = "NeqSim Example", description = "Get a specific NeqSim example by category and name")
+  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://examples/{category}/{name}", name = "NeqSim Example", description = "Get a specific NeqSim example by category and name")
   public TextResourceContents example(String category, String name) {
     String example = ExampleCatalog.getExample(category, name);
     String content = example != null ? example : "{\"error\": \"Example not found\"}";
@@ -75,9 +70,7 @@ public class NeqSimResources {
    * @param type input or output
    * @return resource contents with the JSON schema
    */
-  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://schemas/{tool}/{type}",
-      name = "NeqSim Schema",
-      description = "Get the JSON schema for a specific tool input or output")
+  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://schemas/{tool}/{type}", name = "NeqSim Schema", description = "Get the JSON schema for a specific tool input or output")
   public TextResourceContents schema(String tool, String type) {
     String schema = SchemaCatalog.getSchema(tool, type);
     String content = schema != null ? schema : "{\"error\": \"Schema not found\"}";
@@ -90,9 +83,7 @@ public class NeqSimResources {
    * @param id the setup template id
    * @return resource contents with the setup template JSON
    */
-  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://setup-templates/{id}",
-      name = "NeqSim Setup Template",
-      description = "Get a setup template for a major NeqSim MCP workflow")
+  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://setup-templates/{id}", name = "NeqSim Setup Template", description = "Get a setup template for a major NeqSim MCP workflow")
   public TextResourceContents setupTemplate(String id) {
     String content = CapabilitiesRunner.getSetupTemplate(id);
     return TextResourceContents.create("neqsim://setup-templates/" + id, content);
@@ -107,9 +98,8 @@ public class NeqSimResources {
    *
    * @return JSON listing component categories and representative components
    */
-  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://components", name = "Component Families",
-      description = "Browse available component families: hydrocarbons, acid gases, "
-          + "inerts, glycols, olefins, hydrogen/syngas, refrigerants, mercaptans")
+  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://components", name = "Component Families", description = "Browse available component families: hydrocarbons, acid gases, "
+      + "inerts, glycols, olefins, hydrogen/syngas, refrigerants, mercaptans")
   public String componentFamilies() {
     return DataCatalogRunner.listComponentFamilies();
   }
@@ -120,10 +110,8 @@ public class NeqSimResources {
    * @param name the component name
    * @return resource contents with all properties (Tc, Pc, omega, MW, etc.)
    */
-  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://components/{name}",
-      name = "Component Properties",
-      description = "Get full thermodynamic properties for a component "
-          + "(Tc, Pc, acentric factor, MW, boiling point, CPA/SAFT params, etc.)")
+  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://components/{name}", name = "Component Properties", description = "Get full thermodynamic properties for a component "
+      + "(Tc, Pc, acentric factor, MW, boiling point, CPA/SAFT params, etc.)")
   public TextResourceContents componentProperties(String name) {
     String content = DataCatalogRunner.getComponentProperties(name);
     return TextResourceContents.create("neqsim://components/" + name, content);
@@ -138,9 +126,8 @@ public class NeqSimResources {
    *
    * @return JSON listing all standards with scope and applicability
    */
-  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://standards", name = "Design Standards Catalog",
-      description = "Browse available design standards: ASME, API, DNV, ISO, NORSOK, "
-          + "ASTM, EN, TEMA — with equipment type applicability")
+  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://standards", name = "Design Standards Catalog", description = "Browse available design standards: ASME, API, DNV, ISO, NORSOK, "
+      + "ASTM, EN, TEMA — with equipment type applicability")
   public String designStandards() {
     return DataCatalogRunner.listDesignStandards();
   }
@@ -151,10 +138,8 @@ public class NeqSimResources {
    * @param code the standard code (e.g., API-617, DNV-ST-F101)
    * @return resource contents with standard parameters
    */
-  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://standards/{code}",
-      name = "Standard Detail",
-      description = "Get detailed parameters for a specific design standard "
-          + "(design factors, limits, material requirements)")
+  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://standards/{code}", name = "Standard Detail", description = "Get detailed parameters for a specific design standard "
+      + "(design factors, limits, material requirements)")
   public TextResourceContents standardDetail(String code) {
     String content = DataCatalogRunner.queryStandard(code, null);
     return TextResourceContents.create("neqsim://standards/" + code, content);
@@ -169,9 +154,8 @@ public class NeqSimResources {
    *
    * @return JSON listing all EOS models with descriptions and recommendations
    */
-  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://models", name = "Equation of State Models",
-      description = "Browse available thermodynamic models: SRK, PR, CPA, GERG-2008, "
-          + "PC-SAFT, UMR-PRU, Electrolyte-CPA — with usage recommendations")
+  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://models", name = "Equation of State Models", description = "Browse available thermodynamic models: SRK, PR, CPA, GERG-2008, "
+      + "PC-SAFT, UMR-PRU, Electrolyte-CPA — with usage recommendations")
   public String eosModels() {
     return DataCatalogRunner.listEOSModels();
   }
@@ -186,10 +170,8 @@ public class NeqSimResources {
    * @param type the material category: pipe, plate, casing, compressor, heatExchanger
    * @return resource contents with material grades and properties
    */
-  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://materials/{type}",
-      name = "Material Properties",
-      description = "Browse material grades and properties by type: pipe, plate, "
-          + "casing, compressor, heatExchanger — includes SMYS, SMTS, density")
+  @io.quarkiverse.mcp.server.ResourceTemplate(uriTemplate = "neqsim://materials/{type}", name = "Material Properties", description = "Browse material grades and properties by type: pipe, plate, "
+      + "casing, compressor, heatExchanger — includes SMYS, SMTS, density")
   public TextResourceContents materialProperties(String type) {
     String content = DataCatalogRunner.listMaterials(type);
     return TextResourceContents.create("neqsim://materials/" + type, content);
@@ -204,10 +186,9 @@ public class NeqSimResources {
    *
    * @return JSON listing all queryable tables with descriptions
    */
-  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://data-tables", name = "Data Tables Catalog",
-      description = "Browse all available data tables: thermodynamic properties, "
-          + "binary interaction parameters, reaction data, design standards, "
-          + "material properties, cost estimation data")
+  @io.quarkiverse.mcp.server.Resource(uri = "neqsim://data-tables", name = "Data Tables Catalog", description = "Browse all available data tables: thermodynamic properties, "
+      + "binary interaction parameters, reaction data, design standards, "
+      + "material properties, cost estimation data")
   public String dataTables() {
     return DataCatalogRunner.listDataTables();
   }

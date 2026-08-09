@@ -1,0 +1,189 @@
+{
+  "schemaVersion": "hydrocarbon-water-paper-topology-benchmark-v1",
+  "benchmarkId": "ma-2021-water-heavy-oil-figure-5",
+  "title": "Three-Phase Equilibrium Calculations of Water/Hydrocarbon/Nonhydrocarbon Systems Based on the Equation of State (EOS) in Thermal Processes",
+  "authors": [
+    "Xuesong Ma",
+    "Shuhong Wu",
+    "Gang Huang",
+    "Tianyi Fan"
+  ],
+  "year": 2021,
+  "doi": "10.1021/acsomega.1c04522",
+  "pmcid": "PMC8696998",
+  "sourceUrls": {
+    "article": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8696998/",
+    "fullTextXml": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC8696998/fullTextXML",
+    "figure5": "https://cdn.ncbi.nlm.nih.gov/pmc/blobs/a635/8696998/30a35c043bb1/ao1c04522_0006.jpg"
+  },
+  "license": {
+    "identifier": "CC-BY-4.0",
+    "url": "https://creativecommons.org/licenses/by/4.0/",
+    "attributionRequired": true,
+    "sourceEvidence": "JATS permissions/license in PMC8696998-fulltext.xml"
+  },
+  "artifacts": [
+    {
+      "role": "full-text-jats-xml",
+      "path": "PMC8696998-fulltext.xml",
+      "mediaType": "application/xml",
+      "bytes": 140535,
+      "sha256": "ca99cb9492e4c20abf2317f6a132daaf2c81f224e54806776821c7ef780243ad",
+      "verified": true
+    },
+    {
+      "role": "figure-5-source-raster",
+      "path": "Figure_5_PT_diagram.jpg",
+      "mediaType": "image/jpeg",
+      "widthPixels": 664,
+      "heightPixels": 409,
+      "bytes": 62593,
+      "sha256": "beb89d10ed7d9e69a63874ca9159995b93aa79759305579633f7979379707d57",
+      "verified": true
+    }
+  ],
+  "referenceFluid": {
+    "sourceLocator": "Table 10 (JATS id tbl10)",
+    "basis": "mole-fraction",
+    "sum": 1.0,
+    "components": [
+      {
+        "name": "H2O",
+        "moleFraction": 0.5,
+        "molecularWeightGramPerMole": 18.015,
+        "criticalTemperatureK": 647.3,
+        "criticalPressureBar": 220.89,
+        "acentricFactor": 0.344
+      },
+      {
+        "name": "PC1",
+        "moleFraction": 0.15,
+        "molecularWeightGramPerMole": 30.0,
+        "criticalTemperatureK": 305.556,
+        "criticalPressureBar": 48.82,
+        "acentricFactor": 0.098
+      },
+      {
+        "name": "PC2",
+        "moleFraction": 0.1,
+        "molecularWeightGramPerMole": 156.0,
+        "criticalTemperatureK": 638.889,
+        "criticalPressureBar": 19.65,
+        "acentricFactor": 0.535
+      },
+      {
+        "name": "PC3",
+        "moleFraction": 0.1,
+        "molecularWeightGramPerMole": 310.0,
+        "criticalTemperatureK": 788.889,
+        "criticalPressureBar": 10.2,
+        "acentricFactor": 0.891
+      },
+      {
+        "name": "PC4",
+        "moleFraction": 0.15,
+        "molecularWeightGramPerMole": 400.0,
+        "criticalTemperatureK": 838.889,
+        "criticalPressureBar": 7.72,
+        "acentricFactor": 1.085
+      }
+    ]
+  },
+  "thermodynamicModel": {
+    "equationOfState": "modified-Peng-Robinson",
+    "volumeTranslation": "not-specified",
+    "mixingRule": "phase-type-dependent-binary-interaction-parameters",
+    "waterAlphaModification": true,
+    "phaseIdentityRule": "water mole fraction >= 0.5 selects aqueous-phase BIPs; otherwise nonaqueous BIPs",
+    "nonaqueousBipSourceLocator": "Table 11 (JATS id tbl11)",
+    "nonaqueousWaterPairBips": [
+      {"first": "H2O", "second": "PC1", "kij": 0.71918},
+      {"first": "H2O", "second": "PC2", "kij": 0.45996},
+      {"first": "H2O", "second": "PC3", "kij": 0.26773},
+      {"first": "H2O", "second": "PC4", "kij": 0.24166}
+    ],
+    "otherNonaqueousBips": 0.0,
+    "aqueousBipSourceLocator": "equations 4-7 in the source article",
+    "exactSameModelReproductionAvailableFromThisManifest": false,
+    "reproductionLimitation": "The current target is SRK/PR Peneloux plus Huron-Vidal; the paper uses modified PR with phase-dependent Soreide-Whitson/Li-Yang aqueous BIP correlations. Equation rasters have not been transcribed into a verified executable parameter set."
+  },
+  "phaseVocabulary": {
+    "V": "gas",
+    "L": "oil",
+    "W": "aqueous",
+    "LW": "oil-aqueous",
+    "LV": "gas-oil",
+    "LVW": "gas-oil-aqueous"
+  },
+  "topologyReference": {
+    "sourceLocator": "Figure 5 (JATS id fig5)",
+    "observedRegions": ["V", "LV", "LW", "LVW"],
+    "requiredRegionsForTwoToThreePhaseBenchmark": ["LV", "LW", "LVW"],
+    "requiredTwoToThreePhaseBoundaries": [
+      {
+        "code": "OW_TO_GOW",
+        "paperRegions": ["LW", "LVW"],
+        "marker": "black-square",
+        "appearingPhase": "gas"
+      },
+      {
+        "code": "GO_TO_GOW",
+        "paperRegions": ["LV", "LVW"],
+        "marker": "red-circle",
+        "appearingPhase": "aqueous"
+      }
+    ]
+  },
+  "figureDigitization": {
+    "method": "connected-component marker-center extraction followed by linear axis calibration",
+    "axisCalibration": {
+      "temperature": {
+        "pixelMinimum": 58.0,
+        "pixelMaximum": 530.0,
+        "physicalMinimumK": 300.0,
+        "physicalMaximumK": 600.0,
+        "formula": "T_K = 300 + (pixelX - 58) * 300 / 472"
+      },
+      "pressure": {
+        "pixelMinimumAtMaximumPressure": 4.0,
+        "pixelMaximumAtZeroPressure": 354.0,
+        "physicalMinimumBar": 0.0,
+        "physicalMaximumBar": 130.0,
+        "formula": "P_bar = (354 - pixelY) * 130 / 350"
+      }
+    },
+    "conservativeCoordinateUncertainty": {
+      "temperatureK": 2.5,
+      "pressureBar": 1.5
+    },
+    "points": {
+      "OW_TO_GOW": [
+        {"pixelX": 86.0, "pixelY": 318.13, "temperatureK": 317.797, "pressureBar": 13.323},
+        {"pixelX": 136.14, "pixelY": 304.04, "temperatureK": 349.665, "pressureBar": 18.557},
+        {"pixelX": 191.67, "pixelY": 282.5, "temperatureK": 384.96, "pressureBar": 26.557},
+        {"pixelX": 215.27, "pixelY": 274.4, "temperatureK": 399.96, "pressureBar": 29.566},
+        {"pixelX": 293.86, "pixelY": 236.98, "temperatureK": 449.911, "pressureBar": 43.465},
+        {"pixelX": 372.5, "pixelY": 183.0, "temperatureK": 499.894, "pressureBar": 63.514},
+        {"pixelX": 451.42, "pixelY": 94.95, "temperatureK": 550.055, "pressureBar": 96.219},
+        {"pixelX": 467.81, "pixelY": 69.92, "temperatureK": 560.472, "pressureBar": 105.515}
+      ],
+      "GO_TO_GOW": [
+        {"pixelX": 191.64, "pixelY": 347.79, "temperatureK": 384.941, "pressureBar": 2.307},
+        {"pixelX": 215.42, "pixelY": 343.87, "temperatureK": 400.055, "pressureBar": 3.763},
+        {"pixelX": 294.2, "pixelY": 322.71, "temperatureK": 450.127, "pressureBar": 11.622},
+        {"pixelX": 372.82, "pixelY": 273.37, "temperatureK": 500.097, "pressureBar": 29.948},
+        {"pixelX": 451.65, "pixelY": 177.69, "temperatureK": 550.201, "pressureBar": 65.487},
+        {"pixelX": 468.44, "pixelY": 95.13, "temperatureK": 560.873, "pressureBar": 96.152}
+      ]
+    }
+  },
+  "comparisonPolicy": {
+    "scope": "TOPOLOGY_ONLY",
+    "sameFluidAsFieldCase": false,
+    "sameModelNumericEligible": false,
+    "digitizedCoordinatesEligibleForNumericAcceptance": false,
+    "numericThresholdsFrozen": false,
+    "topologyAcceptanceCanSetEngineeringEligible": false,
+    "releaseRule": "Topology acceptance is supporting evidence only. Engineering release additionally requires the internal thermodynamic quality gate and an exact-fluid, exact-model numeric benchmark with frozen thresholds."
+  }
+}

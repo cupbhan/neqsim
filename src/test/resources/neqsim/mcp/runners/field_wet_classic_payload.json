@@ -1,0 +1,841 @@
+{
+  "components": {
+    "water": 0.65,
+    "heavyOil": 0.25,
+    "CO2": 0.07,
+    "nitrogen": 0.03
+  },
+  "fluidDefinition": {
+    "format": "neqsim-fluid",
+    "version": "1.0",
+    "eos": "SRK",
+    "components": [
+      {
+        "name": "N2",
+        "sourceComponentId": 401,
+        "sourceComponentType": 4,
+        "moleFraction": 0.004031224250793457,
+        "criticalTemperature": 126.19998931884766,
+        "criticalPressure": 33.499996185302734,
+        "acentricFactor": 0.03999999910593033,
+        "molarMass": 28.013519287109375,
+        "normalBoilingPoint": 77.39998626708984,
+        "criticalVolume": 0.08980000185012818,
+        "volumeShift": 0.033901636793664744,
+        "volumeTranslationLmol": 0.0009200000642985106,
+        "idealGasCpCoefficientsJkmolK": [
+          31148.844433526996,
+          -13.564810919697631,
+          0.026794701629007704,
+          -0.000011680814705247179
+        ],
+        "parachor": 41,
+        "isPseudo": false
+      },
+      {
+        "name": "CO2",
+        "sourceComponentId": 402,
+        "sourceComponentType": 4,
+        "moleFraction": 0.008397791385650635,
+        "criticalTemperature": 304.20001220703125,
+        "criticalPressure": 72.80000305175781,
+        "acentricFactor": 0.22499999403953552,
+        "molarMass": 44.00979995727539,
+        "normalBoilingPoint": 194.64999389648438,
+        "criticalVolume": 0.0939999993658066,
+        "volumeShift": 0.10059477681883154,
+        "volumeTranslationLmol": 0.003028000143840909,
+        "idealGasCpCoefficientsJkmolK": [
+          19794.587226412295,
+          73.43422568732873,
+          -0.056017675757639156,
+          0.000017152794985946242
+        ],
+        "parachor": 78,
+        "isPseudo": false
+      },
+      {
+        "name": "C1",
+        "sourceComponentId": 501,
+        "sourceComponentType": 5,
+        "moleFraction": 0.36667747497558595,
+        "criticalTemperature": 190.60000610351562,
+        "criticalPressure": 45.399993896484375,
+        "acentricFactor": 0.00800000037997961,
+        "molarMass": 16.042879104614258,
+        "normalBoilingPoint": 111.59999084472656,
+        "criticalVolume": 0.09900002389192582,
+        "volumeShift": 0.020831517347225603,
+        "volumeTranslationLmol": 0.0006300001470372081,
+        "idealGasCpCoefficientsJkmolK": [
+          19250.319154531957,
+          52.12407832126134,
+          0.011973890898376567,
+          -0.000011316572599968655
+        ],
+        "parachor": 77.30000305175781,
+        "isPseudo": false
+      },
+      {
+        "name": "C2",
+        "sourceComponentId": 502,
+        "sourceComponentType": 5,
+        "moleFraction": 0.0863776969909668,
+        "criticalTemperature": 305.3999938964844,
+        "criticalPressure": 48.20000076293945,
+        "acentricFactor": 0.09799999743700027,
+        "molarMass": 30.069820404052734,
+        "normalBoilingPoint": 184.60000610351562,
+        "criticalVolume": 0.14799999816894532,
+        "volumeShift": 0.057621045330768915,
+        "volumeTranslationLmol": 0.0026299999611824752,
+        "idealGasCpCoefficientsJkmolK": [
+          5409.180871489645,
+          178.10103749692442,
+          -0.06937316127171472,
+          0.000008712464526976493
+        ],
+        "parachor": 108.89999389648438,
+        "isPseudo": false
+      },
+      {
+        "name": "C3",
+        "sourceComponentId": 503,
+        "sourceComponentType": 5,
+        "moleFraction": 0.06658421516418457,
+        "criticalTemperature": 369.8000183105469,
+        "criticalPressure": 41.90000534057617,
+        "acentricFactor": 0.15199999511241913,
+        "molarMass": 44.09675979614258,
+        "normalBoilingPoint": 231.09999084472656,
+        "criticalVolume": 0.20300000383377076,
+        "volumeShift": 0.07958753015767193,
+        "volumeTranslationLmol": 0.0050599998950958255,
+        "idealGasCpCoefficientsJkmolK": [
+          -4224.351809117795,
+          306.2550825270638,
+          -0.1586330255715075,
+          0.00003214526283314534
+        ],
+        "parachor": 151.89999389648438,
+        "isPseudo": false
+      },
+      {
+        "name": "iC4",
+        "sourceComponentId": 504,
+        "sourceComponentType": 5,
+        "moleFraction": 0.012010681629180908,
+        "criticalTemperature": 408.0999755859375,
+        "criticalPressure": 36.00000762939453,
+        "acentricFactor": 0.17599999904632568,
+        "molarMass": 58.12369918823242,
+        "normalBoilingPoint": 261.3999938964844,
+        "criticalVolume": 0.26300000467777257,
+        "volumeShift": 0.08927110117680234,
+        "volumeTranslationLmol": 0.007289999496042729,
+        "idealGasCpCoefficientsJkmolK": [
+          -1389.9750502029062,
+          384.7132476562262,
+          -0.18459030208725383,
+          0.000028950832143943564
+        ],
+        "parachor": 181.5,
+        "isPseudo": false
+      },
+      {
+        "name": "nC4",
+        "sourceComponentId": 505,
+        "sourceComponentType": 5,
+        "moleFraction": 0.0369151782989502,
+        "criticalTemperature": 425.20001220703125,
+        "criticalPressure": 37.500003814697266,
+        "acentricFactor": 0.19300000369548798,
+        "molarMass": 58.12369918823242,
+        "normalBoilingPoint": 272.70001220703125,
+        "criticalVolume": 0.2550000084781647,
+        "volumeShift": 0.09622944356146702,
+        "volumeTranslationLmol": 0.007860000276863574,
+        "idealGasCpCoefficientsJkmolK": [
+          9486.998168368342,
+          331.2913801329956,
+          -0.11082123228042293,
+          -0.000002821816573610192
+        ],
+        "parachor": 191.6999969482422,
+        "isPseudo": false
+      },
+      {
+        "name": "iC5",
+        "sourceComponentId": 506,
+        "sourceComponentType": 5,
+        "moleFraction": 0.01550951600074768,
+        "criticalTemperature": 460.3999938964844,
+        "criticalPressure": 33.400001525878906,
+        "acentricFactor": 0.22699999809265137,
+        "molarMass": 72.15064239501953,
+        "normalBoilingPoint": 301,
+        "criticalVolume": 0.30600000626087187,
+        "volumeShift": 0.11007246792055866,
+        "volumeTranslationLmol": 0.010929999870061876,
+        "idealGasCpCoefficientsJkmolK": [
+          -9524.680354782344,
+          506.5871554324404,
+          -0.2729290673894502,
+          0.00005723179268838586
+        ],
+        "parachor": 225,
+        "isPseudo": false
+      },
+      {
+        "name": "nC5",
+        "sourceComponentId": 507,
+        "sourceComponentType": 5,
+        "moleFraction": 0.02248168468475342,
+        "criticalTemperature": 469.6000061035156,
+        "criticalPressure": 33.29999542236328,
+        "acentricFactor": 0.25099998712539673,
+        "molarMass": 72.15064239501953,
+        "normalBoilingPoint": 309.20001220703125,
+        "criticalVolume": 0.3039999925374985,
+        "volumeShift": 0.1198976673457121,
+        "volumeTranslationLmol": 0.012179999887645246,
+        "idealGasCpCoefficientsJkmolK": [
+          -3625.658317719698,
+          487.32870799925183,
+          -0.2580246309835275,
+          0.00005304513488568308
+        ],
+        "parachor": 233.89999389648438,
+        "isPseudo": false
+      },
+      {
+        "name": "C6",
+        "sourceComponentId": 509,
+        "sourceComponentType": 5,
+        "moleFraction": 0.0327603268623352,
+        "criticalTemperature": 507.3999938964844,
+        "criticalPressure": 29.299997329711914,
+        "acentricFactor": 0.29600000381469727,
+        "molarMass": 86.17758178710938,
+        "normalBoilingPoint": 341.8999938964844,
+        "criticalVolume": 0.3699999954223633,
+        "volumeShift": 0.1441299320007385,
+        "volumeTranslationLmol": 0.017980000067055225,
+        "idealGasCpCoefficientsJkmolK": [
+          -4412.752333660723,
+          581.9472847151757,
+          -0.311865156093736,
+          0.00006493528469655453
+        ],
+        "parachor": 271,
+        "isPseudo": false
+      },
+      {
+        "name": "C7",
+        "sourceComponentId": 1101,
+        "sourceComponentType": 11,
+        "moleFraction": 0.03347226142883301,
+        "criticalTemperature": 539.3245849609375,
+        "criticalPressure": 33.527103424072266,
+        "acentricFactor": 0.46806544065475464,
+        "molarMass": 96,
+        "normalBoilingPoint": 365.1000061035156,
+        "criticalVolume": 0.4436587091255188,
+        "volumeShift": 0.05374693416640159,
+        "volumeTranslationLmol": 0.006228195920735598,
+        "idealGasCpCoefficientsJkmolK": [
+          -16188.96191154957,
+          576.0511728209258,
+          -0.20226028146022149,
+          0
+        ],
+        "parachor": 283.94000244140625,
+        "isPseudo": true
+      },
+      {
+        "name": "C8",
+        "sourceComponentId": 1102,
+        "sourceComponentType": 11,
+        "moleFraction": 0.034444711208343505,
+        "criticalTemperature": 557.6530151367188,
+        "criticalPressure": 30.182315826416016,
+        "acentricFactor": 0.49995529651641846,
+        "molarMass": 107,
+        "normalBoilingPoint": 389.8999938964844,
+        "criticalVolume": 0.4740870673084259,
+        "volumeShift": 0.0907411431860157,
+        "volumeTranslationLmol": 0.012077307597696782,
+        "idealGasCpCoefficientsJkmolK": [
+          -7239.970944122673,
+          609.3122045577318,
+          -0.2344050733689983,
+          0
+        ],
+        "parachor": 309.67999267578125,
+        "isPseudo": true
+      },
+      {
+        "name": "C9",
+        "sourceComponentId": 1103,
+        "sourceComponentType": 11,
+        "moleFraction": 0.030459375381469728,
+        "criticalTemperature": 578.2918701171875,
+        "criticalPressure": 26.776960372924805,
+        "acentricFactor": 0.5399391651153564,
+        "molarMass": 121,
+        "normalBoilingPoint": 415.3999938964844,
+        "criticalVolume": 0.5209949469375611,
+        "volumeShift": 0.1260068559785245,
+        "volumeTranslationLmol": 0.019603534087836744,
+        "idealGasCpCoefficientsJkmolK": [
+          -3285.8555318391327,
+          677.277011474073,
+          -0.2691101549342057,
+          0
+        ],
+        "parachor": 342.44000244140625,
+        "isPseudo": true
+      },
+      {
+        "name": "C10-C12",
+        "sourceComponentId": 1105,
+        "sourceComponentType": 11,
+        "moleFraction": 0.06831945419311523,
+        "criticalTemperature": 611.115234375,
+        "criticalPressure": 22.88968849182129,
+        "acentricFactor": 0.6102278232574463,
+        "molarMass": 145.45977783203125,
+        "normalBoilingPoint": 458.63116455078125,
+        "criticalVolume": 0.6121566860675812,
+        "volumeShift": 0.1575005059115749,
+        "volumeTranslationLmol": 0.03029141801059246,
+        "idealGasCpCoefficientsJkmolK": [
+          720.5215255206824,
+          810.8460990436375,
+          -0.32962435433630166,
+          0
+        ],
+        "parachor": 401.5830078125,
+        "isPseudo": true
+      },
+      {
+        "name": "C13-C15",
+        "sourceComponentId": 1108,
+        "sourceComponentType": 11,
+        "moleFraction": 0.04424376487731933,
+        "criticalTemperature": 659.7001953125,
+        "criticalPressure": 18.899980545043945,
+        "acentricFactor": 0.7265377640724182,
+        "molarMass": 189.11129760742188,
+        "normalBoilingPoint": 519.193359375,
+        "criticalVolume": 0.786531251373291,
+        "volumeShift": 0.16891343095404585,
+        "volumeTranslationLmol": 0.04247210877418518,
+        "idealGasCpCoefficientsJkmolK": [
+          3476.486984153092,
+          1057.0231429278851,
+          -0.430297571643896,
+          0
+        ],
+        "parachor": 503.7937927246094,
+        "isPseudo": true
+      },
+      {
+        "name": "C16-C18",
+        "sourceComponentId": 1111,
+        "sourceComponentType": 11,
+        "moleFraction": 0.029232871532440186,
+        "criticalTemperature": 703.8390502929688,
+        "criticalPressure": 16.61078453063965,
+        "acentricFactor": 0.8417916893959045,
+        "molarMass": 235.64756774902344,
+        "normalBoilingPoint": 571.2294921875,
+        "criticalVolume": 0.9864484175491334,
+        "volumeShift": 0.1510926467175482,
+        "volumeTranslationLmol": 0.04611910717129707,
+        "idealGasCpCoefficientsJkmolK": [
+          6271.171417136193,
+          1321.8667061421277,
+          -0.534963904312317,
+          0
+        ],
+        "parachor": 612.094482421875,
+        "isPseudo": true
+      },
+      {
+        "name": "C19-C22",
+        "sourceComponentId": 1114,
+        "sourceComponentType": 11,
+        "moleFraction": 0.02880645513534546,
+        "criticalTemperature": 743.93701171875,
+        "criticalPressure": 15.386438369750977,
+        "acentricFactor": 0.9483266472816467,
+        "molarMass": 281.93994140625,
+        "normalBoilingPoint": 616.6417236328125,
+        "criticalVolume": 1.1965189999008181,
+        "volumeShift": 0.11672434936658395,
+        "volumeTranslationLmol": 0.04065499498128891,
+        "idealGasCpCoefficientsJkmolK": [
+          8057.785006451608,
+          1587.194343265146,
+          -0.6407545248075622,
+          0
+        ],
+        "parachor": 721.1286010742188,
+        "isPseudo": true
+      },
+      {
+        "name": "C23-C26",
+        "sourceComponentId": 1118,
+        "sourceComponentType": 11,
+        "moleFraction": 0.02102153778076172,
+        "criticalTemperature": 787.0983276367188,
+        "criticalPressure": 14.484121322631836,
+        "acentricFactor": 1.0609904527664185,
+        "molarMass": 336.95257568359375,
+        "normalBoilingPoint": 664.0133666992188,
+        "criticalVolume": 1.4542463567352295,
+        "volumeShift": 0.06872736099112328,
+        "volumeTranslationLmol": 0.026904247663617136,
+        "idealGasCpCoefficientsJkmolK": [
+          10400.908893083335,
+          1901.0887055495382,
+          -0.7649949239125273,
+          0
+        ],
+        "parachor": 849.3872680664062,
+        "isPseudo": true
+      },
+      {
+        "name": "C27-C31",
+        "sourceComponentId": 1123,
+        "sourceComponentType": 11,
+        "moleFraction": 0.01871209740638733,
+        "criticalTemperature": 832.9649047851562,
+        "criticalPressure": 13.848713874816895,
+        "acentricFactor": 1.171223521232605,
+        "molarMass": 399.8792724609375,
+        "normalBoilingPoint": 709.6702880859375,
+        "criticalVolume": 1.7623679708862305,
+        "volumeShift": 0.010617079799953025,
+        "volumeTranslationLmol": 0.004600200553238392,
+        "idealGasCpCoefficientsJkmolK": [
+          13198.07849485636,
+          2262.877392405868,
+          -0.9081375028524054,
+          0
+        ],
+        "parachor": 997.2943725585938,
+        "isPseudo": true
+      },
+      {
+        "name": "C32-C38",
+        "sourceComponentId": 1129,
+        "sourceComponentType": 11,
+        "moleFraction": 0.016706801652908325,
+        "criticalTemperature": 888.7586059570312,
+        "criticalPressure": 13.384533882141113,
+        "acentricFactor": 1.2802010774612427,
+        "molarMass": 481.7683410644531,
+        "normalBoilingPoint": 757.177001953125,
+        "criticalVolume": 2.1775750927734374,
+        "volumeShift": -0.06669675943212088,
+        "volumeTranslationLmol": -0.03190359965562821,
+        "idealGasCpCoefficientsJkmolK": [
+          16388.02420420051,
+          2730.94650690496,
+          -1.095015809919132,
+          0
+        ],
+        "parachor": 1190.3916015625,
+        "isPseudo": true
+      },
+      {
+        "name": "C39-C49",
+        "sourceComponentId": 1137,
+        "sourceComponentType": 11,
+        "moleFraction": 0.013485298156738282,
+        "criticalTemperature": 965.0818481445312,
+        "criticalPressure": 13.06632137298584,
+        "acentricFactor": 1.3602405786514282,
+        "molarMass": 601.4926147460938,
+        "normalBoilingPoint": 816.6846313476562,
+        "criticalVolume": 2.8078938974761964,
+        "volumeShift": -0.17724692384880725,
+        "volumeTranslationLmol": -0.09430697817087175,
+        "idealGasCpCoefficientsJkmolK": [
+          21438.235094087126,
+          3418.6939862272147,
+          -1.3695352690722211,
+          0
+        ],
+        "parachor": 1474.15673828125,
+        "isPseudo": true
+      },
+      {
+        "name": "C50-C80",
+        "sourceComponentId": 1153,
+        "sourceComponentType": 11,
+        "moleFraction": 0.009349581003189087,
+        "criticalTemperature": 1102.7158203125,
+        "criticalPressure": 12.964747428894043,
+        "acentricFactor": 1.2070857286453247,
+        "molarMass": 827.90966796875,
+        "normalBoilingPoint": 912.6702270507812,
+        "criticalVolume": 4.095813051071167,
+        "volumeShift": -0.3667477917920645,
+        "volumeTranslationLmol": -0.22470948310375216,
+        "idealGasCpCoefficientsJkmolK": [
+          33019.54092979193,
+          4772.397317734957,
+          -1.907462709947431,
+          0
+        ],
+        "parachor": 2030.89501953125,
+        "isPseudo": true
+      }
+    ],
+    "binaryInteractionCoefficients": [
+      {
+        "i": "CO2",
+        "j": "N2",
+        "kij": -0.03150000050663948
+      },
+      {
+        "i": "C1",
+        "j": "N2",
+        "kij": 0.027799999341368675
+      },
+      {
+        "i": "C1",
+        "j": "CO2",
+        "kij": 0.11999999731779099
+      },
+      {
+        "i": "C2",
+        "j": "N2",
+        "kij": 0.040699999779462814
+      },
+      {
+        "i": "C2",
+        "j": "CO2",
+        "kij": 0.11999999731779099
+      },
+      {
+        "i": "C3",
+        "j": "N2",
+        "kij": 0.0763000026345253
+      },
+      {
+        "i": "C3",
+        "j": "CO2",
+        "kij": 0.11999998986721039
+      },
+      {
+        "i": "iC4",
+        "j": "N2",
+        "kij": 0.09439999610185623
+      },
+      {
+        "i": "iC4",
+        "j": "CO2",
+        "kij": 0.11999999731779099
+      },
+      {
+        "i": "nC4",
+        "j": "N2",
+        "kij": 0.07000000774860382
+      },
+      {
+        "i": "nC4",
+        "j": "CO2",
+        "kij": 0.11999999731779099
+      },
+      {
+        "i": "iC5",
+        "j": "N2",
+        "kij": 0.08670000731945038
+      },
+      {
+        "i": "iC5",
+        "j": "CO2",
+        "kij": 0.11999999731779099
+      },
+      {
+        "i": "nC5",
+        "j": "N2",
+        "kij": 0.08779999613761902
+      },
+      {
+        "i": "nC5",
+        "j": "CO2",
+        "kij": 0.11999999731779099
+      },
+      {
+        "i": "C6",
+        "j": "N2",
+        "kij": 0.07999999821186066
+      },
+      {
+        "i": "C6",
+        "j": "CO2",
+        "kij": 0.12000000476837158
+      },
+      {
+        "i": "C7",
+        "j": "N2",
+        "kij": 0.07999999821186066
+      },
+      {
+        "i": "C7",
+        "j": "CO2",
+        "kij": 0.10000000149011612
+      },
+      {
+        "i": "C8",
+        "j": "N2",
+        "kij": 0.07999999821186066
+      },
+      {
+        "i": "C8",
+        "j": "CO2",
+        "kij": 0.10000000149011612
+      },
+      {
+        "i": "C9",
+        "j": "N2",
+        "kij": 0.08000000566244125
+      },
+      {
+        "i": "C9",
+        "j": "CO2",
+        "kij": 0.09999999403953552
+      },
+      {
+        "i": "C10-C12",
+        "j": "N2",
+        "kij": 0.07999999821186066
+      },
+      {
+        "i": "C10-C12",
+        "j": "CO2",
+        "kij": 0.10000000149011612
+      },
+      {
+        "i": "C13-C15",
+        "j": "N2",
+        "kij": 0.07999999821186066
+      },
+      {
+        "i": "C13-C15",
+        "j": "CO2",
+        "kij": 0.10000000894069672
+      },
+      {
+        "i": "C16-C18",
+        "j": "N2",
+        "kij": 0.08000000566244125
+      },
+      {
+        "i": "C16-C18",
+        "j": "CO2",
+        "kij": 0.10000000149011612
+      },
+      {
+        "i": "C19-C22",
+        "j": "N2",
+        "kij": 0.07999999821186066
+      },
+      {
+        "i": "C19-C22",
+        "j": "CO2",
+        "kij": 0.10000000149011612
+      },
+      {
+        "i": "C23-C26",
+        "j": "N2",
+        "kij": 0.07999999821186066
+      },
+      {
+        "i": "C23-C26",
+        "j": "CO2",
+        "kij": 0.10000000149011612
+      },
+      {
+        "i": "C27-C31",
+        "j": "N2",
+        "kij": 0.07999999821186066
+      },
+      {
+        "i": "C27-C31",
+        "j": "CO2",
+        "kij": 0.09999999403953552
+      },
+      {
+        "i": "C32-C38",
+        "j": "N2",
+        "kij": 0.07999999821186066
+      },
+      {
+        "i": "C32-C38",
+        "j": "CO2",
+        "kij": 0.10000000149011612
+      },
+      {
+        "i": "C39-C49",
+        "j": "N2",
+        "kij": 0.08000001311302185
+      },
+      {
+        "i": "C39-C49",
+        "j": "CO2",
+        "kij": 0.10000001639127731
+      },
+      {
+        "i": "C50-C80",
+        "j": "N2",
+        "kij": 0.07999999076128006
+      },
+      {
+        "i": "C50-C80",
+        "j": "CO2",
+        "kij": 0.09999999403953552
+      }
+    ],
+    "polarModel": "HV",
+    "mixingRule": "classic",
+    "huronVidalInteractionParameters": [
+      {
+        "i": "CO2",
+        "j": "N2",
+        "forward": -257.4237976074219,
+        "reverse": 534.6909790039062
+      },
+      {
+        "i": "C1",
+        "j": "N2",
+        "forward": -99.30094909667969,
+        "reverse": 176.752197265625
+      },
+      {
+        "i": "C1",
+        "j": "CO2",
+        "forward": 387.1200866699219,
+        "reverse": -128.94149780273438
+      },
+      {
+        "i": "C2",
+        "j": "N2",
+        "forward": -216.17799377441406,
+        "reverse": 594.5344848632812
+      },
+      {
+        "i": "C2",
+        "j": "CO2",
+        "forward": 129.13699340820312,
+        "reverse": 147.7346954345703
+      },
+      {
+        "i": "C3",
+        "j": "N2",
+        "forward": -244.82090759277344,
+        "reverse": 944.3483276367188
+      },
+      {
+        "i": "C3",
+        "j": "CO2",
+        "forward": 26.608699798583984,
+        "reverse": 423.6629638671875
+      },
+      {
+        "i": "iC4",
+        "j": "N2",
+        "forward": -247.84230041503906,
+        "reverse": 1192.2579345703125
+      },
+      {
+        "i": "iC4",
+        "j": "CO2",
+        "forward": -4.554503917694092,
+        "reverse": 643.4312133789062
+      },
+      {
+        "i": "nC4",
+        "j": "N2",
+        "forward": -276.4919128417969,
+        "reverse": 1285.7310791015625
+      },
+      {
+        "i": "nC4",
+        "j": "CO2",
+        "forward": -40.885250091552734,
+        "reverse": 729.2227172851562
+      },
+      {
+        "i": "iC5",
+        "j": "N2",
+        "forward": -276.63519287109375,
+        "reverse": 1553.1851806640625
+      },
+      {
+        "i": "iC5",
+        "j": "CO2",
+        "forward": -63.910282135009766,
+        "reverse": 973.7948608398438
+      },
+      {
+        "i": "nC5",
+        "j": "N2",
+        "forward": -283.0491027832031,
+        "reverse": 1634.620849609375
+      },
+      {
+        "i": "nC5",
+        "j": "CO2",
+        "forward": -79.90416717529297,
+        "reverse": 1045.6510009765625
+      },
+      {
+        "i": "C6",
+        "j": "N2",
+        "forward": -292.3749084472656,
+        "reverse": 1960.14599609375
+      },
+      {
+        "i": "C6",
+        "j": "CO2",
+        "forward": -95.17543029785156,
+        "reverse": 1365.23095703125
+      }
+    ],
+    "viscosityModel": {
+      "type": "PEDERSEN"
+    },
+    "interchange": {
+      "source": "PVTsim JSON EoS Limited (Flash API)",
+      "sourceVersion": {
+        "Major": 23,
+        "Minor": 0,
+        "Build": 0,
+        "Revision": 0,
+        "MajorRevision": 0,
+        "MinorRevision": 0
+      },
+      "sourceFluidId": "bf020466-dbdc-4832-a68e-8b0d7f4d508b",
+      "displayInfo": {
+        "WellName": "ME ",
+        "TestName": "BH",
+        "FluidName": "Oil w/ asphaltenes",
+        "SampleName": "See Notes for demo",
+        "Text": "Asphaltene data",
+        "TimeStamp": "2026-08-01T10:54:38.7546984+08:00"
+      },
+      "assumptions": [
+        "PVTsim Peneloux translation converted to NeqSim dimensionless c/b volume shift",
+        "PVTsim Mathias-Copeman C1-C3 are transferred only when the component VapourPressureModel selects them; a Classic vapour-pressure model keeps the EOS standard alpha term, matching PVTsim",
+        "PVTsim CSP viscosity mapped to NeqSim PFCT/Pedersen corresponding-states model",
+        "PVTsim Huron-Vidal G/R forward and reverse parameters are transferred directionally; temperature-dependent HV terms not present in the source remain at NeqSim database defaults"
+      ]
+    }
+  }
+}

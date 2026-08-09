@@ -21,6 +21,11 @@
 	<properties>
 		<revision>3.17.0</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
+		<reproducible-build-maven-plugin.version>0.17</reproducible-build-maven-plugin.version>
+		<!-- Standard releases remain shaded. MCP composition overrides this to install
+		     a library JAR plus its declared dependencies, avoiding a fat-JAR-in-uber-JAR. -->
+		<neqsim.shade.skip>false</neqsim.shade.skip>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<checkstyle.config.location>.config/checkstyle_neqsim.xml</checkstyle.config.location>
 		<skipFlattening>false</skipFlattening>
@@ -293,6 +298,7 @@
 							<goal>shade</goal>
 						</goals>
 						<configuration>
+							<skip>${neqsim.shade.skip}</skip>
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 									<mainClass>neqsim.thermo.util.benchmark.TPflash_benchmark</mainClass>
@@ -376,6 +382,30 @@
 						<goals>
 							<goal>jar-no-fork</goal>
 						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<!-- Canonicalize the core artifact after jar, shade, javadoc and source
+			     packaging so both shaded releases and the unshaded MCP library input
+			     are byte-for-byte reproducible across clean build directories. -->
+			<plugin>
+				<groupId>io.github.zlika</groupId>
+				<artifactId>reproducible-build-maven-plugin</artifactId>
+				<version>${reproducible-build-maven-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>canonicalize-core-jar</id>
+						<phase>package</phase>
+						<goals>
+							<goal>strip-jar</goal>
+						</goals>
+						<configuration>
+							<includes>
+								<include>${project.build.finalName}[.]jar</include>
+							</includes>
+							<zipDateTime>20260101000000</zipDateTime>
+							<fixZipExternalFileAttributes>true</fixZipExternalFileAttributes>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>

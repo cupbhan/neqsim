@@ -8,13 +8,20 @@
 Read `CONTEXT.md` for a 60-second overview of the codebase (repo map, build
 commands, code patterns).
 
-## Critical Constraint: Java 8
+## Critical Constraint: Java Compatibility Boundaries
 
-**All code MUST compile with Java 8.** Never use:
+**NeqSim core code under `src/` MUST remain Java 8 source-compatible.** The
+default core artifact is compiled for Java 17, while `pomJava8.xml` produces
+the supported `-Java8` artifact from the same sources. In core code, never use:
 - `var`, `List.of()`, `Map.of()`, `Set.of()`, `String.repeat()`,
   `str.isBlank()`, `str.strip()`, text blocks (`"""`), records, pattern
   matching `instanceof`, `Optional.isEmpty()`.
 - Use explicit types, `Arrays.asList()`, `StringUtils.repeat()`, `str.trim().isEmpty()`.
+
+The independent `neqsim-mcp-server/` module is an explicit Java 21 boundary
+because Quarkus/MCP requires Java 21. Its compiler release and formatting rules
+come from `neqsim-mcp-server/pom.xml`; do not apply the core Java 8 API ban to
+that module.
 
 ## Critical Constraint: Logging
 

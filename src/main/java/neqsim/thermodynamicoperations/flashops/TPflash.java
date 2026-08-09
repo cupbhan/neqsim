@@ -132,6 +132,10 @@ public class TPflash extends Flash {
    * the start of {@link #runInternal()}. Used as the collapse target when the spurious-multiphase rescue triggers.
    */
   private PhaseType referenceSinglePhaseType = null;
+  private TPmultiflash.SolveStatus lastMultiphaseSolveStatus = TPmultiflash.SolveStatus.NOT_RUN;
+  private String lastMultiphaseSolveMessage = "multiphase flash has not run";
+  private int lastMultiphaseSolveAttemptCount = 0;
+  private double lastMultiphaseMassBalanceResidual = Double.NaN;
   /** True after the bounded water-bearing ordinary-flash retry has been attempted in this run. */
   private boolean waterBearingRescueAttempted = false;
   /** Reusable rollback state for GDEM acceleration; transient because it contains no thermodynamic state. */
@@ -239,6 +243,46 @@ public class TPflash extends Flash {
       return (EosGeFlashModel) flashSystem;
     }
     return null;
+  }
+
+  /** @return status reported by the most recent nested multiphase flash. */
+  public TPmultiflash.SolveStatus getLastMultiphaseSolveStatus() {
+    return lastMultiphaseSolveStatus;
+  }
+
+  /** @return diagnostic reported by the most recent nested multiphase flash. */
+  public String getLastMultiphaseSolveMessage() {
+    return lastMultiphaseSolveMessage;
+  }
+
+  /** @return phase-fraction attempts made by the most recent nested multiphase flash. */
+  public int getLastMultiphaseSolveAttemptCount() {
+    return lastMultiphaseSolveAttemptCount;
+  }
+
+  /** @return final material-balance residual from the most recent nested multiphase flash. */
+  public double getLastMultiphaseMassBalanceResidual() {
+    return lastMultiphaseMassBalanceResidual;
+  }
+
+  /** @return true when no nested solve was needed or the latest nested solve converged. */
+  public boolean isLastMultiphaseSolveAccepted() {
+    return lastMultiphaseSolveStatus == TPmultiflash.SolveStatus.NOT_RUN
+        || lastMultiphaseSolveStatus.isConverged();
+  }
+
+  private void resetMultiphaseSolveDiagnostics() {
+    lastMultiphaseSolveStatus = TPmultiflash.SolveStatus.NOT_RUN;
+    lastMultiphaseSolveMessage = "multiphase flash has not run";
+    lastMultiphaseSolveAttemptCount = 0;
+    lastMultiphaseMassBalanceResidual = Double.NaN;
+  }
+
+  private void recordMultiphaseSolveDiagnostics(TPmultiflash operation) {
+    lastMultiphaseSolveStatus = operation.getSolveStatus();
+    lastMultiphaseSolveMessage = operation.getSolveStatusMessage();
+    lastMultiphaseSolveAttemptCount = operation.getSolveBetaAttemptCount();
+    lastMultiphaseMassBalanceResidual = operation.getFinalMassBalanceResidual();
   }
 
   /**
@@ -610,6 +654,7 @@ public class TPflash extends Flash {
    */
   private void runInternal() {
     resetStabilityDiagnostics();
+    resetMultiphaseSolveDiagnostics();
     waterBearingRescueAttempted = false;
     HybridEosGeFlashModel hybridModel = getHybridEosGeFlashModel();
     if (hybridModel != null) {
@@ -813,6 +858,12 @@ public class TPflash extends Flash {
           // logger.info("one phase flash is stable - checking multiphase flash....");
           TPmultiflash operation = new TPmultiflash(system, system.doSolidPhaseCheck());
           operation.run();
+          recordMultiphaseSolveDiagnostics(operation);
+          if (!isLastMultiphaseSolveAccepted()) {
+            logger.warn("Skipping TPflash multiphase post-processing after {}: {}",
+                lastMultiphaseSolveStatus, lastMultiphaseSolveMessage);
+            return;
+          }
           rescueSinglePhaseWaterBearingEndpoint();
           rescueSinglePhaseMultiphaseEndpoint();
         }
@@ -1008,6 +1059,12 @@ public class TPflash extends Flash {
       BalancedTwoPhaseState balancedWaterBearingReference = balancedWaterBearingReferenceBeforeMultiphaseCheck();
       TPmultiflash operation = new TPmultiflash(system, system.doSolidPhaseCheck());
       operation.run();
+      recordMultiphaseSolveDiagnostics(operation);
+      if (!isLastMultiphaseSolveAccepted()) {
+        logger.warn("Skipping TPflash multiphase post-processing after {}: {}",
+            lastMultiphaseSolveStatus, lastMultiphaseSolveMessage);
+        return;
+      }
       restoreBalancedAqueousReferenceAfterInvalidPhaseRemoval(balancedWaterBearingReference);
       restoreLowerGibbsReferenceAfterSinglePhaseCollapse(balancedWaterBearingReference);
       rescueSinglePhaseWaterBearingEndpoint();
