@@ -30,6 +30,7 @@ class FieldFluidRunnerTest extends NeqSimTest {
 
       JsonObject result = JsonParser.parseString(FieldFluidRunner.run(request.toString())).getAsJsonObject();
       JsonObject flash = result.getAsJsonObject("flash");
+      assertNotNull(flash, result.toString());
       String phases = flash.getAsJsonArray("phases").toString();
 
       assertEquals("success", result.get("status").getAsString(), result.toString());

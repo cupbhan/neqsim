@@ -1,0 +1,35 @@
+{
+  "format": "neqsim-fluid",
+  "version": "1.0",
+  "eos": "SRK",
+  "polarModel": "HV",
+  "components": [
+    {"name":"H2O","moleFraction":0.6500000000000001,"criticalTemperature":647.2999877929688,"criticalPressure":218.0,"acentricFactor":0.3440000116825104,"molarMass":18.01534080505371,"normalBoilingPoint":373.1499938964844,"criticalVolume":0.0559999880707264,"volumeShift":0.0002630351165927487,"parachor":0.0,"isPseudo":false},
+    {"name":"C7","moleFraction":0.03364005709585275,"criticalTemperature":539.3245849609375,"criticalPressure":33.527103424072266,"acentricFactor":0.46806544065475464,"molarMass":96.0,"normalBoilingPoint":365.1000061035156,"criticalVolume":0.4436587091255188,"volumeShift":0.05374693416640159,"parachor":283.94000244140625,"isPseudo":true},
+    {"name":"C8","moleFraction":0.034617381743460914,"criticalTemperature":557.6530151367188,"criticalPressure":30.182315826416016,"acentricFactor":0.49995529651641846,"molarMass":107.0,"normalBoilingPoint":389.8999938964844,"criticalVolume":0.4740870673084259,"volumeShift":0.0907411431860157,"parachor":309.67999267578125,"isPseudo":true},
+    {"name":"C9","moleFraction":0.030612067520900014,"criticalTemperature":578.2918701171875,"criticalPressure":26.776960372924805,"acentricFactor":0.5399391651153564,"molarMass":121.0,"normalBoilingPoint":415.3999938964844,"criticalVolume":0.5209949469375611,"volumeShift":0.1260068559785245,"parachor":342.44000244140625,"isPseudo":true},
+    {"name":"C10-C12","moleFraction":0.06866193802591906,"criticalTemperature":611.115234375,"criticalPressure":22.88968849182129,"acentricFactor":0.6102278232574463,"molarMass":145.45977783203125,"normalBoilingPoint":458.63116455078125,"criticalVolume":0.6121566860675812,"volumeShift":0.1575005059115749,"parachor":401.5830078125,"isPseudo":true},
+    {"name":"C13-C15","moleFraction":0.04446555784027282,"criticalTemperature":659.7001953125,"criticalPressure":18.899980545043945,"acentricFactor":0.7265377640724182,"molarMass":189.11129760742188,"normalBoilingPoint":519.193359375,"criticalVolume":0.786531251373291,"volumeShift":0.16891343095404585,"parachor":503.7937927246094,"isPseudo":true},
+    {"name":"C16-C18","moleFraction":0.029379415236638878,"criticalTemperature":703.8390502929688,"criticalPressure":16.61078453063965,"acentricFactor":0.8417916893959045,"molarMass":235.64756774902344,"normalBoilingPoint":571.2294921875,"criticalVolume":0.9864484175491334,"volumeShift":0.1510926467175482,"parachor":612.094482421875,"isPseudo":true},
+    {"name":"C19-C22","moleFraction":0.02895086122407617,"criticalTemperature":743.93701171875,"criticalPressure":15.386438369750977,"acentricFactor":0.9483266472816467,"molarMass":281.93994140625,"normalBoilingPoint":616.6417236328125,"criticalVolume":1.1965189999008181,"volumeShift":0.11672434936658395,"parachor":721.1286010742188,"isPseudo":true},
+    {"name":"C23-C26","moleFraction":0.02112691826009393,"criticalTemperature":787.0983276367188,"criticalPressure":14.484121322631836,"acentricFactor":1.0609904527664185,"molarMass":336.95257568359375,"normalBoilingPoint":664.0133666992188,"criticalVolume":1.4542463567352295,"volumeShift":0.06872736099112328,"parachor":849.3872680664062,"isPseudo":true},
+    {"name":"C27-C31","moleFraction":0.0188059007149065,"criticalTemperature":832.9649047851562,"criticalPressure":13.848713874816895,"acentricFactor":1.171223521232605,"molarMass":399.8792724609375,"normalBoilingPoint":709.6702880859375,"criticalVolume":1.7623679708862305,"volumeShift":0.010617079799953025,"parachor":997.2943725585938,"isPseudo":true},
+    {"name":"C32-C38","moleFraction":0.01679055246051589,"criticalTemperature":888.7586059570312,"criticalPressure":13.384533882141113,"acentricFactor":1.2802010774612427,"molarMass":481.7683410644531,"normalBoilingPoint":757.177001953125,"criticalVolume":2.1775750927734374,"volumeShift":-0.06669675943212088,"parachor":1190.3916015625,"isPseudo":true},
+    {"name":"C39-C49","moleFraction":0.013552899642343935,"criticalTemperature":965.0818481445312,"criticalPressure":13.06632137298584,"acentricFactor":1.3602405786514282,"molarMass":601.4926147460938,"normalBoilingPoint":816.6846313476562,"criticalVolume":2.8078938974761964,"volumeShift":-0.17724692384880725,"parachor":1474.15673828125,"isPseudo":true},
+    {"name":"C50-C80","moleFraction":0.009396450235019173,"criticalTemperature":1102.7158203125,"criticalPressure":12.964747428894043,"acentricFactor":1.2070857286453247,"molarMass":827.90966796875,"normalBoilingPoint":912.6702270507812,"criticalVolume":4.095813051071167,"volumeShift":-0.3667477917920645,"parachor":2030.89501953125,"isPseudo":true}
+  ],
+  "binaryInteractionCoefficients": [
+    {"i":"H2O","j":"C7","kij":0.0},
+    {"i":"H2O","j":"C8","kij":0.0},
+    {"i":"H2O","j":"C9","kij":0.0},
+    {"i":"H2O","j":"C10-C12","kij":0.0},
+    {"i":"H2O","j":"C13-C15","kij":0.0},
+    {"i":"H2O","j":"C16-C18","kij":0.0},
+    {"i":"H2O","j":"C19-C22","kij":0.0},
+    {"i":"H2O","j":"C23-C26","kij":0.0},
+    {"i":"H2O","j":"C27-C31","kij":0.0},
+    {"i":"H2O","j":"C32-C38","kij":0.0},
+    {"i":"H2O","j":"C39-C49","kij":0.0},
+    {"i":"H2O","j":"C50-C80","kij":0.0}
+  ]
+}
