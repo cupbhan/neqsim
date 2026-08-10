@@ -15,6 +15,7 @@ import neqsim.mcp.runners.BioprocessRunner;
 import neqsim.mcp.runners.ComponentQuery;
 import neqsim.mcp.runners.DynamicRunner;
 import neqsim.mcp.runners.FieldDevelopmentRunner;
+import neqsim.mcp.runners.FieldFluidRunner;
 import neqsim.mcp.runners.FlashRunner;
 import neqsim.mcp.runners.FlowAssuranceRunner;
 import neqsim.mcp.runners.ChemistryRunner;
@@ -46,6 +47,7 @@ import neqsim.mcp.runners.UtilityDesignRunner;
 import neqsim.mcp.runners.ValidationProfileRunner;
 import neqsim.mcp.runners.VisualizationRunner;
 import neqsim.mcp.runners.WaterHammerRunner;
+import neqsim.mcp.runners.WaterIF97Runner;
 import neqsim.mcp.runners.BenchmarkTrust;
 import neqsim.mcp.runners.CompositionRunner;
 import neqsim.mcp.runners.DataCatalogRunner;
@@ -53,6 +55,8 @@ import neqsim.mcp.runners.EquipmentSizingRunner;
 import neqsim.mcp.runners.FlareRadiationRunner;
 import neqsim.mcp.runners.HAZOPStudyRunner;
 import neqsim.mcp.runners.HazopScenarioRunner;
+import neqsim.mcp.runners.HydrocarbonWaterBoundaryRegressionRunner;
+import neqsim.mcp.runners.HydrocarbonWaterTopologyBenchmarkRunner;
 import neqsim.mcp.runners.IndustrialProfile;
 import neqsim.mcp.runners.LOPARunner;
 import neqsim.mcp.runners.MaterialsReviewRunner;
@@ -159,6 +163,106 @@ public class NeqSimTools {
           withAutoValidation(FlashRunner.run(json.toString()), "flash"), "general");
     } catch (Exception e) {
       return errorJson("Flash calculation failed: " + e.getMessage());
+    }
+  }
+
+  @Tool(description = "Calculate pure-water and steam properties with IAPWS-IF97. "
+      + "Returns one TP state, an IF97 region-4 saturation curve, and the water critical point.")
+  public String runWaterIF97(@ToolArg(description = "State temperature in K") Double temperatureK,
+      @ToolArg(description = "Absolute state pressure in bara") Double pressureBara,
+      @ToolArg(description = "Saturation-curve minimum temperature in K") Double temperatureMinK,
+      @ToolArg(description = "Saturation-curve maximum temperature in K") Double temperatureMaxK,
+      @ToolArg(description = "Saturation-curve point count") Integer pointCount) {
+    if (temperatureK == null || pressureBara == null || temperatureMinK == null || temperatureMaxK == null
+        || pointCount == null) {
+      return errorJson("Water IF97 calculation requires all state and curve arguments");
+    }
+    String policyBlocked = enforceToolAccess("runFlash");
+    if (policyBlocked != null) {
+      return policyBlocked;
+    }
+    return standardizeResponse("runWaterIF97",
+        withAutoValidation(
+            WaterIF97Runner.run(temperatureK, pressureBara, temperatureMinK, temperatureMaxK, pointCount), "flash"),
+        "general");
+  }
+
+  @Tool(description = "Run a thermodynamic flash from a complete neqsim-fluid JSON definition.")
+  public String runFluidFlash(
+      @ToolArg(description = "Complete neqsim-fluid JSON object serialized as a string") String fluidDefinition,
+      @ToolArg(description = "Temperature value") Double temperature,
+      @ToolArg(description = "Temperature unit") String temperatureUnit,
+      @ToolArg(description = "Pressure value") Double pressure,
+      @ToolArg(description = "Pressure unit") String pressureUnit,
+      @ToolArg(description = "Flash type") String flashType) {
+    if (temperature == null || pressure == null) {
+      return errorJson("Fluid-definition flash requires temperature and pressure values");
+    }
+    String policyBlocked = enforceToolAccess("runFlash");
+    if (policyBlocked != null) {
+      return policyBlocked;
+    }
+    try {
+      JsonObject json = new JsonObject();
+      json.add("fluidDefinition", JsonParser.parseString(fluidDefinition));
+      JsonObject temp = new JsonObject();
+      temp.addProperty("value", temperature);
+      temp.addProperty("unit", temperatureUnit);
+      json.add("temperature", temp);
+      JsonObject press = new JsonObject();
+      press.addProperty("value", pressure);
+      press.addProperty("unit", pressureUnit);
+      json.add("pressure", press);
+      json.addProperty("flashType", flashType);
+      JsonObject fluid = json.getAsJsonObject("fluidDefinition");
+      json.addProperty("model", fluid.has("eos") ? fluid.get("eos").getAsString() : "SRK");
+      return standardizeResponse("runFluidFlash", withAutoValidation(FlashRunner.run(json.toString()), "flash"),
+          "general");
+    } catch (Exception e) {
+      return errorJson("Fluid-definition flash calculation failed: " + e.getMessage());
+    }
+  }
+
+  @Tool(description = "Run a field-fluid TP flash for water, ammonia, carbon dioxide, and heavy-oil systems.")
+  public String runFieldFluid(
+      @ToolArg(description = "Complete field-fluid request JSON") String fieldFluidJson) {
+    String policyBlocked = enforceToolAccess("runFlash");
+    if (policyBlocked != null) {
+      return policyBlocked;
+    }
+    return standardizeResponse("runFieldFluid", withAutoValidation(FieldFluidRunner.run(fieldFluidJson), "flash"),
+        "general");
+  }
+
+  @Tool(description = "Compare independently labelled hydrocarbon-water phase boundaries.")
+  public String runHydrocarbonWaterBoundaryRegression(
+      @ToolArg(description = "Boundary regression JSON") String regressionJson) {
+    String policyBlocked = enforceToolAccess("runFlash");
+    if (policyBlocked != null) {
+      return policyBlocked;
+    }
+    try {
+      JsonObject request = JsonParser.parseString(regressionJson).getAsJsonObject();
+      return standardizeResponse("runHydrocarbonWaterBoundaryRegression",
+          HydrocarbonWaterBoundaryRegressionRunner.run(request).toString(), "general");
+    } catch (Exception error) {
+      return errorJson("Hydrocarbon-water boundary regression failed: " + error.getMessage());
+    }
+  }
+
+  @Tool(description = "Verify a hydrocarbon-water topology benchmark manifest.")
+  public String runHydrocarbonWaterTopologyBenchmark(
+      @ToolArg(description = "Topology benchmark JSON") String benchmarkJson) {
+    String policyBlocked = enforceToolAccess("runFlash");
+    if (policyBlocked != null) {
+      return policyBlocked;
+    }
+    try {
+      JsonObject request = JsonParser.parseString(benchmarkJson).getAsJsonObject();
+      return standardizeResponse("runHydrocarbonWaterTopologyBenchmark",
+          HydrocarbonWaterTopologyBenchmarkRunner.run(request).toString(), "general");
+    } catch (Exception error) {
+      return errorJson("Hydrocarbon-water topology benchmark failed: " + error.getMessage());
     }
   }
 
