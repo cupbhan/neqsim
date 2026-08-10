@@ -124,9 +124,9 @@ public class NeqSimTools {
       @ToolArg(description = "Fluid composition as JSON object mapping component names "
           + "to mole fractions, e.g. {\"methane\": 0.85, \"ethane\": 0.10, \"propane\": 0.05}. "
           + "Use searchComponents tool to find valid names.") String components,
-      @ToolArg(description = "Temperature value (number)") double temperature,
+      @ToolArg(description = "Temperature value (number)") Double temperature,
       @ToolArg(description = "Temperature unit: C, K, or F") String temperatureUnit,
-      @ToolArg(description = "Pressure value (number)") double pressure,
+      @ToolArg(description = "Pressure value (number)") Double pressure,
       @ToolArg(
           description = "Pressure unit: bara, barg, Pa, kPa, MPa, psi, or atm") String pressureUnit,
       @ToolArg(description = "Equation of state: SRK (Soave-Redlich-Kwong, general purpose), "
@@ -138,6 +138,9 @@ public class NeqSimTools {
           + "dewPointT (dew point T at given P), dewPointP (dew point P at given T), "
           + "bubblePointT (bubble point T at given P), bubblePointP (bubble point P at given T), "
           + "hydrateTP (hydrate equilibrium T at given P)") String flashType) {
+    if (temperature == null || pressure == null) {
+      return errorJson("Flash calculation requires temperature and pressure values");
+    }
     String policyBlocked = enforceToolAccess("runFlash");
     if (policyBlocked != null) {
       return policyBlocked;
@@ -511,9 +514,12 @@ public class NeqSimTools {
       @ToolArg(description = "Complete process definition as JSON string, OR a modelId returned by manageModel(action=''register'') to reuse a registered model without resending it.") String processJson,
       @ToolArg(description = "Dot-notation address of the INPUT variable to modify, "
           + "e.g. 'Compressor.outletPressure'.") String address,
-      @ToolArg(description = "New value for the variable.") double value,
+      @ToolArg(description = "New value for the variable.") Double value,
       @ToolArg(description = "Unit of measurement for the value, "
           + "e.g. 'C', 'bara', 'kg/hr'.") String unit) {
+    if (value == null) {
+      return errorJson("Simulation variable update requires a value");
+    }
     String policyBlocked = enforceToolAccess("setSimulationVariable");
     if (policyBlocked != null) {
       return policyBlocked;
@@ -701,18 +707,21 @@ public class NeqSimTools {
           + "to mole fractions, e.g. {\"methane\": 0.85, \"ethane\": 0.10}") String components,
       @ToolArg(description = "Variable to sweep: 'temperature' (vary T at fixed P) "
           + "or 'pressure' (vary P at fixed T)") String sweep,
-      @ToolArg(description = "Start of sweep range (number)") double sweepFrom,
+      @ToolArg(description = "Start of sweep range (number)") Double sweepFrom,
       @ToolArg(description = "Unit for start value: C, K, F (temperature) "
           + "or bara, barg, Pa, kPa, MPa, psi (pressure)") String sweepFromUnit,
-      @ToolArg(description = "End of sweep range (number)") double sweepTo,
+      @ToolArg(description = "End of sweep range (number)") Double sweepTo,
       @ToolArg(description = "Unit for end value (same type as sweepFromUnit)") String sweepToUnit,
       @ToolArg(description = "Fixed condition value: pressure if sweeping temperature, "
-          + "or temperature if sweeping pressure") double fixedValue,
+          + "or temperature if sweeping pressure") Double fixedValue,
       @ToolArg(description = "Unit for fixed condition: bara/barg/Pa/kPa/MPa/psi "
           + "(if fixed pressure) or C/K/F (if fixed temperature)") String fixedUnit,
-      @ToolArg(description = "Number of data points (2-200, default 20)") int points,
+      @ToolArg(description = "Number of data points (2-200, default 20)") Integer points,
       @ToolArg(description = "Equation of state: SRK, PR, CPA, GERG2008, "
           + "PCSAFT, UMRPRU") String eos) {
+    if (sweepFrom == null || sweepTo == null || fixedValue == null || points == null) {
+      return errorJson("Property table requires sweep bounds, fixed value, and point count");
+    }
     String policyBlocked = enforceToolAccess("getPropertyTable");
     if (policyBlocked != null) {
       return policyBlocked;
