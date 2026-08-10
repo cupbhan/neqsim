@@ -52,17 +52,23 @@ public abstract class PhaseEos extends Phase implements PhaseEosInterface {
       logger.error("Cloning failed.", ex);
     }
 
-    // Thread-safety contract: mixSelect and mixRule are shared (shallow) with the
-    // parent. This is safe for concurrent flashing on parent and clone because the
-    // interaction-parameter matrices (intparam, intparamT, HVDij, NRTLDij,
-    // WSintparam,
-    // NRTLalpha, ...) are written exclusively by setMixingRule() during fluid setup
-    // and are treated as read-only during flash calculations. Callers MUST NOT
-    // invoke setMixingRule() on a fluid (or any of its clones) while another thread
-    // is performing a flash on a sibling clone. EosMixingRuleHandler.clone() is
-    // available for callers that need fully-independent matrix copies (e.g., when
-    // tuning kij in parallel); it is intentionally not invoked here to keep clone()
-    // cheap on the hot path.
+    // Mixing-rule implementations are not immutable calculation strategies. HV/WS
+    // rules retain the active GE phase, alpha_mix, derivatives, and work arrays.
+    // Sharing them between sibling phase clones makes one phase initialization alter
+    // another phase's fugacity result and can produce Newton roots that cannot be
+    // reproduced in a fresh system. Clone the parameter handler and recreate the
+    // active rule so both its mutable work state and its orgPhase reference belong to
+    // this phase clone.
+    if (clonedPhase != null && mixSelect != null) {
+      clonedPhase.mixSelect = mixSelect.clone();
+      if (mixRule == null) {
+        clonedPhase.mixRule = null;
+      } else if (clonedPhase.mixingRuleType != null) {
+        clonedPhase.mixRule = clonedPhase.mixSelect.resetMixingRule(clonedPhase.mixingRuleType.getValue(), clonedPhase);
+      } else {
+        clonedPhase.mixRule = clonedPhase.mixSelect.getMixingRule(1);
+      }
+    }
     return clonedPhase;
   }
 
@@ -138,14 +144,21 @@ public abstract class PhaseEos extends Phase implements PhaseEosInterface {
         loc_ATT = calcATT(this, temperature, pressure, numberOfComponents);
       }
 
+      // Weighted by molar mass, so the split is decided on a mass basis. Water is 18 g/mol while heavy petroleum
+      // pseudo-components reach several hundred, so a mole-fraction test flips a phase that is 81-96 wt%
+      // hydrocarbon over to AQUEOUS as soon as the water mole fraction passes 0.5. That is not merely a label:
+      // the multiphase flash gates aqueous seeding on !hasPhaseType(AQUEOUS) and hydrocarbon-liquid seeding on
+      // hasPhaseType(OIL), so a misclassified oil phase makes the solver believe an aqueous phase already exists
+      // and skip seeding the real one.
       double sumHydrocarbons = 0.0;
       double sumAqueous = 0.0;
       for (int i = 0; i < numberOfComponents; i++) {
+        double massFraction = getComponent(i).getx() * getComponent(i).getMolarMass();
         if ((getComponent(i).isHydrocarbon() || getComponent(i).isInert() || getComponent(i).isIsTBPfraction())
             && !getComponent(i).getName().equals("water") && !getComponent(i).getName().equals("water_PC")) {
-          sumHydrocarbons += getComponent(i).getx();
+          sumHydrocarbons += massFraction;
         } else {
-          sumAqueous += getComponent(i).getx();
+          sumAqueous += massFraction;
         }
       }
 

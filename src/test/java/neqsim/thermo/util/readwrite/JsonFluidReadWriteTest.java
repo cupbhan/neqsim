@@ -9,8 +9,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import neqsim.thermo.component.Component;
 import neqsim.thermo.phase.PhaseEos;
 import neqsim.thermo.system.SystemInterface;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
@@ -218,6 +220,34 @@ class JsonFluidReadWriteTest extends neqsim.NeqSimTest {
   }
 
   @Test
+  void testMathiasCopemanAlphaParametersAreAppliedForSrkAndPr() {
+    String withAlpha = MINIMAL_JSON.replace("\"volumeShift\": -0.1542,",
+        "\"volumeShift\": -0.1542, " + "\"mathiasCopemanCoefficients\": [0.5427, -0.0524, -0.3381],");
+    SystemInterface srk = JsonFluidReadWrite.readString(withAlpha);
+    assertEquals(4, srk.getComponent(0).getAttractiveTermNumber());
+    assertEquals(0.5427, srk.getComponent(0).getMatiascopemanParams()[0], 1e-12);
+    assertEquals(-0.0524, srk.getComponent(0).getMatiascopemanParams()[1], 1e-12);
+    assertEquals(-0.3381, srk.getComponent(0).getMatiascopemanParams()[2], 1e-12);
+
+    SystemInterface pr = JsonFluidReadWrite.readString(withAlpha.replace("\"SRK\"", "\"PR\""));
+    assertEquals(13, pr.getComponent(0).getAttractiveTermNumber());
+    assertEquals(0.5427, ((Component) pr.getComponent(0)).getMatiascopemanParamsPR()[0], 1e-12);
+  }
+
+  @Test
+  void testMathiasCopemanReapplyResolvesE300AliasAfterAddingComponents() {
+    String json = MINIMAL_JSON.replace("\"methane\"", "\"N2\"").replace("\"volumeShift\": -0.1542,",
+        "\"volumeShift\": -0.1542, " + "\"mathiasCopemanCoefficients\": [0.5427, -0.0524, -0.3381],");
+    SystemInterface fluid = JsonFluidReadWrite.readString(json);
+    fluid.addComponent("water", 0.1);
+    JsonFluidReadWrite.applyComponentAlphaParameters(fluid, JsonParser.parseString(json).getAsJsonObject());
+
+    assertEquals("nitrogen", fluid.getComponent(0).getComponentName());
+    assertEquals(4, fluid.getComponent(0).getAttractiveTermNumber());
+    assertEquals(0.5427, fluid.getComponent(0).getMatiascopemanParams()[0], 1e-12);
+  }
+
+  @Test
   void testE300ShortNames() {
     // Use E300 short names (C1, C2, N2) and verify they map correctly
     String json = "{\n" + "  \"eos\": \"SRK\",\n" + "  \"components\": [\n"
@@ -241,6 +271,21 @@ class JsonFluidReadWriteTest extends neqsim.NeqSimTest {
     assertEquals("nitrogen", fluid.getComponent(0).getComponentName());
     assertEquals("methane", fluid.getComponent(1).getComponentName());
     assertEquals("ethane", fluid.getComponent(2).getComponentName());
+  }
+
+  @Test
+  void testPvtSimAmmoniaShortName() {
+    String json = "{\n" + "  \"eos\": \"SRK\",\n" + "  \"components\": [\n"
+        + "    { \"name\": \"NH3\", \"moleFraction\": 1.0,\n"
+        + "      \"criticalTemperature\": 405.4, \"criticalPressure\": 113.0,\n"
+        + "      \"acentricFactor\": 0.25, \"molarMass\": 17.031,\n"
+        + "      \"normalBoilingPoint\": 239.8, \"criticalVolume\": 0.099,\n"
+        + "      \"volumeShift\": 0.0, \"parachor\": 73.07 }\n" + "  ]\n" + "}";
+
+    SystemInterface fluid = JsonFluidReadWrite.readString(json);
+
+    assertEquals(1, fluid.getNumberOfComponents());
+    assertEquals("ammonia", fluid.getComponent(0).getComponentName());
   }
 
   @Test
