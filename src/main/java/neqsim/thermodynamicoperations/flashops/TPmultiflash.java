@@ -59,6 +59,12 @@ public class TPmultiflash extends TPflash {
 
   /** Serialization version UID. */
   private static final long serialVersionUID = 1000;
+  /** Minimum water feed fraction for repairing a non-equilibrium water-rich split. */
+  private static final double WATER_RICH_REPAIR_FEED_FRACTION_LIMIT = 1.0e-2;
+  /** Water mole fraction identifying the existing candidate aqueous root. */
+  private static final double WATER_RICH_REPAIR_PHASE_FRACTION_LIMIT = 0.5;
+  /** Fugacity residual above which an incoming two-phase split must be repaired before stability analysis. */
+  private static final double WATER_RICH_REPAIR_FUGACITY_RESIDUAL_LIMIT = 1.0e-6;
   /** Logger object for class. */
   static Logger logger = LogManager.getLogger(TPmultiflash.class);
 
@@ -576,6 +582,119 @@ public class TPmultiflash extends TPflash {
   }
 
   /**
+   * Rolls back a vanishing speculative third phase in a neutral water/hydrocarbon flash.
+   *
+   * <p>
+   * A stability trial can add a third non-aqueous phase that immediately collapses to the phase-fraction floor. The
+   * Newton iterate then reports {@link SolveStatus#INVALID_PHASE_REMOVAL_DURING_ITERATION} on every retry, leaving the
+   * otherwise valid oil/aqueous split at its initial beta values. For a neutral three-phase water/hydrocarbon system,
+   * remove only that floor-clamped non-aqueous trial and validate the remaining two phases with a fresh beta solve.
+   * This is deliberately narrower than the ordinary low-beta cleanup because it never removes an aqueous phase and is
+   * only entered after the solver has explicitly rejected the speculative phase-removal iterate.
+   * </p>
+   *
+   * @return true when the two-phase rollback converged
+   */
+  private boolean rollbackVanishingNeutralWaterTrialPhase() {
+    if (lastSolveBetaStatus != SolveStatus.INVALID_PHASE_REMOVAL_DURING_ITERATION || system.getNumberOfPhases() != 3
+        || system.isChemicalSystem() || system.hasIons() || !system.hasComponent("water")
+        || !system.hasPhaseType(PhaseType.AQUEOUS)) {
+      return false;
+    }
+
+    int vanishingPhase = -1;
+    double minimumBeta = Double.POSITIVE_INFINITY;
+    for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+      double beta = system.getBeta(phase);
+      if (system.getPhase(phase).getType() != PhaseType.AQUEOUS && beta < minimumBeta) {
+        minimumBeta = beta;
+        vanishingPhase = phase;
+      }
+    }
+    if (vanishingPhase < 0 || minimumBeta > 1.1 * phaseFractionMinimumLimit) {
+      return false;
+    }
+
+    logger.debug("Rolling back vanishing neutral-water trial phase {} with beta={}", vanishingPhase, minimumBeta);
+    system.removePhaseKeepTotalComposition(vanishingPhase);
+    system.normalizeBeta();
+    system.init(1);
+    setDoubleArrays();
+
+    double difference = Double.POSITIVE_INFINITY;
+    double previousDifference = Double.POSITIVE_INFINITY;
+    int iterations = 0;
+    do {
+      previousDifference = difference;
+      difference = solveBeta();
+      iterations++;
+    } while (difference > 1.0e-12 && !removePhase && (difference < previousDifference || iterations < 10)
+        && iterations < 50);
+
+    boolean converged = lastSolveBetaStatus.isConverged() && calculateMassBalanceResidual() <= 1.0e-8;
+    if (converged) {
+      doStabilityAnalysis = false;
+      postFlashStabilityChecked = true;
+      enhancedStabilityChecked = true;
+    }
+    return converged;
+  }
+
+  /**
+   * Recovers an equilibrium neutral-water split whose phase compositions converged but whose beta iterate stalled.
+   *
+   * <p>
+   * A multiphase stability calculation can finish with two fugacity-equilibrated oil/aqueous compositions while the
+   * retained phase fractions belong to an earlier speculative iterate. The phase fractions then neither sum to one nor
+   * reconstruct the feed, even though a fresh two-phase beta solve converges immediately. Limit the recovery to neutral
+   * water systems with exactly two phases, an aqueous phase, at least one completed beta solve, and already
+   * equilibrated phase compositions. Later stability bookkeeping can invalidate the retained beta vector even when each
+   * individual beta solve reported convergence, so use the current phase-fraction and material-balance state rather
+   * than an individual attempt status. This keeps the fallback from masking a genuine fugacity or chemistry failure.
+   * </p>
+   *
+   * @return true when a fresh beta solve restores a validated two-phase state
+   */
+  private boolean recoverStalledNeutralWaterTwoPhaseBeta() {
+    if (solveBetaAttemptCount == 0 || system.getNumberOfPhases() != 2 || system.isChemicalSystem() || system.hasIons()
+        || !system.hasComponent("water") || !system.hasPhaseType(PhaseType.AQUEOUS)) {
+      return false;
+    }
+
+    double initialMassBalanceResidual = calculateMassBalanceResidual();
+    if (hasValidPhaseFractions() && Double.isFinite(initialMassBalanceResidual)
+        && initialMassBalanceResidual <= 1.0e-8) {
+      return false;
+    }
+    double fugacityResidual = calculateMaximumLogFugacityResidual();
+    if (!Double.isFinite(fugacityResidual) || fugacityResidual > 1.0e-8) {
+      return false;
+    }
+
+    setDoubleArrays();
+    double difference = Double.POSITIVE_INFINITY;
+    double previousDifference = Double.POSITIVE_INFINITY;
+    int iterations = 0;
+    do {
+      previousDifference = difference;
+      difference = solveBeta();
+      iterations++;
+    } while (difference > 1.0e-12 && !removePhase && (difference < previousDifference || iterations < 10)
+        && iterations < 50);
+
+    double recoveredMassBalanceResidual = calculateMassBalanceResidual();
+    boolean recovered = lastSolveBetaStatus.isConverged() && hasValidPhaseFractions()
+        && Double.isFinite(recoveredMassBalanceResidual) && recoveredMassBalanceResidual <= 1.0e-8;
+    if (recovered) {
+      logger.debug(
+          "Recovered stalled neutral-water two-phase beta state: initialMassBalanceResidual={}, "
+              + "recoveredMassBalanceResidual={}, fugacityResidual={}",
+          initialMassBalanceResidual, recoveredMassBalanceResidual, fugacityResidual);
+    }
+    return recovered;
+  }
+
+  /**
    * Remove a duplicate phase while conserving its mass by merging its phase fraction into the surviving
    * (near-identical) phase before removal. Two phases flagged as numerical duplicates have essentially identical
    * mole-fraction vectors, so the merged phase fraction is simply the sum of the two betas. Without this merge the
@@ -592,6 +711,101 @@ public class TPmultiflash extends TPflash {
     int newKeepIndex = keepPhase > removePhase2 ? keepPhase - 1 : keepPhase;
     system.setBeta(newKeepIndex, mergedBeta);
     system.normalizeBeta();
+  }
+
+  /**
+   * Prepares a non-equilibrium water-rich two-phase endpoint for phase-fraction repair.
+   *
+   * <p>
+   * The ordinary cubic gas/oil flash can return two material-balanced phases while retaining a water-rich candidate on
+   * a GAS or OIL root with a large component fugacity mismatch. Running tangent-plane stability analysis on that
+   * non-equilibrium state can create a speculative third phase and later request phase removal from an unconverged
+   * iterate. For a neutral feed with material water content, promote the water-rich candidate to the aqueous root and
+   * solve the existing split first. Stability expansion remains available on later bounded reruns after a converged
+   * phase removal.
+   * </p>
+   *
+   * @return true when the current state was prepared for a phase-fraction repair
+   */
+  private boolean prepareWaterRichSplitForBetaRepair() {
+    if (!system.doMultiPhaseCheck() || system.isChemicalSystem() || system.hasIons() || system.getNumberOfPhases() != 2
+        || system.hasPhaseType(PhaseType.AQUEOUS) || !system.hasComponent("water")) {
+      return false;
+    }
+
+    ComponentInterface waterComponent = system.getPhase(0).getComponent("water");
+    double waterFeedFraction = waterComponent.getz();
+    if (waterFeedFraction < WATER_RICH_REPAIR_FEED_FRACTION_LIMIT) {
+      return false;
+    }
+    // Below water's critical pressure the ordinary gas/oil roots remain topologically
+    // distinct and the existing stability path is reliable. The repair is for the
+    // supercritical-pressure root ambiguity where a dense water-rich candidate can retain
+    // a hydrocarbon phase label even though the incoming split is not at equilibrium.
+    if (system.getPressure("bara") <= waterComponent.getPC()) {
+      return false;
+    }
+
+    int waterRichPhase = -1;
+    double maximumWaterFraction = WATER_RICH_REPAIR_PHASE_FRACTION_LIMIT;
+    for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
+      double waterFraction = system.getPhase(phaseIndex).getComponent("water").getx();
+      if (waterFraction > maximumWaterFraction) {
+        maximumWaterFraction = waterFraction;
+        waterRichPhase = phaseIndex;
+      }
+    }
+    if (waterRichPhase < 0) {
+      return false;
+    }
+
+    double fugacityResidual = calculateMaximumLogFugacityResidual();
+    if (!Double.isFinite(fugacityResidual) || fugacityResidual <= WATER_RICH_REPAIR_FUGACITY_RESIDUAL_LIMIT) {
+      return false;
+    }
+
+    PhaseType originalPhaseType = system.getPhase(waterRichPhase).getType();
+    system.setPhaseType(waterRichPhase, PhaseType.AQUEOUS);
+    try {
+      system.init(1);
+    } catch (Exception ex) {
+      system.setPhaseType(waterRichPhase, originalPhaseType);
+      system.init(1);
+      logger.warn("Water-rich phase repair initialization failed; restored {} root: {}", originalPhaseType,
+          ex.getMessage());
+      return false;
+    }
+    logger.debug("Repairing non-equilibrium water-rich split before stability analysis: phase={}, waterX={}, "
+        + "fugacityResidual={}", waterRichPhase, maximumWaterFraction, fugacityResidual);
+    return true;
+  }
+
+  /**
+   * Calculates the largest component log-fugacity mismatch across active phases.
+   *
+   * @return maximum absolute log-fugacity range
+   */
+  private double calculateMaximumLogFugacityResidual() {
+    if (system.getNumberOfPhases() < 2) {
+      return 0.0;
+    }
+    double maximumResidual = 0.0;
+    for (int componentIndex = 0; componentIndex < system.getPhase(0).getNumberOfComponents(); componentIndex++) {
+      if (system.getPhase(0).getComponent(componentIndex).getz() < 1.0e-12) {
+        continue;
+      }
+      double minimumLogFugacity = Double.POSITIVE_INFINITY;
+      double maximumLogFugacity = Double.NEGATIVE_INFINITY;
+      for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
+        ComponentInterface component = system.getPhase(phaseIndex).getComponent(componentIndex);
+        double moleFraction = Math.max(component.getx(), 1.0e-100);
+        double logFugacity = Math.log(moleFraction) + component.getLogFugacityCoefficient();
+        minimumLogFugacity = Math.min(minimumLogFugacity, logFugacity);
+        maximumLogFugacity = Math.max(maximumLogFugacity, logFugacity);
+      }
+      maximumResidual = Math.max(maximumResidual, maximumLogFugacity - minimumLogFugacity);
+    }
+    return maximumResidual;
   }
 
   /** {@inheritDoc} */
@@ -2443,6 +2657,7 @@ public class TPmultiflash extends TPflash {
       runInternal();
     } finally {
       if (topLevelRun) {
+        recoverStalledNeutralWaterTwoPhaseBeta();
         finalizeSolveDiagnostics();
         if (phaseCleanupSkipped) {
           solveStatusMessage += "; low-beta phase cleanup was skipped";
@@ -2455,6 +2670,10 @@ public class TPmultiflash extends TPflash {
     int aqueousPhaseNumber = 0;
     enhancedStabilityChecked = false;
     betaSolveStalled = false;
+    if (prepareWaterRichSplitForBetaRepair()) {
+      multiPhaseTest = true;
+      doStabilityAnalysis = false;
+    }
     // logger.info("Starting multiphase-flash....");
 
     // For systems with ions, temporarily remove ions before stability analysis
@@ -2678,6 +2897,7 @@ public class TPmultiflash extends TPflash {
           || (iterOut < 3 && system.isChemicalSystem() && system.hasPhaseType(PhaseType.AQUEOUS)));
 
       betaSolveStalled = diff > maxerr;
+      rollbackVanishingNeutralWaterTrialPhase();
 
       // After flash converges, check for additional phases (three-phase detection)
       // This is particularly important for systems like CO2/H2S/hydrocarbon mixtures
@@ -2744,14 +2964,34 @@ public class TPmultiflash extends TPflash {
           double initialBeta = Math.max(1.0e-5, 10.0 * phaseFractionMinimumLimit);
           system.setBeta(aquPhaseIndex, initialBeta);
           system.normalizeBeta();
+          boolean aqueousPhaseSeeded = false;
           try {
             system.init(1);
+            aqueousPhaseSeeded = true;
           } catch (Exception ex) {
             logger.warn("Aqueous phase seeding init failed, removing phase: " + ex.getMessage());
             system.removePhaseKeepTotalComposition(aquPhaseIndex);
           }
-          multiPhaseTest = true;
-          doStabilityAnalysis = false;
+          if (aqueousPhaseSeeded) {
+            multiPhaseTest = true;
+            doStabilityAnalysis = false;
+
+            // Seeding changes both the phase count and the normalized beta vector after the main
+            // phase-fraction solve above. Validate that new state through the same solver before
+            // final diagnostics; otherwise the fixed seed beta leaks directly into the material
+            // balance (for example, a repeatable 3.5e-6 residual for the wet field fluid).
+            setDoubleArrays();
+            double seededPhaseDiff = Double.POSITIVE_INFINITY;
+            double previousSeededPhaseDiff = Double.POSITIVE_INFINITY;
+            int seededPhaseIterations = 0;
+            do {
+              previousSeededPhaseDiff = seededPhaseDiff;
+              seededPhaseDiff = solveBeta();
+              seededPhaseIterations++;
+            } while (seededPhaseDiff > 1.0e-12 && !removePhase
+                && (seededPhaseDiff < previousSeededPhaseDiff || seededPhaseIterations < 50)
+                && seededPhaseIterations < 200);
+          }
         }
       }
 
@@ -2761,6 +3001,8 @@ public class TPmultiflash extends TPflash {
       // Other phases classified as AQUEOUS should be reclassified as OIL with ions removed
       // Also applies to systems with ions even without chemical reactions
       ensureSingleAqueousPhase();
+
+      recoverStalledNeutralWaterTwoPhaseBeta();
 
       // A failed beta solve must not feed the destructive low-beta purge below. This checkpoint evaluates the current
       // active state before any phase is removed. Speculative failures remain visible in the counters, but an earlier
