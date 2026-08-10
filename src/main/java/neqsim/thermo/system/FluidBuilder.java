@@ -367,6 +367,25 @@ public class FluidBuilder implements Serializable {
   }
 
   /**
+   * Creates the versioned development heavy-oil fluid containing H2O, CO2, N2, and NH3.
+   *
+   * <p>
+   * This preset uses the nonreactive SRK compatibility contract validated against PVTsim Nova. Supported NH3 anchors
+   * are 0.1, 1.0, and 5.0 mol%. The preset is intended for software delivery and regression testing; it is not a
+   * field-qualified reservoir-fluid description.
+   * </p>
+   *
+   * @param temperatureK temperature in Kelvin
+   * @param pressureBara pressure in bara
+   * @param nh3MolPercent NH3 dose; must be 0.1, 1.0, or 5.0 mol%
+   * @return configured heavy-oil multimedia fluid
+   * @see HeavyOilMultimediaFluid
+   */
+  public static SystemInterface heavyOilMultimedia(double temperatureK, double pressureBara, double nh3MolPercent) {
+    return HeavyOilMultimediaFluid.create(nh3MolPercent, temperatureK, pressureBara);
+  }
+
+  /**
    * Creates a CO2-rich stream typical for carbon capture and storage (CCS).
    *
    * <p>

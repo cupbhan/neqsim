@@ -78,6 +78,40 @@ public class EosMixingRulesTest {
   }
 
   @Test
+  void waterAgainstALightPseudoMatchesTheDatabaseValueForTheSameMolecule() {
+    neqsim.thermo.system.SystemSrkEos named = new neqsim.thermo.system.SystemSrkEos(298.0, 10.0);
+    named.addComponent("water", 0.5);
+    named.addComponent("n-heptane", 0.5);
+    named.setMixingRule("classic");
+    double namedKij = ((PhaseEos) named.getPhase(0)).getEosMixingRule().getBinaryInteractionParameter(0, 1);
+
+    neqsim.thermo.system.SystemSrkEos pseudo = new neqsim.thermo.system.SystemSrkEos(298.0, 10.0);
+    pseudo.addComponent("water", 0.5);
+    pseudo.addTBPfraction("C7", 0.5, 96.0 / 1000.0, 0.75);
+    pseudo.setMixingRule("classic");
+    double pseudoKij = ((PhaseEos) pseudo.getPhase(0)).getEosMixingRule().getBinaryInteractionParameter(0, 1);
+
+    // A C7 pseudo is n-heptane by molar mass; it used to take a flat 0.2 purely for lacking a name, which dissolves
+    // all the water into the hydrocarbon liquid and truncates the three-phase locus.
+    assertEquals(0.5, namedKij, 1e-9, "database value for the named molecule");
+    assertEquals(namedKij, pseudoKij, 1e-9, "pseudo of the same molar mass must not get a different parameter");
+  }
+
+  @Test
+  void waterAgainstAPseudoBeyondTheDatabaseRangeKeepsTheHistoricalDefault() {
+    neqsim.thermo.system.SystemSrkEos testSystem = new neqsim.thermo.system.SystemSrkEos(298.0, 10.0);
+    testSystem.addComponent("water", 0.5);
+    testSystem.addTBPfraction("C30", 0.5, 420.0 / 1000.0, 0.95);
+    testSystem.setMixingRule("classic");
+
+    double kij = ((PhaseEos) testSystem.getPhase(0)).getEosMixingRule().getBinaryInteractionParameter(0, 1);
+
+    // The database holds no water pair above n-nonane, so heavy fractions are left where they were rather than
+    // extrapolated: the one heavy-fluid comparison available gets worse when 0.5 is pushed onto them.
+    assertEquals(0.2, kij, 1e-9);
+  }
+
+  @Test
   void testCalculatedInteractionParametersUseCriticalVolumes() {
     neqsim.thermo.system.SystemPrEos testSystem = new neqsim.thermo.system.SystemPrEos(298.0, 10.0);
     testSystem.addComponent("methane", 1.0);
