@@ -167,6 +167,40 @@ public interface EosMixingRulesInterface extends MixingRulesInterface {
   public double getBinaryInteractionParameterT1(int i, int j);
 
   /**
+   * Set a symmetric piecewise-linear temperature table for one binary interaction parameter.
+   *
+   * <p>
+   * Temperatures must be finite, strictly increasing values in kelvin. Values are held constant outside the table
+   * range. Mixing rules without tabulated-temperature support may retain the table for a later rule reset but do not
+   * use it in their calculations.
+   * </p>
+   *
+   * @param i first component index
+   * @param j second component index
+   * @param temperaturesK temperature knots in kelvin
+   * @param values interaction-parameter values at the knots
+   */
+  public void setBinaryInteractionParameterTemperatureTable(int i, int j, double[] temperaturesK, double[] values);
+
+  /**
+   * Get a copy of the temperature knots for one binary interaction parameter.
+   *
+   * @param i first component index
+   * @param j second component index
+   * @return temperature knots in kelvin, or an empty array when no table is configured
+   */
+  public double[] getBinaryInteractionParameterTemperatureKnots(int i, int j);
+
+  /**
+   * Get a copy of the tabulated values for one binary interaction parameter.
+   *
+   * @param i first component index
+   * @param j second component index
+   * @return interaction-parameter values, or an empty array when no table is configured
+   */
+  public double[] getBinaryInteractionParameterTemperatureValues(int i, int j);
+
+  /**
    * setCalcEOSInteractionParameters.
    *
    * @param CalcEOSInteractionParameters a boolean

@@ -708,6 +708,8 @@ public class JsonFluidReadWrite {
       return "water";
     case "H2S":
       return "H2S";
+    case "NH3":
+      return "ammonia";
     default:
       return name;
     }

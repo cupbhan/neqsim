@@ -53,6 +53,8 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
 
   public double[][] intparam;
   public double[][] intparamT;
+  public double[][][] intparamTemperatureKnots;
+  public double[][][] intparamTemperatureValues;
   public double[][] WSintparam;
   public double[][] intparamij;
   public double[][] intparamji;
@@ -116,6 +118,9 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
     } else if (mr == 12) {
       mixingRuleName = "Temperature dependent classic";
       return new ClassicSRKT(1);
+    } else if (mr == 13) {
+      mixingRuleName = "Tabulated temperature dependent classic";
+      return new ClassicSRKTabulated();
     } else {
       // For mixing rules that require phase initialization (4, 7, 8, 9),
       // fall back to ClassicSRK. These will be properly initialized
@@ -143,6 +148,8 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
     intparamji = new double[phase.getNumberOfComponents()][phase.getNumberOfComponents()];
     intparamij = new double[phase.getNumberOfComponents()][phase.getNumberOfComponents()];
     intparamT = new double[phase.getNumberOfComponents()][phase.getNumberOfComponents()];
+    intparamTemperatureKnots = new double[phase.getNumberOfComponents()][phase.getNumberOfComponents()][];
+    intparamTemperatureValues = new double[phase.getNumberOfComponents()][phase.getNumberOfComponents()][];
     intparamTType = new int[phase.getNumberOfComponents()][phase.getNumberOfComponents()];
     HVDij = new double[phase.getNumberOfComponents()][phase.getNumberOfComponents()];
     HVDijT = new double[phase.getNumberOfComponents()][phase.getNumberOfComponents()];
@@ -379,7 +386,8 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
                 intparam[k][l] = 0.08;
               } else if ((component_name.equals("water") && phase.getComponent(l).isIsTBPfraction())
                   || (component_name2.equals("water") && phase.getComponent(k).isIsTBPfraction())) {
-                intparam[k][l] = 0.2;
+                intparam[k][l] = waterPseudoComponentKij(
+                    phase.getComponent(phase.getComponent(l).isIsTBPfraction() ? l : k).getMolarMass());
 
                 if (phase instanceof PhaseSrkCPA) {
                   // Covers PhaseSrkCPA, PhaseSrkCPAs,
@@ -517,6 +525,39 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
   }
 
   /**
+   * Interaction parameter between water and a pseudo component under a non-associating EOS.
+   *
+   * <p>
+   * The database carries this pair for named n-alkanes - 0.45 for methane and ethane, 0.53 for propane, 0.52 for
+   * n-butane, and a flat 0.50 from n-pentane through n-nonane - but a pseudo component has no name to look up, so it
+   * used to take 0.2 whatever its size. A C7 pseudo is the same molecule as n-heptane at less than half the parameter,
+   * and the difference is not cosmetic: on PVTsim's own H2O + C7 binary, 0.2 dissolves every last mole of water into
+   * the hydrocarbon liquid above 140 C, so the three-phase locus stops at 6.2 bara where the licensed reference carries
+   * it to 26.1 bara. At the database value the locus reaches the reference's upper critical end point.
+   * </p>
+   *
+   * <p>
+   * Pseudo components no heavier than n-nonane therefore take the database's plateau value. Heavier fractions keep the
+   * historical 0.2: the database holds no water pair above n-nonane, and the one heavy-fluid comparison available - the
+   * 65 mol% water field fluid against a controlled PVTsim run - gets worse when 0.5 is extrapolated to its C10+
+   * fractions, so there is nothing to justify moving them.
+   * </p>
+   *
+   * @param pseudoComponentMolarMass molar mass of the pseudo component, in kg/mol
+   * @return the interaction parameter to use against water
+   */
+  static double waterPseudoComponentKij(double pseudoComponentMolarMass) {
+    return pseudoComponentMolarMass <= HEAVIEST_DATABASE_WATER_ALKANE_MOLAR_MASS ? DATABASE_WATER_ALKANE_KIJ_PLATEAU
+        : 0.2;
+  }
+
+  /** Molar mass of n-nonane in kg/mol: the heaviest hydrocarbon the database pairs with water. */
+  private static final double HEAVIEST_DATABASE_WATER_ALKANE_MOLAR_MASS = 0.12826;
+
+  /** The database's water-alkane interaction parameter, flat from n-pentane through n-nonane. */
+  private static final double DATABASE_WATER_ALKANE_KIJ_PLATEAU = 0.50;
+
+  /**
    * resetMixingRule.
    *
    * @param i a int
@@ -573,6 +614,9 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
     } else if (i == 12) {
       mixingRuleName = "Temperature dependent classic";
       return new ClassicSRKT(1);
+    } else if (i == 13) {
+      mixingRuleName = "Tabulated temperature dependent classic";
+      return new ClassicSRKTabulated();
     } else {
       return new ClassicVdW();
     }
@@ -663,6 +707,12 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
           clonedSystem.intparamT[i] = intparamT[i].clone();
         }
       }
+    }
+    if (intparamTemperatureKnots != null) {
+      clonedSystem.intparamTemperatureKnots = cloneThreeDimensionalArray(intparamTemperatureKnots);
+    }
+    if (intparamTemperatureValues != null) {
+      clonedSystem.intparamTemperatureValues = cloneThreeDimensionalArray(intparamTemperatureValues);
     }
     if (intparamij != null) {
       clonedSystem.intparamij = new double[intparamij.length][];
@@ -785,6 +835,22 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
     return clonedSystem;
   }
 
+  private static double[][][] cloneThreeDimensionalArray(double[][][] source) {
+    double[][][] copy = new double[source.length][][];
+    for (int i = 0; i < source.length; i++) {
+      if (source[i] == null) {
+        continue;
+      }
+      copy[i] = new double[source[i].length][];
+      for (int j = 0; j < source[i].length; j++) {
+        if (source[i][j] != null) {
+          copy[i][j] = source[i][j].clone();
+        }
+      }
+    }
+    return copy;
+  }
+
   public class ClassicVdW implements EosMixingRulesInterface {
     /** Serialization version UID. */
     private static final long serialVersionUID = 1000;
@@ -832,6 +898,54 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
         return 0.0;
       }
       return intparamT[i][j];
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setBinaryInteractionParameterTemperatureTable(int i, int j, double[] temperaturesK, double[] values) {
+      if (intparamTemperatureKnots == null || intparamTemperatureValues == null) {
+        throw new IllegalStateException("Mixing-rule component arrays have not been initialized");
+      }
+      if (i < 0 || j < 0 || i >= intparamTemperatureKnots.length || j >= intparamTemperatureKnots.length) {
+        throw new IllegalArgumentException("Component indices are outside the mixing-rule matrix");
+      }
+      if (i == j) {
+        throw new IllegalArgumentException("A component cannot have a binary interaction table with itself");
+      }
+      if (temperaturesK == null || values == null || temperaturesK.length != values.length
+          || temperaturesK.length < 2) {
+        throw new IllegalArgumentException("Temperature and value arrays must have the same length of at least two");
+      }
+      for (int knot = 0; knot < temperaturesK.length; knot++) {
+        if (!Double.isFinite(temperaturesK[knot]) || !Double.isFinite(values[knot])) {
+          throw new IllegalArgumentException("Temperature-table entries must be finite");
+        }
+        if (knot > 0 && temperaturesK[knot] <= temperaturesK[knot - 1]) {
+          throw new IllegalArgumentException("Temperature knots must be strictly increasing");
+        }
+      }
+      intparamTemperatureKnots[i][j] = temperaturesK.clone();
+      intparamTemperatureKnots[j][i] = temperaturesK.clone();
+      intparamTemperatureValues[i][j] = values.clone();
+      intparamTemperatureValues[j][i] = values.clone();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public double[] getBinaryInteractionParameterTemperatureKnots(int i, int j) {
+      if (intparamTemperatureKnots == null || intparamTemperatureKnots[i][j] == null) {
+        return new double[0];
+      }
+      return intparamTemperatureKnots[i][j].clone();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public double[] getBinaryInteractionParameterTemperatureValues(int i, int j) {
+      if (intparamTemperatureValues == null || intparamTemperatureValues[i][j] == null) {
+        return new double[0];
+      }
+      return intparamTemperatureValues[i][j].clone();
     }
 
     /**
@@ -1527,6 +1641,90 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
         logger.error("Cloning failed.", ex);
       }
 
+      return clonedSystem;
+    }
+  }
+
+  /**
+   * Classic symmetric EOS mixing rule with independently tabulated binary interaction parameters.
+   *
+   * <p>
+   * Each configured pair is interpolated linearly in absolute temperature and held constant outside its table range.
+   * The first derivative is the active segment slope and the second derivative is zero. At a knot the left-hand slope
+   * is used; the parameter itself remains continuous. Pairs without a table use their ordinary constant interaction
+   * parameter.
+   * </p>
+   */
+  public class ClassicSRKTabulated extends ClassicSRKT {
+    /** Serialization version UID. */
+    private static final long serialVersionUID = 1000;
+
+    private boolean hasTemperatureTable(int i, int j) {
+      return intparamTemperatureKnots != null && intparamTemperatureValues != null
+          && intparamTemperatureKnots[i][j] != null && intparamTemperatureValues[i][j] != null;
+    }
+
+    private int findInterpolationInterval(double temperature, double[] knots) {
+      for (int knot = 1; knot < knots.length; knot++) {
+        if (temperature <= knots[knot]) {
+          return knot - 1;
+        }
+      }
+      return knots.length - 2;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public double getkij(double temperature, int i, int j) {
+      if (i == j) {
+        return 0.0;
+      }
+      if (!hasTemperatureTable(i, j)) {
+        return intparam[i][j];
+      }
+      double[] knots = intparamTemperatureKnots[i][j];
+      double[] values = intparamTemperatureValues[i][j];
+      if (temperature <= knots[0]) {
+        return values[0];
+      }
+      if (temperature >= knots[knots.length - 1]) {
+        return values[values.length - 1];
+      }
+      int interval = findInterpolationInterval(temperature, knots);
+      double fraction = (temperature - knots[interval]) / (knots[interval + 1] - knots[interval]);
+      return values[interval] + fraction * (values[interval + 1] - values[interval]);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public double getkijdT(double temperature, int i, int j) {
+      if (i == j || !hasTemperatureTable(i, j)) {
+        return 0.0;
+      }
+      double[] knots = intparamTemperatureKnots[i][j];
+      if (temperature <= knots[0] || temperature >= knots[knots.length - 1]) {
+        return 0.0;
+      }
+      double[] values = intparamTemperatureValues[i][j];
+      int interval = findInterpolationInterval(temperature, knots);
+      return (values[interval + 1] - values[interval]) / (knots[interval + 1] - knots[interval]);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public double getkijdTdT(double temperature, int i, int j) {
+      return 0.0;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public ClassicSRKTabulated clone() {
+      ClassicSRKTabulated clonedSystem = null;
+      try {
+        clonedSystem = (ClassicSRKTabulated) super.clone();
+      } catch (Exception ex) {
+        logger.error("Cloning failed.", ex);
+      }
       return clonedSystem;
     }
   }
@@ -3514,7 +3712,68 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
    * @return a {@link neqsim.thermo.mixingrule.ElectrolyteMixingRulesInterface} object
    */
   public ElectrolyteMixingRulesInterface getElectrolyteMixingRule(PhaseInterface phase) {
+    ensureElectrolyteInteractionMatrices(phase.getNumberOfComponents());
     return new ElectrolyteMixRule(phase);
+  }
+
+  /**
+   * Ensure electrolyte interaction matrices exist before the electrolyte rule calculates Wij.
+   *
+   * <p>
+   * Some electrolyte phases request their electrolyte mixing rule while being constructed, before an EOS mixing rule
+   * has initialized these shared matrices. Cloned phases can also add reaction species after the original matrices were
+   * allocated. Preserve any parameters already loaded while resizing to the current component count.
+   *
+   * @param numberOfComponents current number of phase components
+   */
+  private void ensureElectrolyteInteractionMatrices(int numberOfComponents) {
+    boolean resizeWij = wij == null || wij.length != 3;
+    if (!resizeWij) {
+      for (int order = 0; order < wij.length && !resizeWij; order++) {
+        resizeWij = wij[order] == null || wij[order].length != numberOfComponents;
+        for (int i = 0; i < numberOfComponents && !resizeWij; i++) {
+          resizeWij = wij[order][i] == null || wij[order][i].length != numberOfComponents;
+        }
+      }
+    }
+
+    if (resizeWij) {
+      double[][][] resizedWij = new double[3][numberOfComponents][numberOfComponents];
+      if (wij != null) {
+        for (int order = 0; order < Math.min(wij.length, resizedWij.length); order++) {
+          if (wij[order] == null) {
+            continue;
+          }
+          for (int i = 0; i < Math.min(wij[order].length, numberOfComponents); i++) {
+            if (wij[order][i] != null) {
+              System.arraycopy(wij[order][i], 0, resizedWij[order][i], 0,
+                  Math.min(wij[order][i].length, numberOfComponents));
+            }
+          }
+        }
+      }
+      wij = resizedWij;
+    }
+
+    boolean resizeFlags = wijCalcOrFitted == null || wijCalcOrFitted.length != numberOfComponents;
+    if (!resizeFlags) {
+      for (int i = 0; i < numberOfComponents && !resizeFlags; i++) {
+        resizeFlags = wijCalcOrFitted[i] == null || wijCalcOrFitted[i].length != numberOfComponents;
+      }
+    }
+
+    if (resizeFlags) {
+      int[][] resizedFlags = new int[numberOfComponents][numberOfComponents];
+      if (wijCalcOrFitted != null) {
+        for (int i = 0; i < Math.min(wijCalcOrFitted.length, numberOfComponents); i++) {
+          if (wijCalcOrFitted[i] != null) {
+            System.arraycopy(wijCalcOrFitted[i], 0, resizedFlags[i], 0,
+                Math.min(wijCalcOrFitted[i].length, numberOfComponents));
+          }
+        }
+      }
+      wijCalcOrFitted = resizedFlags;
+    }
   }
 
   /**
