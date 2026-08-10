@@ -267,8 +267,7 @@ public class TPflash extends Flash {
 
   /** @return true when no nested solve was needed or the latest nested solve converged. */
   public boolean isLastMultiphaseSolveAccepted() {
-    return lastMultiphaseSolveStatus == TPmultiflash.SolveStatus.NOT_RUN
-        || lastMultiphaseSolveStatus.isConverged();
+    return lastMultiphaseSolveStatus == TPmultiflash.SolveStatus.NOT_RUN || lastMultiphaseSolveStatus.isConverged();
   }
 
   private void resetMultiphaseSolveDiagnostics() {
@@ -860,8 +859,8 @@ public class TPflash extends Flash {
           operation.run();
           recordMultiphaseSolveDiagnostics(operation);
           if (!isLastMultiphaseSolveAccepted()) {
-            logger.warn("Skipping TPflash multiphase post-processing after {}: {}",
-                lastMultiphaseSolveStatus, lastMultiphaseSolveMessage);
+            logger.warn("Skipping TPflash multiphase post-processing after {}: {}", lastMultiphaseSolveStatus,
+                lastMultiphaseSolveMessage);
             return;
           }
           rescueSinglePhaseWaterBearingEndpoint();
@@ -1061,8 +1060,8 @@ public class TPflash extends Flash {
       operation.run();
       recordMultiphaseSolveDiagnostics(operation);
       if (!isLastMultiphaseSolveAccepted()) {
-        logger.warn("Skipping TPflash multiphase post-processing after {}: {}",
-            lastMultiphaseSolveStatus, lastMultiphaseSolveMessage);
+        logger.warn("Skipping TPflash multiphase post-processing after {}: {}", lastMultiphaseSolveStatus,
+            lastMultiphaseSolveMessage);
         return;
       }
       restoreBalancedAqueousReferenceAfterInvalidPhaseRemoval(balancedWaterBearingReference);
