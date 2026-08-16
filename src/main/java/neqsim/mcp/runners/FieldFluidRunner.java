@@ -19,6 +19,7 @@ import neqsim.thermo.phase.PhaseInterface;
 import neqsim.thermo.system.SystemElectrolyteCPAstatoil;
 import neqsim.thermo.system.SystemInterface;
 import neqsim.thermo.system.SystemPrEos;
+import neqsim.thermo.system.SystemSrkCPAstatoil;
 import neqsim.thermo.system.SystemSrkEos;
 import neqsim.thermo.util.readwrite.JsonFluidReadWrite;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
@@ -1583,6 +1584,8 @@ public final class FieldFluidRunner {
         system = new SystemPrEos(temperatureK, pressureBara);
       } else if ("SRK".equals(model)) {
         system = new SystemSrkEos(temperatureK, pressureBara);
+      } else if ("CPA".equals(model)) {
+        system = new SystemSrkCPAstatoil(temperatureK, pressureBara);
       } else {
         system = new SystemElectrolyteCPAstatoil(temperatureK, pressureBara);
       }
@@ -1653,7 +1656,8 @@ public final class FieldFluidRunner {
       }
     } else {
       system.createDatabase(true);
-      system.setMixingRule("Electrolyte-CPA".equals(normalizedModel(requestedModel, false)) ? 10 : 2);
+      String model = normalizedModel(requestedModel, false);
+      system.setMixingRule("CPA".equals(model) || "Electrolyte-CPA".equals(model) ? 10 : 2);
     }
 
     if (definition != null && !reactive) {
@@ -1708,11 +1712,14 @@ public final class FieldFluidRunner {
     if (normalized.equals("SRK") || normalized.contains("SOAVEREDLICHKWONG")) {
       return "SRK";
     }
-    if (normalized.contains("CPA")) {
+    if (normalized.contains("ELECTROLYTECPA")) {
       return "Electrolyte-CPA";
     }
-    throw new IllegalArgumentException(
-        "Unsupported field-fluid model: " + requestedModel + "; supported models are SRK, PR, and Electrolyte-CPA");
+    if (normalized.contains("CPA")) {
+      return "CPA";
+    }
+    throw new IllegalArgumentException("Unsupported field-fluid model: " + requestedModel
+        + "; supported models are SRK, PR, CPA, and Electrolyte-CPA");
   }
 
   private static ReactiveFlashAudit runTpFlash(SystemInterface system, boolean reactive) {

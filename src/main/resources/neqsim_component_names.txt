@@ -15,6 +15,7 @@ oxygen
 TEG
 DEG
 nitrogen
+ammonia
 n-butane
 HCO3-
 Li+
