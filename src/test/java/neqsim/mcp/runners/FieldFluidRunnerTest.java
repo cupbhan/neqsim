@@ -106,7 +106,7 @@ class FieldFluidRunnerTest extends NeqSimTest {
 
   @Test
   void calculatesSelectedCubicModelForWaterAmmoniaCarbonDioxide() {
-    for (String eos : new String[] { "SRK", "PR" }) {
+    for (String eos : new String[] { "SRK", "PR", "CPA" }) {
       String request = "{\"components\":{\"water\":0.90,\"ammonia\":0.05,\"CO2\":0.05},"
           + "\"temperatureC\":200.0,\"pressureBara\":15.0,\"temperatureMinC\":20.0,"
           + "\"temperatureMaxC\":350.0,\"pointCount\":31,\"eos\":\"" + eos + "\",\"reactive\":false}";

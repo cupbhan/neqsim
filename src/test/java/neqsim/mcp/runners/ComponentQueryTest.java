@@ -27,6 +27,7 @@ class ComponentQueryTest {
     assertTrue(ComponentQuery.isValid("water"));
     assertTrue(ComponentQuery.isValid("H2S"));
     assertTrue(ComponentQuery.isValid("nitrogen"));
+    assertTrue(ComponentQuery.isValid("ammonia"));
     assertTrue(ComponentQuery.isValid("hydrogen"));
   }
 
