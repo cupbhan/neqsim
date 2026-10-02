@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Source baseline before shared engine consolidation; historical benchmark values have not been rerun.",
+  "recordedAt": "2026-10-02T06:58:49.833744+00:00",
+  "canonicalRepository": "https://github.com/cupbhan/neqsim.git",
+  "upstreamRepository": "https://github.com/equinor/neqsim.git",
+  "enhancedBaseline": "e9b41932d6fa242022945394f47c340c65ae120d",
+  "upstreamBaseline": "66a866f1e2e82c2fbbd29a7af936e098cd29e849",
+  "sagdBaseline": "760d0cb1933086c6c343b0ac57cf452e910513b9",
+  "productRuntime": {
+    "source": "local-neqsim-project",
+    "repository": "C:\\mycodex\\neqsim-sagd",
+    "commit": "760d0cb1933086c6c343b0ac57cf452e910513b9",
+    "branch": "sagd-integration",
+    "dirty": false,
+    "builtAt": "2026-08-16T04:05:46.596Z",
+    "sha256": "83729788ec4f4dfa2d06026e006479b6c78c981be9ba60bd325d241d02bf5542"
+  },
+  "researchArchive": {
+    "originalDirectory": "neqsim-snapshot-backup-20260809",
+    "gitCommit": null,
+    "execution": "workspace target/classes; archived target JAR is not equivalent",
+    "sources": {
+      "two_and_three_phase_history": {
+        "path": "task_solve/2026-08-02_重做高含水重油2_hc相包络求解器/RESULT.md",
+        "sha256": "b60ed81541cfcfddab8dad15e141e617f212072607fc8ddbb1125fe6cc10efd6",
+        "sizeBytes": 33281
+      },
+      "same_definition_benchmark": {
+        "path": "task_solve/2026-08-08_pvtsim同定义三相边界对标/results.json",
+        "sha256": "770f45a662f493c2f983142da79eaabee165cc2b574ea85cee807c46fd8d09a3",
+        "sizeBytes": 190127
+      },
+      "same_definition_report": {
+        "path": "task_solve/2026-08-08_pvtsim同定义三相边界对标/step3_report/Report.html",
+        "sha256": "6b1b1eb39c99673a55af33058672a5eb4f87871b72e22378bd0bb2bf067d4f74",
+        "sizeBytes": 2185226
+      },
+      "high_pressure_recovery": {
+        "path": "task_solve/2026-08-08_高含水重油_260_300_bara_多相求解与拓扑/results.json",
+        "sha256": "84f298c89cdb424a89bed80fb881b9301346ee46c27fdd3e454f54e23e18ada6",
+        "sizeBytes": 9949
+      },
+      "high_pressure_summary": {
+        "path": "task_solve/2026-08-08_高含水重油_260_300_bara_多相求解与拓扑/step3_report/Summary.md",
+        "sha256": "00ba0b506b185971bddc443452560cae3006b9a423dff27b4b1fbc50728ae9c9",
+        "sizeBytes": 1202
+      },
+      "topology_closure": {
+        "path": "task_solve/2026-08-08_高含水重油_200_300_bara_包络拓扑闭合/results.json",
+        "sha256": "77e8ccc7fc0990f5026bfc78f3706c7b64421f256c37b76b8831c9e6af1f97e6",
+        "sizeBytes": 13422
+      },
+      "multimedia_freeze": {
+        "path": "task_solve/2026-08-09_srk稠油多介质逐级pvtsim对标/l5_delivery_freeze.json",
+        "sha256": "b0805a6747dad1a6b47c7d58764a1abd0ae191f6f85becaf87b2baae4c3ee835",
+        "sizeBytes": 1992
+      },
+      "multimedia_envelope": {
+        "path": "task_solve/2026-08-09_srk稠油多介质逐级pvtsim对标/l5_nh35_complete_envelope.json",
+        "sha256": "93e4295f05331285b4872125f254068b6ad47309007d2105fef6c89cf14ab595",
+        "sizeBytes": 28194
+      },
+      "multimedia_figure": {
+        "path": "task_solve/2026-08-09_srk稠油多介质逐级pvtsim对标/figures/l5_nh35_complete_envelope.png",
+        "sha256": "e546e77e35c8acc6b5c11ae05e320ee324e7346490f86cf6e9299b456b2f920f",
+        "sizeBytes": 209742
+      }
+    }
+  },
+  "historicalResults": {
+    "highPressureRecovery": {
+      "baseline_grid_accepted_states": 865,
+      "baseline_grid_rejected_states": 17,
+      "final_grid_accepted_states": 882,
+      "final_grid_rejected_states": 0,
+      "recovered_rejected_states": 17,
+      "high_pressure_correct_states": 39,
+      "high_pressure_wrong_states": 0,
+      "low_pressure_balanced_states": 49,
+      "wet_boundary_crosscheck_points": 22,
+      "wet_boundary_max_delta_K": 5.6769465487604975e-05,
+      "solver_status_tests_passed": 7,
+      "targeted_product_tests_passed": 2
+    },
+    "sameDefinitionBenchmark": {
+      "pvtsim_refined_success_pct": 100.0,
+      "main_boundary_point_count": 15,
+      "main_boundary_mae_C": 0.8783333333333397,
+      "main_boundary_mean_bias_C": -0.8783333333333397,
+      "secondary_boundary_point_count": 7,
+      "secondary_boundary_mae_C": 8.819492460580696,
+      "secondary_boundary_mean_bias_C": -8.819492460580696,
+      "neqsim_endpoint_pressure_bara": 229.9321709182054,
+      "pvtsim_direct_topology_termination_low_bara": 228.5,
+      "pvtsim_direct_topology_termination_high_bara": 228.6,
+      "diagnostic_water_kij_multiplier": 0.932,
+      "diagnostic_secondary_boundary_mae_C": 0.2922040197647919,
+      "diagnostic_secondary_boundary_max_abs_C": 0.5275412446795258,
+      "full_main_recalculation_max_delta_C": 2.2737367544323206e-13,
+      "full_secondary_recalculation_max_delta_C": 3.1693324444859172e-06,
+      "near_critical_endpoint_pressure_bara": 286.0,
+      "near_critical_endpoint_temperature_C": 249.375,
+      "alternate_stable_root_count": 8,
+      "rejected_near_critical_root_count": 12,
+      "supplemental_pvtsim_flash_point_count": 26102,
+      "supplemental_pvtsim_solver_failure_count": 0,
+      "supplemental_pvtsim_phase_identified_point_count": 21533,
+      "supplemental_pvtsim_unresolved_phase_identity_point_count": 4569,
+      "supplemental_secondary_boundary_mae_C": 8.831992460580702,
+      "supplemental_secondary_boundary_max_abs_C": 9.541543479587233,
+      "supplemental_pvtsim_direct_topology_termination_low_bara": 228.55,
+      "supplemental_pvtsim_direct_topology_termination_high_bara": 228.56,
+      "supplemental_endpoint_pressure_difference_low_bara": 1.3721709182053985,
+      "supplemental_endpoint_pressure_difference_high_bara": 1.3821709182053894,
+      "compatibility_main_water_kij_multiplier": 0.98325,
+      "compatibility_secondary_water_kij_multiplier": 0.932,
+      "compatibility_main_boundary_mae_C": 0.7345415153883418,
+      "compatibility_main_boundary_max_abs_C": 1.6694190187026834,
+      "compatibility_secondary_boundary_mae_C": 0.2985027590261374,
+      "compatibility_secondary_boundary_max_abs_C": 0.5900412322151283,
+      "compatibility_endpoint_pressure_bara": 228.5508849218492,
+      "compatibility_endpoint_temperature_C": 312.8722699770806,
+      "compatibility_mode_passed": true,
+      "compatibility_production_promotion_allowed": false
+    },
+    "heavyOilMultimediaDelivery": {
+      "schemaVersion": "1.0",
+      "status": "RELEASED_WITH_KNOWN_LIMITATIONS",
+      "contractId": "HeavyOil-DEV-H2O65-CO27-N23-NH3-SRK-v1",
+      "softwareArtifacts": [
+        {
+          "path": "src/main/java/neqsim/thermo/system/HeavyOilMultimediaFluid.java",
+          "sha256": "427e345390864fad704a90a53f3f3e68f604044ffb7e6b293d84d252903477d2"
+        },
+        {
+          "path": "src/main/java/neqsim/thermo/system/FluidBuilder.java",
+          "sha256": "a615ab2efefece2dfaff6cc96ff0168ab1c4dc990dd668ba785b8400ed86a92a"
+        },
+        {
+          "path": "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-0p1-v1.json",
+          "sha256": "d370c5ee1d0f847dc12980fb1062a4bd2ff98e6f9a29dad88395f02022cbd41e"
+        },
+        {
+          "path": "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-1-v1.json",
+          "sha256": "7683c5b549f3bbfd2b42d5a995154eb3618be236d65f710dddcf74e4e3fad8ef"
+        },
+        {
+          "path": "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-5-v1.json",
+          "sha256": "7d4b2a297799262f1ff587d6fd9033d5617f45a54823f563fd4d4f06de865509"
+        }
+      ],
+      "publicApi": "FluidBuilder.heavyOilMultimedia(double temperatureK, double pressureBara, double nh3MolPercent)",
+      "supportedNh3MolPercent": [
+        0.1,
+        1.0,
+        5.0
+      ],
+      "verification": {
+        "stagedRegressionAccepted": "11/11",
+        "javaTestsPassed": "5/5",
+        "spotlessCheckPassed": true,
+        "deliveryEnvelopePassed": true,
+        "strictResearchEnvelopePassed": false
+      },
+      "deliveryEnvelope": {
+        "temperatureC": [
+          20.0,
+          250.0
+        ],
+        "pressureBara": [
+          1.0,
+          100.0
+        ],
+        "topologyAgreementPct": 98.36601307189542,
+        "meanBoundaryDeviationBara": 1.14375,
+        "maximumBoundaryDeviationBara": 4.25
+      },
+      "limitations": [
+        "Development heavy-oil composition derived from a PVTsim demonstration heavy-end distribution; not field-qualified.",
+        "NH3 is modeled as nonreactive SRK; no pH, ion speciation, or reaction heat is claimed.",
+        "The 70-110 C gas-disappearance boundary remains a post-delivery optimization item."
+      ]
+    }
+  },
+  "unmergedExperimentalClasses": [
+    "HydrocarbonWaterBoundaryModelProfile",
+    "RetainedPhaseBifurcationCorrector",
+    "SpecifiedMultiphaseFlashSolver"
+  ]
+}

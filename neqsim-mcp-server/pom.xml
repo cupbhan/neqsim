@@ -6,11 +6,13 @@
 
     <groupId>com.equinor.neqsim</groupId>
     <artifactId>neqsim-mcp-server</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>${mcp.revision}</version>
     <name>NeqSim MCP Server</name>
     <description>Model Context Protocol (MCP) server exposing NeqSim thermodynamic calculations and process simulation to LLMs</description>
 
     <properties>
+        <!-- Personal distributions set both revision and mcp.revision to the same immutable version. -->
+        <mcp.revision>1.0.0-SNAPSHOT</mcp.revision>
         <quarkus.version>3.37.0</quarkus.version>
         <mcp-server.version>1.13.0</mcp-server.version>
         <reproducible-build-maven-plugin.version>0.17</reproducible-build-maven-plugin.version>

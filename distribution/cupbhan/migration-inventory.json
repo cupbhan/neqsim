@@ -1,0 +1,506 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "5d00dd3733",
+  "canonicalBaseline": "e9b41932d6fa242022945394f47c340c65ae120d",
+  "comparison": "File inventory only; changed files are covered by focused review and regression rather than assumed identical.",
+  "migrationFileCount": 94,
+  "identicalCount": 87,
+  "files": [
+    {
+      "path": "neqsim-mcp-server/pom.xml",
+      "present": true,
+      "identicalIgnoringLineEndings": false
+    },
+    {
+      "path": "neqsim-mcp-server/src/main/java/neqsim/mcp/server/NeqSimPrompts.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "neqsim-mcp-server/src/main/java/neqsim/mcp/server/NeqSimResources.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "neqsim-mcp-server/src/main/java/neqsim/mcp/server/NeqSimTools.java",
+      "present": true,
+      "identicalIgnoringLineEndings": false
+    },
+    {
+      "path": "neqsim-mcp-server/src/test/java/neqsim/mcp/server/NeqSimToolsContractTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/mcp/runners/FieldFluidRunner.java",
+      "present": true,
+      "identicalIgnoringLineEndings": false
+    },
+    {
+      "path": "src/main/java/neqsim/mcp/runners/HydrocarbonWaterBoundaryAuditRunner.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/mcp/runners/HydrocarbonWaterBoundaryRegressionRunner.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/mcp/runners/HydrocarbonWaterModelIdentity.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/mcp/runners/HydrocarbonWaterTopologyBenchmarkRunner.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/mcp/runners/WaterIF97Runner.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermo/util/readwrite/JsonFluidReadWrite.java",
+      "present": true,
+      "identicalIgnoringLineEndings": false
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/flashops/TPflash.java",
+      "present": true,
+      "identicalIgnoringLineEndings": false
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/flashops/TPmultiflash.java",
+      "present": true,
+      "identicalIgnoringLineEndings": false
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryAnchorDiscoverer.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryBranchAssembler.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryEndpointClassifier.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryEventDetector.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryGlobalStabilityGate.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryNetworkAssembler.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryRegression.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundarySeedCorrector.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryTerminationClassifier.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBranchSeedScanner.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterClosedBoundaryLoopAssembler.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterClosedBoundaryLoopVerifier.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterContinuationChainAssembler.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterCriticalEndpointSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterFullNetworkVerifier.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterIsolatedBoundaryRootClassifier.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterOpenBoundaryVerifier.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterPhaseTopology.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterRegularPressureBoundaryTracer.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterRetainedPairCriticalEndpointSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterRetainedPhaseBranchSwitcher.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterRetainedPhaseSpinodalBranchInitializer.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterRetainedPhaseSpinodalSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterSecondaryStationaryBranchTracker.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterStableRegionBoundaryCorrector.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterStableRegionTransitionScanner.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreePhasePointFinder.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreePhaseTopologyFinder.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterTopologyBenchmark.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseBoundaryPointSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseCurvatureAnalyzer.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseStabilityAnalyzer.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseStationarityJacobianAnalyzer.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseStationaryPointSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/PTPhaseEnvelopeMichelsen.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/ScaledTrustRegionLeastSquaresSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedThreePhaseFlashSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedThreePhaseGibbsSeedPreconditioner.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedTwoPhaseFlashSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SysNewtonRhapsonPhaseEnvelope.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/ThreePhasePointSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/TwoHydrocarbonPhaseEnvelopeSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/TwoToThreePhaseArcLengthCorrector.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/TwoToThreePhaseBoundaryPointSolver.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/TwoToThreePhaseBoundaryQualityGate.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/TwoToThreePhaseBoundaryTracer.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/TwoToThreePhasePseudoArcLengthTracer.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/mcp/runners/FieldFluidRunnerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": false
+    },
+    {
+      "path": "src/test/java/neqsim/mcp/runners/HydrocarbonWaterBoundaryRegressionRunnerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/mcp/runners/HydrocarbonWaterModelIdentityTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/mcp/runners/HydrocarbonWaterTopologyBenchmarkRunnerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/mcp/runners/WaterIF97RunnerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryAnchorDiscovererTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryAuditRunnerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryBranchAssemblerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryEventDetectorTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryGlobalStabilityGateTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryNetworkAssemblerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryRegressionTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryTerminationClassifierTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBranchSeedScannerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterClosedBoundaryLoopAssemblerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterContinuationChainAssemblerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterIsolatedBoundaryRootClassifierTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterMinimalSystemLadderTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterOpenBoundaryVerifierTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterPhaseTopologyTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterRegularPressureBoundaryTracerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterSecondaryOilTransitionTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterStableRegionTransitionScannerTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreePhasePointFinderTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreePhaseTopologyFinderTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreeToFourPhaseBoundaryPointSolverTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterTopologyBenchmarkTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/LindeloffMichelsenReferenceFluidTest.java",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/resources/neqsim/mcp/runners/field_wet_classic_payload.json",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/resources/neqsim/mcp/runners/ma-2021-acs-omega/Figure_5_PT_diagram.jpg",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/resources/neqsim/mcp/runners/ma-2021-acs-omega/PMC8696998-fulltext.xml",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    },
+    {
+      "path": "src/test/resources/neqsim/mcp/runners/ma-2021-acs-omega/benchmark_manifest.json",
+      "present": true,
+      "identicalIgnoringLineEndings": true
+    }
+  ],
+  "archivedExperimentalClasses": [
+    {
+      "name": "HydrocarbonWaterBoundaryModelProfile",
+      "archivePath": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfile.java",
+      "sha256": "53d24705b62a30014539a9ceddd1c8cfc1dc5ca22dd57736527886e58a607b13",
+      "sizeBytes": 5676,
+      "status": "research-only; not merged",
+      "reason": "No maintained integration tests or product contract identified in current canonical source; requires separate algorithm review."
+    },
+    {
+      "name": "RetainedPhaseBifurcationCorrector",
+      "archivePath": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/RetainedPhaseBifurcationCorrector.java",
+      "sha256": "a79b127757d501d2277eb9ba8c803393c45450dd116a7793a864feb16688d525",
+      "sizeBytes": 34753,
+      "status": "research-only; not merged",
+      "reason": "No maintained integration tests or product contract identified in current canonical source; requires separate algorithm review."
+    },
+    {
+      "name": "SpecifiedMultiphaseFlashSolver",
+      "archivePath": "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashSolver.java",
+      "sha256": "62643261a9cb0d9745972a65c8d4fa93940f5d9ff3bfbfa9f598a4fe492a8522",
+      "sizeBytes": 25786,
+      "status": "research-only; not merged",
+      "reason": "No maintained integration tests or product contract identified in current canonical source; requires separate algorithm review."
+    }
+  ]
+}
