@@ -1,0 +1,86 @@
+[project]
+name = "neqsim"
+version = "3.16.0"
+description = "NeqSim is a tool for thermodynamic and process calculations"
+authors = [{ name = "Even Solbraa", email = "esolbraa@gmail.com" }]
+requires-python = ">=3.10,<4"
+readme = "README.md"
+license = "Apache-2.0"
+classifiers = [
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "JPype1>=1.7.0,<2",
+    "numpy>1.25.2",
+    "pandas>=2.0.3,<4",
+]
+
+[project.optional-dependencies]
+interactive = [
+    "matplotlib>=3.7.0,<4",
+    "jupyter>=1.0.0,<2",
+    "tabulate>=0.9.0,<0.10",
+]
+schema = [
+    "pydantic>=2.0,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/Equinor/neqsim-python"
+Repository = "https://github.com/Equinor/neqsim-python"
+
+[dependency-groups]
+dev = [
+    # Pin black to a single stable-style major (26.x). Black's stable
+    # formatting style changes with each yearly major (25 -> 26 -> 27), so a
+    # wider range let CI silently pick up a new style and reformat files that
+    # were formatted locally. black 26+ requires Python >=3.10 (see
+    # requires-python). Keep this in sync with the black rev in
+    # .pre-commit-config.yaml.
+    "black>=26.0,<27.0",
+    "pytest>=8.0.0,<9",
+    "pre-commit>=3.6.0,<4",
+    "stubgenj>=0.2.12,<0.3",
+    "mypy>=1.10,<3",
+]
+
+[tool.uv]
+default-groups = "all"
+
+[tool.uv.build-backend]
+# Allow namespace packages to include both neqsim and jneqsim-stubs
+namespace = true
+# Include the stub package in distributions using glob patterns
+source-include = [
+    "src/jneqsim-stubs/**",
+    "src/jpype-stubs/**",
+    "src/neqsim/**/*.pyi",
+    "src/neqsim/py.typed",
+    "src/neqsim/data/neqsim_api.json.gz",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.18,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.black]
+# Pin the target Python versions so formatting is deterministic across Black
+# releases and does not depend on per-file auto-detection (which can drift, e.g.
+# detecting py315 features, and emit a safety-check warning). Black's safety
+# check parses its output with the running interpreter against the HIGHEST target
+# listed, so the top of this list is capped at py313 to match the Python version
+# used by the CI formatting job (avoids a spurious "cannot parse" warning).
+# Running on Python 3.14 still parses py313-formatted code fine.
+target-version = ["py310", "py311", "py312", "py313"]
+
+[tool.mypy]
+mypy_path = "src"
+
+[tool.pytest.ini_options]
+addopts = "-p no:faulthandler"

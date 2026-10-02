@@ -1,0 +1,53 @@
+{% set name = "neqsim" %}
+{% set version = "3.16.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  sha256: d68cdef13335a62fdfa821c1903f0bc038f7adb236ad41d1818a0216ddcb96c1
+
+build:
+  number: 0
+  noarch: python
+  script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+
+requirements:
+  host:
+    - python >=3.10
+    - pip
+    - uv-build >=0.11.18,<0.12.0
+  run:
+    - python >=3.10
+    - jpype1 >=1.7.0,<2.0.0
+    - numpy >1.25.2
+    - pandas >=2.0.3,<3.0.0
+    - openjdk >=17
+
+test:
+  imports:
+    - neqsim
+  commands:
+    - pip check
+  requires:
+    - pip
+
+about:
+  home: https://github.com/Equinor/neqsim-python
+  summary: NeqSim is a tool for thermodynamic and process calculations
+  description: |
+    NeqSim Python is a Python interface to the NeqSim Java library for
+    estimation of fluid behavior and process design for oil and gas production.
+    It provides toolboxes like thermoTools and processTools to streamline
+    the use of NeqSim in Python.
+  license: Apache-2.0
+  license_family: Apache
+  license_file: LICENSE
+  doc_url: https://github.com/equinor/neqsim-python/wiki
+  dev_url: https://github.com/Equinor/neqsim-python
+
+extra:
+  recipe-maintainers:
+    - EvenSol

@@ -1,0 +1,53 @@
+from neqsim.process.unitop import unitop
+from neqsim.thermo import fluid
+from neqsim import jneqsim
+from jpype import JOverride
+
+
+class ExampleCompressor(unitop):
+    def __init__(self, name):
+        super().__init__()
+        self.name = name
+        self.inputstream = None
+        self.outputstream = None
+
+    def setInputStream(self, stream):
+        self.inputstream = stream
+        self.outputstream = stream.clone()
+
+    def getOutputStream(self):
+        return self.outputstream
+
+    @JOverride
+    def run(self, id=None):
+        """Doubles the input stream pressure and updates the output stream."""
+        # Get the current input stream's fluid
+        fluid2 = self.inputstream.getFluid().clone()
+        fluid2.setPressure(self.inputstream.getPressure() * 2.0)
+        self.getOutputStream().setFluid(fluid2)
+        self.getOutputStream().run()
+
+
+def test_addPythonUnitOp():
+    fluid1 = fluid("srk")  # create a fluid using the SRK-EoS
+    fluid1.setTemperature(30.0, "C")
+    fluid1.setPressure(1.0, "bara")
+    fluid1.addComponent("n-pentane", 1.0, "kg/sec")
+    fluid1.addComponent("n-hexane", 1.0, "kg/sec")
+    fluid1.setMixingRule(2)
+
+    stream1 = jneqsim.process.equipment.stream.Stream("stream 1", fluid1)
+    stream1.setFlowRate(30000, "kg/hr")
+
+    uop = ExampleCompressor(name="compressor 1")
+    uop.setName("example operation 1")
+    uop.setInputStream(stream1)
+
+    oilprocess = jneqsim.process.processmodel.ProcessSystem()
+    oilprocess.add(stream1)
+    oilprocess.add(uop)
+
+    oilprocess.run()
+
+    # The outputstream gets the doubled pressure after run()
+    assert uop.getOutputStream().getPressure() == 2 * stream1.getPressure()

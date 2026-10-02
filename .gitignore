@@ -144,3 +144,10 @@ neqsim_profile.jfr
 .release-run-status.json
 benchmark_results.txt
 .vscode/settings.json
+
+# Consolidated local history and installed, checksum-pinned engine releases
+/.local-archive/
+/runtime/
+**/.venv/
+**/.pytest_cache/
+**/*.egg-info/
