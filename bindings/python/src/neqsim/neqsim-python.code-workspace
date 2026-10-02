@@ -1,16 +1,4 @@
 {
-	"folders": [
-		{
-			"path": "../.."
-		},
-		{
-			"path": "../../../neqsim"
-		},
-		{
-			"path": "../../../neqsim-feedstock"
-		}
-	],
-	"settings": {
-		"java.configuration.updateBuildConfiguration": "interactive"
-	}
+  "folders": [{ "path": "../../../.." }],
+  "settings": { "java.configuration.updateBuildConfiguration": "interactive" }
 }

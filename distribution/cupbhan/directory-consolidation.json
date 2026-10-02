@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-02",
+  "canonicalPath": "C:\\mycodex\\neqsim",
+  "canonicalBranch": "master",
+  "integrationCommit": "acd29187348a0324b568e0933cc8bc3ed882633b",
+  "moves": [
+    {
+      "original": "C:\\mycodex\\neqsim-python",
+      "destination": "bindings/python",
+      "fileCount": 622,
+      "bytes": 62188647,
+      "allSha256Match": true
+    },
+    {
+      "original": "C:\\mycodex\\neqsim-sagd",
+      "destination": ".local-archive/20261002/neqsim-sagd",
+      "fileCount": 14958,
+      "bytes": 1302783761,
+      "allSha256Match": true
+    },
+    {
+      "original": "C:\\mycodex\\neqsim-snapshot-backup-20260809",
+      "destination": ".local-archive/20261002/neqsim-snapshot-backup-20260809",
+      "fileCount": 42332,
+      "bytes": 2916834517,
+      "allSha256Match": true
+    }
+  ],
+  "totalVerifiedFiles": 57912,
+  "totalVerifiedBytes": 4281806925,
+  "localManifest": ".local-archive/20261002/move-manifest.json",
+  "manifestSha256": "4953a64bdfda33eed12074243d5ced98a2ed5a0144d9a37b02b71661f69dfcb6",
+  "comparisonSha256": "00d38f4ceeb7bc2b968e09ae94e355908d40eb525ee5b4bc24cadec449fc1542",
+  "archiveUploaded": false,
+  "pythonOriginalJar": ".local-archive/20261002/python-original-runtime/neqsim-3.16.0.jar"
+}

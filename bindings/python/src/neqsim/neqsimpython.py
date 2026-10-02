@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 
 import jpype
 
+from ._shared_runtime import resolve_runtime
+
 
 class NeqSimJVMError(Exception):
     """Exception raised when JVM initialization fails."""
@@ -71,8 +73,8 @@ def init_jvm(jvm_args: Optional[List[str]] = None, interrupt: bool = False) -> N
     """
     Start the JVM used by NeqSim, if it is not already running.
 
-    Safe to call multiple times: if the JVM is already started this is a
-    no-op. Call this explicitly when automatic startup has been disabled via
+    Safe to call multiple times: an existing JVM must use the pinned engine.
+    Call this explicitly when automatic startup has been disabled via
     ``NEQSIM_JVM_AUTOSTART=0``, e.g. to control JVM startup arguments before
     any NeqSim classes are used.
 
@@ -87,18 +89,17 @@ def init_jvm(jvm_args: Optional[List[str]] = None, interrupt: bool = False) -> N
         NeqSimJVMError: If the JVM fails to start, or the detected Java
             version is older than 17.
     """
-    if jpype.isJVMStarted():
-        return
-
     try:
+        jar, _lock = resolve_runtime()
         args = jvm_args if jvm_args is not None else _default_jvm_args()
-        start_kwargs: Dict[str, Any] = {"convertStrings": False}
-        try:
-            # `interrupt` kwarg was added in JPype 1.5.0. Guard with a
-            # fallback for older versions just in case.
-            jpype.startJVM(*args, interrupt=interrupt, **start_kwargs)
-        except TypeError:
-            jpype.startJVM(*args, **start_kwargs)
+        start_kwargs: Dict[str, Any] = {"convertStrings": False, "classpath": [str(jar)]}
+        if not jpype.isJVMStarted():
+            try:
+                jpype.startJVM(*args, interrupt=interrupt, **start_kwargs)
+            except TypeError:
+                jpype.startJVM(*args, **start_kwargs)
+        else:
+            jpype.addClassPath(str(jar))
 
         jvm_version = jpype.getJVMVersion()[0]
         if jvm_version < 17:
@@ -109,12 +110,18 @@ def init_jvm(jvm_args: Optional[List[str]] = None, interrupt: bool = False) -> N
                 "See: https://github.com/equinor/neqsim-python#prerequisites"
             )
 
-        module_dir = Path(__file__).resolve().parent
-        jpype.addClassPath(str(module_dir / "lib" / "*"))
+        probe = jpype.JClass("neqsim.thermo.system.SystemSrkEos")
+        location = probe.class_.getProtectionDomain().getCodeSource().getLocation().toURI()
+        loaded = Path(str(jpype.JClass("java.io.File")(location).getCanonicalPath())).resolve()
+        if loaded != jar:
+            raise NeqSimJVMError(
+                f"Existing JVM loaded NeqSim from {loaded}; expected pinned engine {jar}. "
+                "Restart Python before changing engines."
+            )
     except NeqSimJVMError:
         raise
     except Exception as e:
-        raise NeqSimJVMError(_get_jvm_error_message()) from e
+        raise NeqSimJVMError(f"{e}\n\n{_get_jvm_error_message()}") from e
 
 
 def _autostart_enabled() -> bool:

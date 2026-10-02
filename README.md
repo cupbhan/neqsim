@@ -1,3 +1,5 @@
+> **本机统一入口（2026-10-02）：** 只维护本仓库 `master`；Python 接口在 `bindings/python/`，旧目录在 `.local-archive/20261002/`。参见[目录整理与使用说明](docs/development/local-directory-consolidation.md)。
+
 本 fork 维护供多个模拟平台共用的增强版组分物性内核。请先阅读 [仓库管理规则](docs/development/shared-thermo-repository.md)、[统一记录](docs/development/shared-thermo-unification.md) 和 [首个候选版本的验证记录](distribution/cupbhan/candidates/3.17.0-cupbhan.1-rc.1.json)。下面的构建和发布徽章链接到官方上游项目；个人版本的来源与验证以对应发行清单为准。
 
 <h1>

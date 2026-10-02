@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "version": "3.17.0-cupbhan.1-rc.1",
+  "status": "tested-candidate",
+  "commit": "bddee13a60be83aa72d157ede0b8cea23caae4b4",
+  "jar": "runtime/releases/3.17.0-cupbhan.1-rc.1/neqsim-mcp-server-3.17.0-cupbhan.1-rc.1-runner.jar",
+  "sha256": "a1f58d255325294fe8c3513d4d7c431017ed4dd75312c888b45c759b1992ebfe",
+  "source": "runtime/releases/3.17.0-cupbhan.1-rc.1/SOURCE.json"
+}

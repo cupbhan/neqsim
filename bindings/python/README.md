@@ -1,3 +1,5 @@
+> **个人共享版接口：** 本目录已纳入 `cupbhan/neqsim`，请使用 `python -m pip install -e ./bindings/python`（从仓库根目录执行）。默认读取共享版本锁，不再加载自带的旧 3.16.0 JAR。包接口版本与内核版本分别管理；下面保留上游使用文档，`pip install neqsim` 是官方包，并不包含个人增强配置。详见[统一说明](../../docs/development/local-directory-consolidation.md)。
+
 <h1>
   <img src="https://github.com/equinor/neqsim/blob/master/docs/wiki/neqsimlogocircleflatsmall.png" alt="NeqSim Logo" width="120" valign="middle">&nbsp;NeqSim Python
 </h1>
