@@ -6,7 +6,7 @@
   "status": "compiled-research-apis-validated",
   "candidateVersion": "3.23.0-cupbhan.1-rc.2",
   "scope": "Three archived algorithms, explicit physical acceptance and focused regression; broader candidate validation is recorded separately",
-  "tests": 13.0,
+  "tests": 13,
   "failures": 0,
   "errors": 0,
   "skipped": 0,
@@ -71,7 +71,7 @@
   ],
   "checks": {
     "java8SourceAndApiCompilation": "passed for four new production classes",
-    "checkstyle": "passed for nine changed Java files",
+    "checkstyle": "Whole-repository check passed with 0 violations; all nine final changed Java files also passed the scoped check",
     "javadoc": "passed for four new production classes including private methods; 94 private-field documentation warnings",
     "enhancementProtection": "5 tests passed; 74 required MCP tools and 3 frozen model resources retained",
     "archiveOriginals": "SHA-256 unchanged"
@@ -97,11 +97,13 @@
     "build/research-integration/legacy-scan.log": "599e06db18f67ea472c82ae35bcd15196abf84de4da591081b6c2c92b01f70e9",
     "build/research-integration/java8.log": "e7722cc8f7dc14f947ff21343fcbc8156902b29278558f48fcfb1eed116a5725",
     "build/research-integration/javadoc-scoped.log": "a9376ebd8c016fc9133cad3b146b2cab9ec9bdfbf410be8ca0c1b8cce38ed2d1",
-    "build/research-integration/checkstyle-scoped.log": "6ed98e60bddf6df3c58ac0bd62c241bbbbd1a6f63aead6e55085da5a52b7cbea"
+    "build/research-integration/checkstyle-scoped.log": "6ed98e60bddf6df3c58ac0bd62c241bbbbd1a6f63aead6e55085da5a52b7cbea",
+    "build/research-integration/focused-tests.log": "3495d142bc8172c9f0deb82604b2ad674098c2d5b073efd927843b471ebbf2d4",
+    "build/research-integration/checkstyle.log": "c49252e01101a5ca7a5a480e9864b786d5849abb9caaf5c6b668a290d74f63c5"
   },
   "executionNotes": [
-    "Initial high-pressure run interrupted after profiling identified repeated HV/database cloning. The corrected solve-local workspace completed both corrector tests in 9.168 seconds. No speedup ratio is claimed.",
-    "Whole-repository Checkstyle parsing interrupted; all nine changed Java files passed scoped Checkstyle.",
+    "Initial focused run completed successfully: 9 tests passed, including the corrector tests in 640.0 seconds. Profiling identified repeated HV/database cloning. With a solve-local workspace, the same corrector test class completed in 9.168 seconds. These observed timings are not a controlled platform-wide benchmark.",
+    "Whole-repository Checkstyle completed successfully with 0 violations in 13:21; all nine final changed Java files also passed scoped Checkstyle. Earlier provisional interrupted-run notes have been corrected against final process results and logs.",
     "Scoped Maven Javadoc needed target/classes in its classpath; corrected generated options were run with JDK Javadoc and completed with zero errors."
   ],
   "limitations": [
@@ -109,5 +111,7 @@
     "Finite TPD searches do not prove global thermodynamic stability.",
     "No stable four-phase region or completed high-pressure boundary network is claimed.",
     "Dedicated heavy-oil MCP endpoints and arbitrary GUI model editing remain separate work."
-  ]
+  ],
+  "sourceCommit": "f5db0c33b78d62da3a05130723430db44fff9595",
+  "deliveryRecord": "delivery.json"
 }

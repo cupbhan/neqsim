@@ -51,3 +51,34 @@ description: "Integration, acceptance checks, regression coverage and qualificat
 统一构建必须确认这些测试实际执行。
 [原迁移清单](../../distribution/cupbhan/migration-inventory.json)保留整理当时的状态，本页记录后续接入。
 本轮不代表完整 PVTsim 重跑、实验标定或高压相边界网络闭合。
+
+## 已交付版本
+
+本地公共运行版本已切换为 `3.23.0-cupbhan.1-rc.2`，构建源码提交为
+`f5db0c33b78d62da3a05130723430db44fff9595`。后续文档和运行指针提交不改变这个源码身份。
+旧版本 `3.23.0-cupbhan.1-rc.1` 保留在版本目录中，可通过统一激活脚本回退。
+候选包为本地可追溯发行包，未发布到公共 Maven 仓库。
+
+| 验证范围 | 结果 |
+| --- | --- |
+| 核心选定回归，38 个测试类 | 190 通过，1 个已登记的上游禁用用例跳过，0 失败 |
+| MCP 接口合同与真实 STDIO | 4 项测试、6 项运行检查通过，发现 76 个工具 |
+| 三项研究算法专项 | 13 项通过，其中 11 项已包含在核心回归中，2 项历史扫描单独执行 |
+| 仅加载发行 JAR 的 Python 调用 | 两相、三相、参数副本隔离、分岔数值根与相身份拒绝，4 项通过 |
+| Python 绑定 | 13 项通过，覆盖 API 发现、显示、组分库和黏度 |
+| thermal wellbore simulator | PVT、批处理、缓存、相包络验收、9 点查表、Python 调用及运行包身份检查通过 |
+| T2WELL | 8 个 PR 状态点的 Fortran/NeqSim 对比通过；不同黏度关联式仅报告差异 |
+
+验证范围是指定回归和实际调用检查，不等于全仓库测试、完整 UI 验收或实验标定。
+本次未增加这三个研究接口的专用 MCP 工具或 GUI 控件；它们已可通过 Java 和 Python 调用。
+
+修复了两项求解器在残差和雅可比计算时反复克隆 EOS、重复加载数据库的问题，
+改为每次求解独享工作状态。相同分岔校正测试类本机用时从 640.0 秒降至 9.168 秒；
+这是两次测试的观测值，不是统一平台性能基准。另有跨温压重复调用测试检查状态隔离。
+
+完整版本身份、SHA256、命令和各平台验证见[交付记录](../../distribution/cupbhan/research-integration/delivery.json)，
+候选构建原始记录见[候选包验收](../../distribution/cupbhan/research-integration/candidate-validation.json)。
+构建记录中的 `productRuntimeSwitched=false` 是构建时状态；后续切换结果记录在交付记录中。
+
+以后合并官方更新时，现有公共构建流程会检查个人增强源码和测试是否保留，并要求三项快速回归测试类实际执行。
+重复相、消失相、错误油水身份和已发现额外分相趋势仍会阻止结果通过物理验收。

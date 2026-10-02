@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-02",
+  "status": "validated-and-selected-local-candidate",
+  "version": "3.23.0-cupbhan.1-rc.2",
+  "sourceCommit": "f5db0c33b78d62da3a05130723430db44fff9595",
+  "officialBaseline": "v3.23.0",
+  "sourceMetadataSha256": "ffe28e459c0dfe0df7a06a3723f016971c9e80dac01fcc3b07de5ecb76d39415",
+  "runnerSha256": "5c889aaa3a78f654036ee41e40acbbd03fbcd222bad20800f5fe730385928a0d",
+  "runtimeLock": "distribution/cupbhan/runtime.json",
+  "candidateValidation": {
+    "file": "candidate-validation.json",
+    "sha256": "7fb746cfeefd5479bc6d503304269c5995fc390313b0c2e8894b3281b0c58b93"
+  },
+  "coverage": {
+    "core": {
+      "tests": 191,
+      "passed": 190,
+      "skipped": 1,
+      "scope": "38 selected regression suites; the one known upstream disabled case is recorded in candidate-validation.json"
+    },
+    "mcp": {
+      "tests": 4,
+      "passed": 4
+    },
+    "stdio": {
+      "checks": 6,
+      "passed": true,
+      "discoveredTools": 76
+    },
+    "researchFocused": {
+      "tests": 13,
+      "passed": 13,
+      "overlap": "11 are included in the selected core gate; 2 extended historical scans ran separately"
+    },
+    "releasedResearchApis": {
+      "version": "3.23.0-cupbhan.1-rc.2",
+      "commit": "f5db0c33b78d62da3a05130723430db44fff9595",
+      "jarSha256": "5c889aaa3a78f654036ee41e40acbbd03fbcd222bad20800f5fe730385928a0d",
+      "source": "packaged-runner-only",
+      "loadedClasses": [
+        "HydrocarbonWaterBoundaryModelProfile",
+        "RetainedPhaseBifurcationCorrector",
+        "SpecifiedMultiphaseFlashSolver",
+        "SpecifiedPhaseEquilibriumValidator"
+      ],
+      "checks": [
+        {
+          "check": "2-phase-released-api",
+          "passed": true,
+          "materialBalanceResidual": 8.659739592076221e-15
+        },
+        {
+          "check": "3-phase-released-api",
+          "passed": true,
+          "materialBalanceResidual": 4.6351811278100286e-14
+        },
+        {
+          "check": "clone-only-research-profile",
+          "passed": true
+        },
+        {
+          "check": "released-bifurcation-root-and-identity-rejection",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    "pythonBindings": {
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "thermalWellbore": {
+      "pvt": {
+        "success": true,
+        "runtimeSource": "SAGD_NEQSIM_MCP_JAR",
+        "flashKeys": [
+          "flash",
+          "fluid"
+        ],
+        "batchKeys": [
+          "summary",
+          "results"
+        ],
+        "cached": true,
+        "phaseEnvelopeQualityGate": "accepted-physical-curve-and-rejected-nonphysical-fixture",
+        "phaseEnvelopePoints": 41,
+        "pvtExperiment": "viscosity",
+        "lookupCandidatePoints": 9
+      },
+      "adapterChecksPassed": true,
+      "pythonLocalCheckPassed": true,
+      "runtimeAligned": true
+    },
+    "t2well": {
+      "eos": "PR",
+      "states": 8,
+      "passed": true,
+      "disagreements": 0,
+      "viscosity": "Reported only because the correlations differ; not an acceptance criterion"
+    }
+  },
+  "commands": {
+    "candidate": "C:/Python314/python.exe devtools/build_shared_thermo.py --version 3.23.0-cupbhan.1-rc.2",
+    "researchApis": "bindings/python/.venv/Scripts/python.exe build/research-integration/runtime-smoke.py build/shared-thermo/releases/3.23.0-cupbhan.1-rc.2",
+    "activation": "bindings/python/.venv/Scripts/python.exe devtools/activate_shared_thermo.py build/shared-thermo/releases/3.23.0-cupbhan.1-rc.2",
+    "pythonBindings": "bindings/python: .venv/Scripts/python.exe -m pytest tests/test_discovery.py tests/test_display.py tests/test_NeqSim.py::test_Viscosity tests/test_NeqSim.py::test_hasComponentDatabase -q",
+    "thermalPvt": "SAGDFrontend: SAGD_NEQSIM_MCP_JAR=<candidate runner>; node scripts/pvt-runtime-smoke.cjs",
+    "thermalAlignment": [
+      "SAGDFrontend: npm run prepare:pvt",
+      "SAGDFrontend: node scripts/neqsim-release-candidate.mjs --write",
+      "SAGDFrontend: npm run test:engine-adapters",
+      "SAGDFrontend: npm run test:pvt-python"
+    ],
+    "t2well": "build/ui-runtime/Scripts/python.exe tools/pvt/test_complib.py --eos pr --points 4 --jar <candidate runner>"
+  },
+  "javaHome": "C:/Program Files/Microsoft/jdk-21.0.12.8-hotspot",
+  "fallbackVersionRetained": "3.23.0-cupbhan.1-rc.1",
+  "releaseArtifactPolicy": "Versioned local binaries; source and provenance tracked in Git; no public Maven publication",
+  "immutableBuildRecord": "candidate-validation.json records productRuntimeSwitched=false at build time. This delivery record records the later validated runtime selection.",
+  "limitations": [
+    "No full PVTsim rerun or laboratory calibration.",
+    "Finite TPD searches do not prove global thermodynamic stability.",
+    "No stable four-phase region or completed high-pressure boundary network is claimed.",
+    "Dedicated heavy-oil MCP endpoints and arbitrary GUI model editing remain separate work.",
+    "Selected regression and consumer smoke checks, not full repository, full GUI, or full engineering qualification."
+  ],
+  "localEvidenceSha256": {
+    "build/research-integration/runtime-smoke.py": "cd7d5b8dfd1d069651f5ec4b7c91d8e6f1a278d1cef471d2637b752c0c33dc0f",
+    "build/research-integration/runtime-smoke.log": "29cef48f0e0a36bfd6217df9d40bb9ffaf21ae30e54b81dcf2154262f53c2f9f",
+    "build/research-integration/runtime-smoke.json": "29cef48f0e0a36bfd6217df9d40bb9ffaf21ae30e54b81dcf2154262f53c2f9f",
+    "build/research-integration/thermal-smoke.log": "96a563e06bc4c91a60ab5154e2d1f390db515eb240e65c678e657411c251ae97",
+    "build/research-integration/t2well-smoke.log": "7987dff6317f96bc330612ef8b96fea19341ae11e63595f8251c87c35139bc93",
+    "build/research-integration/python-bindings.log": "0c6ac9e6c65a3421f119098c7e77a5d75d7a069d9469aa0bfb1eb37b9584513c",
+    "build/research-integration/python-bindings.xml": "079fdcdc8406a5c983744bcc514df864aefd59cc2f99c9fa78ddca04304182bb",
+    "build/research-integration/thermal-adapters.log": "5b3fbf880da31975a2e199185562dd48535569bd4dc6e8c87e0aa86fc7dd062c",
+    "build/research-integration/thermal-python.log": "f38a2da7700f70e91d879e4a4aa9936d3eec2b2154227aa357799396d6660273",
+    "build/shared-thermo/validation/3.23.0-cupbhan.1-rc.2/core.log": "045554820e64e840e5fc736c1811d1dfd0b9b32afe79f7aca2e7cc24410af558",
+    "build/shared-thermo/validation/3.23.0-cupbhan.1-rc.2/mcp.log": "b4b29429e3fd0b1fcbe4f5bcc23c7d7d2357ad3aae629a42cce3c0b415f912f3"
+  }
+}
