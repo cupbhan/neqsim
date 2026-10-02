@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-02",
+  "baseCommit": "84dad8656052f00ca8a8495afa8a28ce408ba0ff",
+  "officialBaseline": "v3.23.0",
+  "status": "compiled-research-apis-validated",
+  "candidateVersion": "3.23.0-cupbhan.1-rc.2",
+  "scope": "Three archived algorithms, explicit physical acceptance and focused regression; broader candidate validation is recorded separately",
+  "tests": 13.0,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "suites": [
+    {
+      "name": "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryModelProfileTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.706,
+      "cases": [
+        "appliesIndependentFamilyMultipliersToClonesOnly",
+        "preservesBaselineAcrossSerializationAndRejectsScalingOverflow",
+        "reportsGovernanceAndRejectsInvalidConfiguration"
+      ],
+      "reportSha256": "2783b03ebe71879e07cdaf2cc230390b82f49b68ad52eda3d10c0937e22a995e"
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.RetainedPhaseBifurcationCorrectorTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 9.168,
+      "cases": [
+        "convergedAqueousRootCannotBePromotedToASecondOilPhase",
+        "fluidTwoSpinodalNullModeDoesNotInventAFiniteThreePhaseOilSplit"
+      ],
+      "reportSha256": "aa6c43698becd6e17bd8bcfab85c5b7ef1cafba5349f00a135420f4924aaca97"
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.SpecifiedMultiphaseFlashAcceptanceTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 4.875,
+      "cases": [
+        "rejectsCoincidentFourPhaseRootAndVanishingPhase",
+        "rejectsConvergedMetastableRootWithAnAdditionalWaterPhase",
+        "rejectsInvalidPhysicalStateOnReplay",
+        "rejectsInvalidSeedsAndOverflowingTotals",
+        "reproducesTwoAndThreePhaseFlashWithConservedNormalizedResults",
+        "solveLocalWorkspaceDoesNotLeakBetweenOperatingPoints"
+      ],
+      "reportSha256": "0700a38f86e0554bd304222b8c507bdce9e5abf0288abe6bdf6aedf1c2b949e5"
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.SpecifiedMultiphaseFlashSolverTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 58.384,
+      "cases": [
+        "fluidTwoHighPressureStationaryModesAreAuditedAsFourPhaseSeeds",
+        "fourSpecifiedSlotsReproduceOneGasOilEquilibriumWithoutChangingTheTemplate"
+      ],
+      "reportSha256": "87f424883d9c87041deb198166d545d39b671dbcf1cbcd77c07bb7698b0e3384"
+    }
+  ],
+  "checks": {
+    "java8SourceAndApiCompilation": "passed for four new production classes",
+    "checkstyle": "passed for nine changed Java files",
+    "javadoc": "passed for four new production classes including private methods; 94 private-field documentation warnings",
+    "enhancementProtection": "5 tests passed; 74 required MCP tools and 3 frozen model resources retained",
+    "archiveOriginals": "SHA-256 unchanged"
+  },
+  "implementation": {
+    "profile": "Explicit clone-only research configuration; productionPromotionAllowed=false",
+    "solvers": "Independent replay and finite-phase/stability acceptance; numerical roots remain available for diagnosis",
+    "workspace": "Private workspace per solve; all trial state reset; cross-operating-point regression passed"
+  },
+  "sourceSha256": {
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfile.java": "c8087fee3172d5e5fba403f74a73050497638cd3d6fedb130f4ce66a907eff73",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/RetainedPhaseBifurcationCorrector.java": "5f79e26ba3886796767f7275aa4881db3fdebdbb5347e6b6d4d0fc02769fa9ec",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashSolver.java": "86c262533ce93c28a4e21215f19292cd3adff36931eeacad165a3b6a6b1bce8a",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedPhaseEquilibriumValidator.java": "79cb6fc9fa14c703dfcbc7ef5de3043f943a2cc9fb3e933058b74ec30a814bce",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfileTest.java": "8665ca9368ae89367826b16d2cd4ca4cc8392088f8ed238651e484f7548eabf5",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/ResearchEquilibriumFixtures.java": "a3a7c8edc8ba5cca038184de7160c50ddf27fb989f23e2b7e48c1b8b3944753b",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/RetainedPhaseBifurcationCorrectorTest.java": "f330dfad99f7623813eb0e3e4252a519dfcec79a44163bb2b71f7ea2a9f236d3",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashAcceptanceTest.java": "516f35666284f574e636013fc3824f8423d3fa775861c144964fbea6a86709cb",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashSolverTest.java": "1e48a1bd293f7b7a28967e0b7a8a8e9499bd036548162d612451ca1433ec4de5"
+  },
+  "logs": {
+    "build/research-integration/focused-fixed-tests.log": "c06856cc23572bc29b833a1ccd3f4de57151275da30b3d19be89c10f679ce2ae",
+    "build/research-integration/legacy-scan.log": "599e06db18f67ea472c82ae35bcd15196abf84de4da591081b6c2c92b01f70e9",
+    "build/research-integration/java8.log": "e7722cc8f7dc14f947ff21343fcbc8156902b29278558f48fcfb1eed116a5725",
+    "build/research-integration/javadoc-scoped.log": "a9376ebd8c016fc9133cad3b146b2cab9ec9bdfbf410be8ca0c1b8cce38ed2d1",
+    "build/research-integration/checkstyle-scoped.log": "6ed98e60bddf6df3c58ac0bd62c241bbbbd1a6f63aead6e55085da5a52b7cbea"
+  },
+  "executionNotes": [
+    "Initial high-pressure run interrupted after profiling identified repeated HV/database cloning. The corrected solve-local workspace completed both corrector tests in 9.168 seconds. No speedup ratio is claimed.",
+    "Whole-repository Checkstyle parsing interrupted; all nine changed Java files passed scoped Checkstyle.",
+    "Scoped Maven Javadoc needed target/classes in its classpath; corrected generated options were run with JDK Javadoc and completed with zero errors."
+  ],
+  "limitations": [
+    "No full PVTsim rerun or laboratory calibration.",
+    "Finite TPD searches do not prove global thermodynamic stability.",
+    "No stable four-phase region or completed high-pressure boundary network is claimed.",
+    "Dedicated heavy-oil MCP endpoints and arbitrary GUI model editing remain separate work."
+  ]
+}

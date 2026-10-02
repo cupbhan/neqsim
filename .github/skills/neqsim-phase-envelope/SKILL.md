@@ -267,6 +267,19 @@ Symptoms that a continuation result is truncated:
 - The cricondentherm is far colder than the heaviest component's boiling point suggests.
 - Adding or removing a trace component changes the cricondenbar by more than a few bar.
 
+## Explicit specified-phase research APIs
+
+- `SpecifiedMultiphaseFlashSolver` and `RetainedPhaseBifurcationCorrector` separate numerical roots from physical
+  acceptance. `isConverged()` is insufficient: call `validateEquilibrium` or `toValidatedThermodynamicSystem`
+  before consuming a finite-phase equilibrium.
+- The shared validator replays balance and fugacity, rejects coincident/vanishing phases and identity mismatches,
+  and requires completed gas/oil/water stability searches. Finite searches do not prove global stability or
+  laboratory accuracy. Critical and incipient-phase roots require boundary-specific checks.
+- `HydrocarbonWaterBoundaryModelProfile` is clone-only and opt-in. Per-boundary water-Kij multipliers remain
+  research settings, never a default production calibration inferred from software benchmark agreement.
+- Preserve archive originals and migrate assertions, including rejected high-pressure roots. See
+  `docs/development/shared-thermo-research-integration.md` and the shared-engine regression policy.
+
 ## Known Limitations
 
 - Stored branch labels can differ from physical branch identity for bubble-first tracing.

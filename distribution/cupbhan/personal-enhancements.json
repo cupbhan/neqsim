@@ -24,7 +24,14 @@
     "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterStableRegionTransitionScannerTest.java",
     "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreePhasePointFinderTest.java",
     "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreePhaseTopologyFinderTest.java",
-    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterTopologyBenchmarkTest.java"
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterTopologyBenchmarkTest.java",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfile.java",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/RetainedPhaseBifurcationCorrector.java",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashSolver.java",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedPhaseEquilibriumValidator.java",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfileTest.java",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/RetainedPhaseBifurcationCorrectorTest.java",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashAcceptanceTest.java"
   ],
   "frozenResources": {
     "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-0p1-v1.json": "13412fb89cc1bf901968be8a74368d23890c6c40325331ddf7ed648c93c1fb58",
@@ -107,7 +114,7 @@
     "validateInput",
     "validateResults"
   ],
-  "coreTests": "ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,HeavyOilMultimediaFluidTest,TPmultiflash*Test,HydrocarbonWater*Test,TPflashWaterRich*Test,TPflashSrkWaterRichSeededPhaseSetTest,PTPhaseEnvelopeComponentLimitTest,PTPhaseEnvelopeContinuityTest,PTPhaseEnvelopeMichelsenTest,PTPhaseEnvelopeReferenceEosTest,PTPhaseEnvelopeRobustnessTest,PTPhaseEnvelopeSegmentsTest,SystemThermoReactiveCloneTest,ReactiveElectrolyteStateConsistencyTest",
+  "coreTests": "ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,HeavyOilMultimediaFluidTest,TPmultiflash*Test,HydrocarbonWater*Test,TPflashWaterRich*Test,TPflashSrkWaterRichSeededPhaseSetTest,PTPhaseEnvelopeComponentLimitTest,PTPhaseEnvelopeContinuityTest,PTPhaseEnvelopeMichelsenTest,PTPhaseEnvelopeReferenceEosTest,PTPhaseEnvelopeRobustnessTest,PTPhaseEnvelopeSegmentsTest,SystemThermoReactiveCloneTest,ReactiveElectrolyteStateConsistencyTest,RetainedPhaseBifurcationCorrectorTest,SpecifiedMultiphaseFlashAcceptanceTest",
   "knownUpstreamDisabledTests": {
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest#testPureMethane": "Disabled by upstream v3.23.0: pure-component phase-envelope tracing is not supported by this regression. All other selected cases must execute."
   },
@@ -115,7 +122,9 @@
     "Selected tests do not constitute the full repository suite or a full PVTsim rerun.",
     "The broad PTPhaseEnvelopeTest UMR-PRU coarse-grid integration scan is outside the routine candidate gate. The first extended run was interrupted during this scan; targeted Michelsen, continuity, reference-EOS and robustness suites are included.",
     "Historical heavy-oil calibration envelopes and nonreactive NH3 assumptions still apply.",
-    "Dedicated heavy-oil multimedia MCP endpoints are not implemented."
+    "Dedicated heavy-oil multimedia MCP endpoints are not implemented.",
+    "Boundary model profiles are opt-in research settings; no production calibration or full PVTsim rerun is claimed.",
+    "Specified-phase acceptance uses finite gas/oil/water TPD searches, not a mathematical proof of global stability; critical and vanishing-phase states use dedicated boundary solvers."
   ],
   "requiredCoreSuites": [
     "neqsim.mcp.runners.ComponentQueryTest",
@@ -152,7 +161,10 @@
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeMichelsenTest",
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeReferenceEosTest",
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest",
-    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeSegmentsTest"
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeSegmentsTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryModelProfileTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.RetainedPhaseBifurcationCorrectorTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.SpecifiedMultiphaseFlashAcceptanceTest"
   ],
   "excludedMavenTags": [
     "slow",
