@@ -1,7 +1,7 @@
 ---
 name: neqsim-electrolyte-systems
 description: "Electrolyte and brine chemistry guidance for NeqSim. USE WHEN: modeling produced water, scale prediction, CO2/H2S in aqueous systems, MEG/DEG injection, hydrate inhibitor dosing, or any system with ions, salts, or electrolytes. Covers SystemElectrolyteCPAstatoil setup, ion components, scale risk assessment, and brine handling patterns."
-last_verified: "2026-07-04"
+last_verified: "2026-09-01"
 ---
 
 # Electrolyte Systems Guide
@@ -28,6 +28,27 @@ Guide for modeling electrolyte/brine systems in NeqSim.
 | Brine + multiple salts | `SystemElectrolyteCPAstatoil` | `10` |
 
 ## Basic Electrolyte Setup
+
+### Pitzer hydrate and mixed-chloride route
+
+For Pitzer water activities use `SystemPitzer` with `setMixingRule("classic")` and
+`setMultiPhaseCheck(true)`. The hydrate onset temperature/pressure/curve operations use
+`PitzerHydrateFlash` and a matched liquid-water reference. See
+`docs/thermo/pitzer_hydrate_equilibrium.md` for the tested setup and limits.
+`applyPhreeqcCo2ChlorideParameters(Map<String, Double>)` loads the pinned PHREEQC Na/K/Ca/Mg-Cl
+and CO2 lambda rows, but requires an explicit CO2-cation-Cl zeta for every present cation.
+Zero is an explicit screening assumption, not a fitted catalog coefficient. It remains unqualified.
+When both K+ and Mg++ are present (including zero-amount components), the pinned catalog also lacks their theta row.
+Use `applyPhreeqcCo2ChlorideParameters(zeta, potassiumMagnesiumTheta)` with an explicit finite value;
+the one-argument overload rejects that topology. For concentration sweeps retain the same components and neutral
+parameter dataset at zero salt. See the guide's 57-point reference assessment: numerical convergence and a
+passing regression suite do not mean every experimental comparison passed the 1 K accuracy criterion.
+Do not silently fill missing tuples or equate parameter coverage with scientific validation.
+
+Hand off to `neqsim-flow-assurance` / `flow.assurance` with the configured fluid, salt mole basis,
+dataset identity, supplied zeta/theta values, pressure grid and operating temperature. Carry forward
+the Henry-domain lower limit (CO2 274.19 K; methane 275.46 K) and onset-only scope; subzero
+hydrate predictions require a qualified low-temperature aqueous gas reference.
 
 ```java
 import neqsim.thermo.system.SystemElectrolyteCPAstatoil;
@@ -122,6 +143,36 @@ Before hand-rolling the flash, note these ready-made helpers (see the
   and flash first (otherwise carbonate/bicarbonate/pH speciation is missing and
   the SR is wrong).
 
+Once the SI/SR is known, the **inhibitor** side (minimum inhibitor concentration, residual SI
+after treatment, chemical compatibility, and what a pH adjuster or H2S scavenger does to the
+brine) lives in `neqsim-production-chemistry`
+(`ScaleInhibitorPerformance`, `ScaleControlAssessor`, `ProductionChemicalScaleScenario`).
+A `StreamChemistryAdapter` / `fromStream(...)` helper reads the ion table straight off the
+electrolyte stream built here — do not retype it.
+
+### Activity-consistent calcium-sulfate equilibrium
+
+Use the pure-mineral operation when the engineering question is gypsum/anhydrite equilibrium rather than screening
+SI:
+
+```java
+MultiSaltPrecipitationResult solids =
+    new ThermodynamicOperations(brine).precipitateScales("CaSO4_A", "CaSO4_G");
+
+CalciumSulfatePhaseBoundaryQualification evidence =
+    new ThermodynamicOperations(brine).qualifyCalciumSulfatePhaseBoundary();
+```
+
+`CaSO4_G` is hydrated gypsum: the authoritative operation includes $a_{\mathrm{w}}^2$, removes or returns two water
+moles per formula unit, and reports hydrated mass. `CaSO4_A` remains water-free anhydrite. The qualification object
+separates this mineral-standard-state evidence from the Pitzer or electrolyte-CPA aqueous activity model. It is
+currently fail-closed against the CC BY 4.0 Voigt–Freyer pure-water and NaCl crossing envelopes and does not qualify
+high-pressure use; do not fit or reinterpret Pitzer interactions to hide a mineral-correlation mismatch. See
+`docs/pvtsimulation/scale_prediction_api.md` for the source matrix, numerical residuals, and limits.
+The object registers the NIST ThermoML CaCl2 pressure series as independent finite-concentration
+evidence, but explicitly leaves the dilute limiting-volume term unresolved; do not treat the presence
+of pressure evidence as high-pressure calcium-sulfate qualification.
+
 ### CaCO3 (Calcite) Scaling
 
 Scale forms when the product of ion activities exceeds the solubility product:
@@ -180,6 +231,51 @@ injWater.addComponent("Cl-", 0.015);
 injWater.addComponent("SO4--", 0.01);   // High sulfate
 injWater.setMixingRule(10);
 ```
+
+## Cathodic (high-pH) scaling in seawater electrochemical devices
+
+Electrochlorination cells, seawater electrolysers and impressed-current cathodic protection all
+evolve hydrogen at the cathode, which lifts the boundary-layer pH far above the bulk seawater
+value of ≈ 8.1. The deposit there is **brucite Mg(OH)₂ together with CaCO₃**, not the sulphate
+minerals produced-water work usually screens for. Set the **boundary-layer** pH, not the bulk pH:
+
+```java
+ElectrolyteScaleCalculator calc = new ElectrolyteScaleCalculator()
+    .setTemperatureCelsius(8.0).setPressureBara(1.013)
+    .setPH(10.5)                       // cathode boundary layer, NOT the bulk 8.1
+    .setCations(412.0, 0.02, 7.9, 1290.0, 10780.0, 399.0, 0.002)  // S = 35 seawater, mg/L
+    .setAnions(19350.0, 2710.0, 142.0, 0.0);
+calc.calculate();
+double siBrucite = calc.getBruciteSaturationIndex();   // Mg(OH)2 - two decades per pH unit
+double siCalcite = calc.getCaCO3SaturationIndex();
+double aOH = calc.getHydroxideActivity();
+```
+
+Bulk S = 35 seawater at 8 °C is already supersaturated in calcite (SI ≈ +0.58, Ω ≈ 3.8) but
+strongly undersaturated in brucite (SI ≈ −4.8); brucite crosses SI = 0 near pH 10.5 at 8 °C and
+near pH 10.1 at 14 °C (retrograde solubility, so it is *worse* in warm water).
+
+`getpH()` on a loaded `SystemElectrolyteCPAstatoil` can return a flat 7.0 without an explicit
+reaction/ion setup — for boundary-layer work set the pH explicitly on the scale calculator instead
+of reading it back from a flash.
+
+**Cell voltage is an electrolyte-transport question.** For a current-controlled device the applied
+voltage floats with seawater resistivity, so a fixed voltage limit (vendor maximum, Ex/ATEX
+certification) has a *temperature-dependent* margin. Use
+`neqsim.process.chemistry.electrochlorination.SeawaterElectrolyteConductivity`
+(UNESCO/PSS-78) for conductivity, resistivity and the ohmic voltage:
+
+```java
+SeawaterElectrolyteConductivity sw = new SeawaterElectrolyteConductivity()
+    .setSalinityPsu(35.0).setTemperatureCelsius(8.0);
+sw.calculate();
+double kappa = sw.getConductivitySPerM();                       // ≈ 3.62 S/m
+double ratio = sw.ohmicVoltageRatioVersusTemperature(15.0);     // ≈ 1.19 vs a 15 °C design basis
+```
+
+Chain: this skill → `neqsim-flow-assurance` (scale kinetics, remediation) for deposition rate and
+dissolver selection; → `neqsim-standards-lookup` for NORSOK S-001 / ISO 13702 when the consequence
+is firewater or seawater-system availability.
 
 ## MEG Injection Calculations
 
@@ -247,7 +343,7 @@ double pH = co2Brine.getpH();               // ~3.9 for CO2-saturated water
 ## Common Pitfalls
 
 1. **Charge balance**: Total positive charges must equal total negative charges
-2. **Mixing rule must be numeric `10`**: Not `"classic"` — CPA requires numeric mixing rule
+2. **Mixing rule is model-specific**: CPA requires numeric `10`; `SystemPitzer` uses `"classic"`
 3. **Ion names are case-sensitive**: `"Na+"` not `"na+"` or `"NA+"`
 4. **Multi-phase check**: Always enable for electrolyte systems (`setMultiPhaseCheck(true)`)
 5. **Temperature limits**: Electrolyte models may have narrower valid T range than HC models

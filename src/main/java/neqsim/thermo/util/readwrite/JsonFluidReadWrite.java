@@ -645,8 +645,8 @@ public class JsonFluidReadWrite {
 
   private static int findRuntimeComponentIndex(SystemInterface fluid, ComponentData data) {
     String mappedName = mapToNeqSimName(data.name);
-    String[] candidates = data.isPseudo ? new String[] { data.name, mappedName, data.name + "_PC", mappedName + "_PC" }
-        : new String[] { data.name, mappedName };
+    String[] candidates = data.isPseudo ? new String[] {data.name, mappedName, data.name + "_PC", mappedName + "_PC"}
+        : new String[] {data.name, mappedName};
     for (String candidate : candidates) {
       if (!fluid.hasComponent(candidate, false)) {
         continue;

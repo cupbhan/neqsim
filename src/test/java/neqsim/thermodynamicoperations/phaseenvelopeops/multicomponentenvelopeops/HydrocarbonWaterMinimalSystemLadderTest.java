@@ -13,8 +13,8 @@ import neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops
 
 /** Minimal composition ladder for reproducible hydrocarbon-water topology development. */
 class HydrocarbonWaterMinimalSystemLadderTest extends NeqSimTest {
-  private static final double[] TEMPERATURES_K = new double[] { 180.0, 220.0, 260.0, 300.0, 350.0, 425.0 };
-  private static final double[] PRESSURES_BARA = new double[] { 1.0, 5.0, 10.0, 25.0, 50.0, 100.0 };
+  private static final double[] TEMPERATURES_K = new double[] {180.0, 220.0, 260.0, 300.0, 350.0, 425.0};
+  private static final double[] PRESSURES_BARA = new double[] {1.0, 5.0, 10.0, 25.0, 50.0, 100.0};
 
   @Test
   @Tag("slow")

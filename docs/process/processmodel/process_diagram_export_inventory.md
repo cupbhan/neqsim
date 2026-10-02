@@ -6,8 +6,11 @@ description: Current-master inventory and compatibility contract for NeqSim DOT,
 # Process diagram exporter and API inventory
 
 This inventory records the process-diagram and engineering-exchange paths present on NeqSim
-`master` at commit `60a6bde7` (10 August 2026). It is the Phase 0 baseline for issue #1332. It
-does not change an exporter, qualify a drawing, or claim ISO 10628 conformance.
+`master` at commit `1dee5b51` (11 August 2026). It is the Phase 0 baseline for issue #1332. It
+does not change an exporter, qualify a drawing, or claim ISO 10628 conformance. The paired
+[DEXPI and P&ID current-master audit](../../integration/dexpi-pid-current-master-audit.md)
+extends this baseline across the detailed #2899 reader, writer, validator, engineering, P&ID,
+test, fixture, example, and qualification surfaces.
 
 The intended architecture is one canonical semantic plant model projected into complementary
 outputs:
@@ -33,8 +36,8 @@ API-stability classification.
 | Legacy `ProcessSystem` Graphviz | `ProcessSystem.exportToGraphviz(...)`, `ProcessSystemGraphvizExporter.export(...)` | Equipment stream introspection and export options | Legacy Graphviz file with optional stream values and property table | Retain as a compatibility output; do not silently redirect it through a new model or renderer |
 | Legacy minimal PFD DOT | `ProcessFlowDiagramExporter(ProcessSystem).toDot()` | Shared stream identity plus explicit `ProcessConnection` declarations | Minimal equipment-node/stream-edge DOT | Preserve the constructor and `toDot()` result contract while public callers remain supported |
 | Multi-area Graphviz | `ProcessModel.toDOT()`, `createGraphvizExporter()`, `exportToGraphviz(...)`, `exportAreaDOT(...)`, and `ProcessModelGraphvizExporter` | Ordered areas and shared stream identity | One clustered plant DOT and optional per-area DOT files | Preserve current combined and per-area APIs. Per-area files are compatibility views, not the future controlled multi-sheet document model |
-| Canonical topology adapter | `ProcessDiagramGraphAdapter.fromProcessSystem(...)`, `fromProcessModel(...)` | `ProcessSystem`, explicit connections, and ordered `ProcessModel` areas | Defensive deterministic `EngineeringGraph`, fingerprint, and structured diagnostics | Reuse as the shared topology foundation; it currently has no renderer or DEXPI consumer and remains calculated, review-required evidence |
-| Native DEXPI 2.0 Process | `Dexpi20ProcessModelWriter.write(...)`, `writeAndAssess(...)` | Direct `ProcessSystem` equipment and connection traversal | Native DEXPI 2.0 Process XML with steps, material ports, streams, quantities, and conformance report | Preserve the native Process profile and fail-closed assessment; migrate only after semantic-equivalence and loss-report tests pass |
+| Canonical topology adapter | `ProcessDiagramGraphAdapter.fromProcessSystem(...)`, `fromProcessModel(...)` | `ProcessSystem`, explicit connections, and ordered `ProcessModel` areas; opt-in successful-run operating case | Defensive deterministic `EngineeringGraph`, fingerprint, structured diagnostics, and optional unit-explicit stream operating values | Reuse as the shared semantic foundation; the assessed DEXPI Process path consumes one topology snapshot, while legacy renderers and compatibility writers retain their established paths |
+| Native DEXPI 2.0 Process | `Dexpi20ProcessModelWriter.write(...)`, `writeAndAssess(...)`, `writeAndAssessTopology(...)` | Direct `ProcessSystem` traversal for compatibility APIs; canonical material projection for assessed overloads; opt-in named-case calculation nodes for operating values | Native DEXPI 2.0 Process XML with steps, material ports, streams, quantities, conformance report, and optional structured topology/value-source evidence | Preserve the native Process profile and existing sequential serialization; canonical values omit and diagnose gaps without stream fallback |
 | Native DEXPI 2.0 Plant | `Dexpi20XmlWriter.write(...)`, `writeAndAssess(...)` | Direct `ProcessSystem` engineering/plant mapping | Native DEXPI 2.0 Plant XML and conformance report | Keep separate from Process/PFD exchange and from Proteus compatibility output |
 | Proteus-compatible DEXPI | `DexpiXmlWriter.write(...)`, `writeForPyDexpi(...)`, `write(ProcessModel, ...)`, `writeSheets(...)` | Direct process/engineering mapping plus `DexpiLayoutEngine` | Proteus-compatible P&ID XML, pyDEXPI variant, layouts, and per-area sheets | Preserve import/export compatibility. Combined export flattens areas and logs/skips distinct equipment with duplicate names; per-area sheets expose boundary feeds but do not yet form a controlled, paired-reference document set |
 | Proteus import and simulation reconstruction | `DexpiXmlReader`, `DexpiSimulationBuilder`, `DexpiTopologyResolver`, `DexpiEquipmentFactory` | Imported nozzles, piping segments, equipment, instruments, and mappings | DEXPI/Proteus XML to a runnable `ProcessSystem` with explicit loss and validation boundaries | Keep as the detailed P&ID workflow; do not infer that a simulation-only PFD contains complete piping, valve, nozzle, instrument, or safeguard design |
@@ -47,9 +50,9 @@ API-stability classification.
 |---|---|---|
 | `ProcessGraph` | Execution topology and dependency scheduling | Execution-oriented; not a drawing/document model |
 | `EngineeringGraph` | Exchange-neutral engineering objects and revision comparison | Mutable and broader than a qualified process-diagram document contract |
-| `ProcessDiagramGraphAdapter.Result` | Deterministic projection of `ProcessSystem` or multi-area `ProcessModel` into `EngineeringGraph` | Stable plant/area/equipment/port/connection IDs exist, but document/sheet IDs, controlled views, operating cases, and persistent layout are absent |
+| `ProcessDiagramGraphAdapter.Result` | Deterministic projection of `ProcessSystem` or multi-area `ProcessModel` into `EngineeringGraph` | Stable topology and an opt-in current operating case with temperature, absolute pressure, mass flow, units, and provenance are present; tags/stream numbers, document/sheet IDs, controlled views, operating envelopes, and persistent layout remain absent |
 | `ProcessDiagramExporter` configuration | Simulator-style content and Graphviz layout policy | Layout is renderer-specific and has no document-set, revision-block, approval, or controlled off-page-reference model |
-| DEXPI 2.0 Process model | Tool-neutral BFD/PFD exchange | Currently consumes `ProcessSystem` directly and has no `ProcessModel` overload or canonical-graph equivalence proof |
+| DEXPI 2.0 Process model | Tool-neutral BFD/PFD exchange | The opt-in assessed path consumes canonical `ProcessSystem` material topology and named-case operating values for registered stream subjects; values for implicit equipment outlet streams are explicitly omitted and diagnosed, compatibility APIs remain direct, and no multi-area `ProcessModel` overload exists |
 | Proteus/DEXPI P&ID model | Detailed P&ID proposal, import/export, and graphical interchange | Separate profile with richer piping/instrument semantics; must remain an engineering proposal until accountable data are present |
 
 `ProcessConnection` distinguishes material, energy, and signal connections and records explicit
@@ -64,15 +67,15 @@ source contract has no independent connection ID; the adapter reports
 |---|---:|---:|---:|---:|
 | `ProcessSystem` | Present | Missing | Present | Present |
 | Multi-area `ProcessModel` | Present | Missing | Missing | Present |
-| Stable plant/area/equipment/port/connection IDs through canonical adapter | Present as a separate topology baseline | Foundation only | Not yet consumed | Not yet consumed as the shared graph |
+| Stable plant/area/equipment/port/connection IDs through canonical adapter | Present as a separate topology baseline | Foundation only | Assessed material projection consumes the canonical snapshot and records its stable IDs; writer IDs remain compatibility-sequential | Not yet consumed as the shared graph |
 | Material, energy, and signal topology | Present in canonical baseline; renderer coverage varies | Missing | Material-focused | Present where supported by the detailed profile |
-| Parallel connection preservation | Golden topology evidence for distinct material/energy/signal endpoints | Missing | Not yet proved against golden cases | Profile-specific tests only |
-| Units and provenance | Optional stream labels/tables; canonical topology provenance | Missing document model | Selected physical quantities with explicit units | Simulation/design metadata and governed package artifacts |
+| Parallel connection preservation | Golden topology evidence for distinct material/energy/signal endpoints | Missing | Multiplicity-sensitive evidence for supported simple and parallel-branch material cases | Profile-specific tests only |
+| Units and provenance | Optional stream labels/tables; canonical topology plus opt-in current-case stream values in K, bara absolute, and kg/s with review-required simulation provenance | Missing document model | Opt-in assessed export consumes named-case canonical values, converts to kg/h, bar absolute, and degree Celsius, and records value-source and omission diagnostics | Simulation/design metadata and governed package artifacts |
 | Controlled multi-document/multi-sheet hierarchy | Per-area compatibility files only | Missing | Missing | Partial sheet/layout features, not the shared controlled document set |
 | Paired off-page connectors with direction and sheet/grid references | Missing | Missing | Missing | Graphical off-page features exist, but shared connection/document completeness is not qualified |
 | Title/revision blocks and drawing status | Missing controlled model | Missing | Missing | Some rendered metadata exists; full shared revision/status governance remains unqualified |
 | Native rendering without Graphviz | No | Missing | XML only | XML plus external/tool-specific rendering paths |
-| Structured loss diagnostics | Canonical adapter diagnostics | Missing | Conformance assessment, but no canonical topology loss comparison | Reader/writer/engineering validation paths |
+| Structured loss diagnostics | Canonical adapter diagnostics | Missing | Canonical/exported topology comparison plus explicit unsupported energy, signal, multi-area, document, and graphics scopes | Reader/writer/engineering validation paths |
 
 ## Test and example inventory
 
@@ -80,12 +83,12 @@ The following tests are the executable evidence closest to the public paths:
 
 | Evidence | Coverage |
 |---|---|
-| `ProcessDiagramTopologyEquivalenceTest` | Golden simple, parallel/recycle, and multi-area directed topology across `ProcessGraph`, canonical `EngineeringGraph`, PFD DOT, and legacy/multi-area Graphviz projections |
-| `ProcessDiagramGraphAdapterTest` | Stable identities, explicit ports, material/energy/signal connections, parallel endpoints, multi-area hierarchy, deterministic snapshots, defensive copies, and structured diagnostics |
+| `ProcessDiagramTopologyEquivalenceTest`, `ProcessDiagramGoldenFixtures` | Reusable golden simple and parallel-branch manifests plus parallel/recycle and multi-area directed topology across `ProcessGraph`, canonical `EngineeringGraph`, PFD DOT, and legacy/multi-area Graphviz projections |
+| `ProcessDiagramGraphAdapterTest` | Stable identities, explicit ports, material/energy/signal connections, parallel endpoints, multi-area hierarchy, deterministic snapshots, case-scoped unit-explicit operating values and provenance, stale-value prevention, defensive copies, and structured diagnostics |
 | `ProcessDiagramExporterTest` | DOT structure, diagram styles/options, stream annotations/tables, and Graphviz-backed exports when Graphviz is available |
 | `ProcessSystemGraphvizExportTest` | Legacy complex-oil, three-phase, anti-surge, and annotated stream/property-table exports |
 | `HysysStyleDiagramTest`, `OilStabilizationDiagramTest`, `GasOilWaterProcessSvgExportTest` | Professional-looking simulator examples and representative process diagrams; visual examples, not standards qualification |
-| `Dexpi20ProcessModelWriterTest`, `Dexpi20SemanticValidatorTest` | Native DEXPI 2.0 Process structure, physical quantities, semantic rules, and scoped conformance evidence |
+| `Dexpi20ProcessModelWriterTest`, `Dexpi20SemanticValidatorTest` | Native DEXPI 2.0 Process structure, direct and canonical operating quantities, deterministic conversion, unsuccessful-run suppression, semantic rules, simple/parallel material-topology equivalence, explicit ports, and scoped loss/conformance evidence |
 | `DexpiXmlWriterTest`, `DexpiXmlReaderTest`, `DexpiTopologyResolverTest` | Proteus-compatible export/import, equipment/nozzle/piping topology, round trip, instrumentation, safety metadata, and schema variants |
 | `DexpiRenderingImprovementsTest` | Proteus layout, routing, crossing hops, off-page symbols, line styles, title-block fields, multi-area export, and structural XML checks |
 | P&ID package tests under `process/engineering/pid` | Proposal synthesis, controls/safeguards, completeness findings, materialization, and governed engineering-package behavior |
@@ -126,12 +129,15 @@ Future increments shall follow these rules:
 
 ## Dependency-ordered next work
 
-The inventory shows that the canonical topology foundation exists, while exporters still traverse
-their own source models. The next safe implementation increment is therefore to make the golden
-topology manifest reusable and prove DEXPI 2.0 Process semantic equivalence for supported simple
-and branched cases. That increment must retain the Proteus/P&ID workflow and report unsupported
-energy, signal, multi-area, document, and graphical semantics explicitly.
+The canonical topology foundation supports an opt-in, successful-run operating-case snapshot, and
+the DEXPI Process comparison gate drives the assessed material projection. An additional opt-in
+writer overload consumes named-case calculation nodes with deterministic unit conversion and
+explicit missing-value diagnostics. Compatibility APIs still traverse their established source
+model and retain their sequential XML identities. The next dependency-ready increment is to widen
+canonical value ownership beyond registered stream elements or, after review, extend exchange to
+multi-area `ProcessModel`; hierarchy and energy/signal mappings must not be silently flattened or
+lost.
 
-After that evidence is merged, migrate one exporter at a time. The native professional document
-model and renderer remain later work because controlled document/sheet identity, layout ownership,
-revision semantics, and licensed symbol qualification are not yet available.
+The native professional document model and renderer remain later work because controlled
+document/sheet identity, layout ownership, revision semantics, and licensed symbol qualification
+are not yet available.

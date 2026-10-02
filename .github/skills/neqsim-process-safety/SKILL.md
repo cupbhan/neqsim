@@ -1,7 +1,7 @@
 ---
 name: neqsim-process-safety
 version: "1.5.0"
-description: "Process safety methodology — barrier management, PSFs/SCEs, HAZOP guidewords, LOPA worksheets, SIL determination per IEC 61511, integrated facility safety response, safety change revalidation, independent benchmarks, bow-tie analysis, risk-matrix scoring, TR3001 overpressure-protection studies, and trapped-liquid fire rupture screening. USE WHEN: a task requires barrier registers, hazard identification, layer-of-protection analysis, safety-integrity-level assignment for an SIF, integrated ESD/compressor-trip/blowdown/relief/flare evidence, safety-study revalidation after change, independent method benchmarks, overpressure relief-cause / governing-case studies, trapped liquid rupture/PFP demand, or quantitative risk evaluation. Anchors on neqsim.process.safety.barrier, neqsim.process.safety.risk, neqsim.process.safety.overpressure, and neqsim.process.safety.rupture classes."
+description: "Process safety methodology - barriers, PSFs/SCEs, HAZOP, LOPA, SIL per IEC 61511, integrated safety response, change revalidation, bow-tie, risk matrix, TR3001 overpressure studies, trapped-liquid rupture. USE WHEN: a task needs barrier registers, hazard identification, LOPA, SIF SIL assignment, ESD/blowdown/relief/flare evidence, safety revalidation, overpressure governing cases, PFP demand or risk evaluation. Anchors on neqsim.process.safety.barrier, .risk, .overpressure, .rupture."
 last_verified: "2026-07-18"
 requires:
   java_packages: [neqsim.process.safety.barrier, neqsim.process.safety.risk, neqsim.process.safety.overpressure, neqsim.process.safety.rupture, neqsim.process.safety.risk.sis.nog070, neqsim.process.safety.esd, neqsim.process.safety.api14c, neqsim.process.safety.compliance]
@@ -122,6 +122,39 @@ limit is a data-sheet value or a screening default. Equipment design limits
 PRESSURE deviations can be screened with
 `neqsim.process.safety.depressurization.BlockedOutletOverpressureAnalyzer`. See
 `docs/safety/ai_hazop_input_format.md` for the full input-data format.
+
+### Method 1b — Quantify the governing deviations of a separator node
+
+A guide-word grid on its own is not decision-grade. For a separation node, four
+deviations carry the risk; each maps to a class that turns the qualitative row
+into a number against a data-sheet limit:
+
+| Guideword / parameter | Class | Standard |
+| --- | --- | --- |
+| MORE FLOW / MORE LEVEL (carryover) | Souders-Brown `K = v_gas / sqrt((rho_l-rho_g)/rho_g)` from the run `ProcessSystem`; `SeparatorMechanicalDesign.setFromExistingDesign(id, lTanTan, wallThickness)` to pin the as-built geometry | NORSOK P-002, GPSA |
+| MORE PRESSURE (fire) | `neqsim.process.safety.overpressure.FireCaseRelief` | API 521 §4.3 |
+| MORE PRESSURE (blocked outlet) | `neqsim.process.util.fire.ReliefValveSizing.calculateRequiredArea` on the **full inlet gas rate**; `BlockedOutletOverpressureAnalyzer` for the transient | API 520 Part I, API 521 §4.4.2 |
+| LESS LEVEL (gas blow-by) | `neqsim.process.safety.blowby.GasBlowbyAnalyzer` | API 521 §4.4.7 |
+| LESS TEMPERATURE (MDMT) | `neqsim.process.safety.depressurization.DepressurizationSimulator` + `result.meetsMDMT(mdmtK)` | API 521 §5.20, ASME VIII UCS-66 |
+
+Three heuristics that repeatedly decide the outcome:
+
+- **Fire is rarely the governing relief case for a high-throughput separator.**
+  The fire case only vents vapour generated from the wetted area, while a blocked
+  gas outlet must vent the whole inlet gas rate. Always size both and state which
+  governs — a 10× difference in required orifice area is normal.
+- **Blow-by on LESS LEVEL is choked in nearly every HP→LP pair**, so the rate is
+  set purely by the open area of the level-control valve, not by downstream
+  pressure. When the valve Cv is unknown, present a 2″–8″ equivalent-diameter
+  sensitivity rather than picking one number.
+- **A thick-walled vessel does not reach MDMT during blowdown.** Model the wall
+  (`setWall(mass, area, cp, htc)`); several hundred tonnes of steel keeps the
+  metal near ambient. The cold spot is the BDV/PSV tail pipe — check it with an
+  isenthalpic `PHflash` of the gas down to flare pressure, not with the vessel
+  temperature.
+
+Carryover margin scales as `1/(1-level)`, so report the utilisation as a level
+sensitivity — it converts "verify the HH trip" into a numeric trip setpoint.
 
 ## Method 2 — LOPA Worksheet
 
@@ -528,6 +561,7 @@ disposal.getGoverningContributor();
 ## Related Skills
 
 - [`neqsim-relief-flare-network`](../neqsim-relief-flare-network/SKILL.md) — when LOPA shows PSV is the IPL of last resort
+- [`neqsim-firewater-deluge-design`](../neqsim-firewater-deluge-design/SKILL.md) — sizing and adjudicating the active fire-protection barrier (deluge coverage, nozzle net, monitors, active-vs-passive substitution rules)
 - [`neqsim-trapped-liquid-fire-rupture`](../neqsim-trapped-liquid-fire-rupture/SKILL.md) — blocked-in liquid fire rupture, PFP demand, and source-term handoff
 - [`neqsim-self-heating-ignition`](../neqsim-self-heating-ignition/SKILL.md) — spontaneous ignition of combustible liquid absorbed into porous insulation (lagging fires); use for any fire with no identified ignition source
 - [`neqsim-dynamic-simulation`](../neqsim-dynamic-simulation/SKILL.md) — depressurization & blowdown

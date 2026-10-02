@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -121,12 +124,12 @@ public class OnePhasePipeLineCompositionalTest {
 
     UUID id = UUID.randomUUID();
     pipe.run(id);
-    pipe.runConservativeTransient(new double[] { 0.0, 30.0, 60.0, 90.0 },
-        new SystemInterface[] { pulseGas, pulseGas, baselineGas }, 1, id);
+    pipe.runConservativeTransient(new double[] {0.0, 30.0, 60.0, 90.0},
+        new SystemInterface[] {pulseGas, pulseGas, baselineGas}, 1, id);
 
     OnePhaseSpeciesConservationHistory history = pipe.getSpeciesConservationHistory();
     assertEquals(3, history.size());
-    assertArrayEquals(new double[] { 30.0, 60.0, 90.0 }, history.getElapsedTimeSeconds(), 0.0);
+    assertArrayEquals(new double[] {30.0, 60.0, 90.0}, history.getElapsedTimeSeconds(), 0.0);
     for (OnePhaseSpeciesConservationReport report : history.getReports()) {
       assertTrue(report.isConverged(), report.getMessage());
       assertTrue(report.getMaximumRelativeInventoryResidual() <= 1.0e-8, report.getMessage());
@@ -140,6 +143,35 @@ public class OnePhasePipeLineCompositionalTest {
     int nitrogen = componentIndex(latest, "nitrogen");
     assertArrayEquals(latest.getMassFractionProfile()[nitrogen], pipe.getConservativeMassFractionProfile("nitrogen"),
         0.0);
+    assertLocalInventoryInvariants(latest);
+    assertArrayEquals(latest.getFinalCellInventoryKg(), pipe.getConservativeCellInventoryKg(), 0.0);
+    assertArrayEquals(latest.getFinalComponentCellInventoryKg()[nitrogen],
+        pipe.getConservativeComponentInventoryProfileKg("NITROGEN"), 0.0);
+    assertEquals(pipe.getConvergenceReport().getFinalFiniteVolumeMassKg(), sum(latest.getFinalCellInventoryKg()),
+        Math.max(pipe.getConvergenceReport().getFinalFiniteVolumeMassKg(), 1.0) * 1.0e-8);
+
+    double[] cellInventoryCopy = latest.getFinalCellInventoryKg();
+    double originalFirstCellInventory = cellInventoryCopy[0];
+    cellInventoryCopy[0] = -1.0;
+    assertEquals(originalFirstCellInventory, latest.getFinalCellInventoryKg()[0], 0.0);
+    double[][] componentInventoryCopy = latest.getFinalComponentCellInventoryKg();
+    double originalFirstComponentInventory = componentInventoryCopy[0][0];
+    componentInventoryCopy[0][0] = -1.0;
+    assertEquals(originalFirstComponentInventory, latest.getFinalComponentCellInventoryKg()[0][0], 0.0);
+
+    String reportJson = latest.toJson();
+    assertTrue(reportJson.contains("\"finalCellInventoryKg\""));
+    assertTrue(reportJson.contains("\"finalComponentCellInventoryKg\""));
+    Gson gson = new Gson();
+    JsonObject reportJsonObject = JsonParser.parseString(reportJson).getAsJsonObject();
+    double[] restoredCellInventory = gson.fromJson(reportJsonObject.get("finalCellInventoryKg"), double[].class);
+    double[][] restoredComponentCellInventory = gson.fromJson(reportJsonObject.get("finalComponentCellInventoryKg"),
+        double[][].class);
+    assertArrayEquals(latest.getFinalCellInventoryKg(), restoredCellInventory, 0.0);
+    for (int component = 0; component < latest.getComponentNames().length; component++) {
+      assertArrayEquals(latest.getFinalComponentCellInventoryKg()[component], restoredComponentCellInventory[component],
+          0.0);
+    }
     assertTrue(history.toJson().contains("\"elapsedTimeSeconds\""));
   }
 
@@ -160,7 +192,7 @@ public class OnePhasePipeLineCompositionalTest {
 
     UUID id = UUID.randomUUID();
     pipe.run(id);
-    pipe.runConservativeTransient(new double[] { 0.0, 60.0 }, new SystemInterface[] { pulseGas }, 1, id);
+    pipe.runConservativeTransient(new double[] {0.0, 60.0}, new SystemInterface[] {pulseGas}, 1, id);
 
     OnePhaseSpeciesConservationReport report = pipe.getSpeciesConservationHistory().getReport(0);
     assertTrue(report.isConverged(), report.getMessage());
@@ -192,7 +224,7 @@ public class OnePhasePipeLineCompositionalTest {
     double[] baselineTemperatureK = pipe.getTemperatureProfile("K");
     double[] baselineVelocityMetersPerSecond = pipe.getVelocityProfile();
 
-    pipe.runConservativeTransient(new double[] { 0.0, 1800.0 }, new SystemInterface[] { pulseGas }, 30, id);
+    pipe.runConservativeTransient(new double[] {0.0, 1800.0}, new SystemInterface[] {pulseGas}, 30, id);
     OnePhaseSpeciesConservationHistory pulseHistory = pipe.getSpeciesConservationHistory();
     assertEquals(30, pulseHistory.size());
     assertEquals(60.0, pulseGas.getFlowRate("kg/sec"), 1.0e-12,
@@ -202,7 +234,7 @@ public class OnePhasePipeLineCompositionalTest {
     double[] pulseTemperatureK = pipe.getTemperatureProfile("K");
     double[] pulseVelocityMetersPerSecond = pipe.getVelocityProfile();
 
-    pipe.runConservativeTransient(new double[] { 0.0, 3600.0 }, new SystemInterface[] { baselineGas }, 60, id);
+    pipe.runConservativeTransient(new double[] {0.0, 3600.0}, new SystemInterface[] {baselineGas}, 60, id);
     OnePhaseSpeciesConservationHistory recoveryHistory = pipe.getSpeciesConservationHistory();
     assertEquals(60, recoveryHistory.size());
     assertEquals(5400.0, pipe.getSimulationTime(), 0.0);
@@ -256,15 +288,24 @@ public class OnePhasePipeLineCompositionalTest {
     OnePhasePipeLine deterministicPipe = runCoupledEvent(60.0);
     OnePhaseSpeciesConservationReport deterministicReport = deterministicPipe.getSpeciesConservationReport();
     assertArrayEquals(finalReport.getFinalInventoryKg(), deterministicReport.getFinalInventoryKg(), 1.0e-12);
+    assertArrayEquals(finalReport.getFinalCellInventoryKg(), deterministicReport.getFinalCellInventoryKg(), 0.0);
+    assertLocalInventoryInvariants(deterministicReport);
     for (int component = 0; component < finalReport.getComponentNames().length; component++) {
       assertArrayEquals(finalReport.getMassFractionProfile()[component],
           deterministicReport.getMassFractionProfile()[component], 1.0e-12);
+      assertArrayEquals(finalReport.getFinalComponentCellInventoryKg()[component],
+          deterministicReport.getFinalComponentCellInventoryKg()[component], 0.0);
     }
     assertArrayEquals(pipe.getPressureProfile("bara"), deterministicPipe.getPressureProfile("bara"), 1.0e-12);
     assertArrayEquals(pipe.getVelocityProfile(), deterministicPipe.getVelocityProfile(), 1.0e-12);
 
     OnePhasePipeLine halfTimeStepPipe = runCoupledEvent(30.0);
     OnePhaseSpeciesConservationHistory halfTimeStepHistory = halfTimeStepPipe.getSpeciesConservationHistory();
+    OnePhaseSpeciesConservationReport halfTimeStepReport = halfTimeStepPipe.getSpeciesConservationReport();
+    assertLocalInventoryInvariants(halfTimeStepReport);
+    assertEquals(halfTimeStepPipe.getConvergenceReport().getFinalFiniteVolumeMassKg(),
+        sum(halfTimeStepReport.getFinalCellInventoryKg()),
+        Math.max(halfTimeStepPipe.getConvergenceReport().getFinalFiniteVolumeMassKg(), 1.0) * 1.0e-8);
     double halfTimeStepPulseOutlet = last(halfTimeStepHistory.getReport(59).getMassFractionProfile()[nitrogen]);
     assertEquals(pulseOutlet, halfTimeStepPulseOutlet, 1.0e-3,
         "Halving the timestep must not materially change pulse breakthrough.");
@@ -285,7 +326,7 @@ public class OnePhasePipeLineCompositionalTest {
     pipe.setConservativeCompositionalTracking(true);
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> pipe
-        .runConservativeTransient(new double[] { 0.0, 30.0 }, new SystemInterface[] { null }, 1, UUID.randomUUID()));
+        .runConservativeTransient(new double[] {0.0, 30.0}, new SystemInterface[] {null}, 1, UUID.randomUUID()));
 
     assertTrue(exception.getMessage().contains("non-null inlet system"));
     assertEquals(0.0, pipe.getSimulationTime(), 0.0, "Rejected input must not advance the pipeline clock.");
@@ -306,8 +347,8 @@ public class OnePhasePipeLineCompositionalTest {
     pipe.run(UUID.randomUUID());
 
     IllegalStateException exception = assertThrows(IllegalStateException.class,
-        () -> pipe.runConservativeTransient(new double[] { 0.0, 30.0 },
-            new SystemInterface[] { createKnownGasOilFluid() }, 1, UUID.randomUUID()));
+        () -> pipe.runConservativeTransient(new double[] {0.0, 30.0}, new SystemInterface[] {createKnownGasOilFluid()},
+            1, UUID.randomUUID()));
 
     assertTrue(exception.getMessage().contains("one gas phase only"));
     assertEquals(0.0, pipe.getSimulationTime(), 0.0, "Rejected phase appearance must not advance the pipeline clock.");
@@ -329,9 +370,8 @@ public class OnePhasePipeLineCompositionalTest {
 
     SystemInterface reversedGas = createTransmissionGas(0.80, 0.20);
     reversedGas.setTotalFlowRate(-50.0, "kg/sec");
-    IllegalStateException exception = assertThrows(IllegalStateException.class,
-        () -> pipe.runConservativeTransient(new double[] { 0.0, 30.0 }, new SystemInterface[] { reversedGas }, 1,
-            UUID.randomUUID()));
+    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> pipe
+        .runConservativeTransient(new double[] {0.0, 30.0}, new SystemInterface[] {reversedGas}, 1, UUID.randomUUID()));
 
     assertTrue(exception.getMessage().contains("strictly positive inlet mass flow only"));
     assertEquals(0.0, pipe.getSimulationTime(), 0.0, "Rejected reversed flow must not advance the pipeline clock.");
@@ -355,8 +395,8 @@ public class OnePhasePipeLineCompositionalTest {
     UUID id = UUID.randomUUID();
     pipe.run(id);
     double baselineOutlet = pipe.getOutletMassFraction("nitrogen");
-    pipe.runConservativeTransient(new double[] { 0.0, 1800.0, 5400.0 }, new SystemInterface[] { pulseGas, baselineGas },
-        60, id);
+    pipe.runConservativeTransient(new double[] {0.0, 1800.0, 5400.0}, new SystemInterface[] {pulseGas, baselineGas}, 60,
+        id);
 
     OnePhaseSpeciesConservationHistory history = pipe.getSpeciesConservationHistory();
     assertEquals(120, history.size());
@@ -407,11 +447,11 @@ public class OnePhasePipeLineCompositionalTest {
     OnePhasePipeLine pipe = new OnePhasePipeLine("TestPipe", inlet);
     pipe.setNumberOfLegs(1);
     pipe.setNumberOfNodesInLeg(10);
-    pipe.setPipeDiameters(new double[] { 0.1, 0.1 });
-    pipe.setLegPositions(new double[] { 0.0, 100.0 });
-    pipe.setHeightProfile(new double[] { 0.0, 0.0 });
-    pipe.setPipeWallRoughness(new double[] { 1e-5, 1e-5 });
-    pipe.setOuterTemperatures(new double[] { 280.0, 280.0 });
+    pipe.setPipeDiameters(new double[] {0.1, 0.1});
+    pipe.setLegPositions(new double[] {0.0, 100.0});
+    pipe.setHeightProfile(new double[] {0.0, 0.0});
+    pipe.setPipeWallRoughness(new double[] {1e-5, 1e-5});
+    pipe.setOuterTemperatures(new double[] {280.0, 280.0});
 
     pipe.run();
 
@@ -431,11 +471,11 @@ public class OnePhasePipeLineCompositionalTest {
     OnePhasePipeLine pipe = new OnePhasePipeLine("TestPipe", inlet);
     pipe.setNumberOfLegs(1);
     pipe.setNumberOfNodesInLeg(10);
-    pipe.setPipeDiameters(new double[] { 0.1, 0.1 });
-    pipe.setLegPositions(new double[] { 0.0, 100.0 });
-    pipe.setHeightProfile(new double[] { 0.0, 0.0 });
-    pipe.setPipeWallRoughness(new double[] { 1e-5, 1e-5 });
-    pipe.setOuterTemperatures(new double[] { 280.0, 280.0 });
+    pipe.setPipeDiameters(new double[] {0.1, 0.1});
+    pipe.setLegPositions(new double[] {0.0, 100.0});
+    pipe.setHeightProfile(new double[] {0.0, 0.0});
+    pipe.setPipeWallRoughness(new double[] {1e-5, 1e-5});
+    pipe.setOuterTemperatures(new double[] {280.0, 280.0});
 
     // Initial steady state
     UUID id = UUID.randomUUID();
@@ -523,11 +563,11 @@ public class OnePhasePipeLineCompositionalTest {
     OnePhasePipeLine pipe = new OnePhasePipeLine("TestPipe", inlet);
     pipe.setNumberOfLegs(1);
     pipe.setNumberOfNodesInLeg(10);
-    pipe.setPipeDiameters(new double[] { 0.1, 0.1 });
-    pipe.setLegPositions(new double[] { 0.0, 100.0 });
-    pipe.setHeightProfile(new double[] { 0.0, 0.0 });
-    pipe.setPipeWallRoughness(new double[] { 1e-5, 1e-5 });
-    pipe.setOuterTemperatures(new double[] { 280.0, 280.0 });
+    pipe.setPipeDiameters(new double[] {0.1, 0.1});
+    pipe.setLegPositions(new double[] {0.0, 100.0});
+    pipe.setHeightProfile(new double[] {0.0, 0.0});
+    pipe.setPipeWallRoughness(new double[] {1e-5, 1e-5});
+    pipe.setOuterTemperatures(new double[] {280.0, 280.0});
 
     pipe.run();
 
@@ -562,11 +602,11 @@ public class OnePhasePipeLineCompositionalTest {
     OnePhasePipeLine pipe = new OnePhasePipeLine("TestPipe", inlet);
     pipe.setNumberOfLegs(1);
     pipe.setNumberOfNodesInLeg(10);
-    pipe.setPipeDiameters(new double[] { 0.1, 0.1 });
-    pipe.setLegPositions(new double[] { 0.0, 100.0 });
-    pipe.setHeightProfile(new double[] { 0.0, 0.0 });
-    pipe.setPipeWallRoughness(new double[] { 1e-5, 1e-5 });
-    pipe.setOuterTemperatures(new double[] { 280.0, 280.0 });
+    pipe.setPipeDiameters(new double[] {0.1, 0.1});
+    pipe.setLegPositions(new double[] {0.0, 100.0});
+    pipe.setHeightProfile(new double[] {0.0, 0.0});
+    pipe.setPipeWallRoughness(new double[] {1e-5, 1e-5});
+    pipe.setOuterTemperatures(new double[] {280.0, 280.0});
 
     pipe.run();
 
@@ -604,11 +644,11 @@ public class OnePhasePipeLineCompositionalTest {
     OnePhasePipeLine pipe = new OnePhasePipeLine("3 km conservative gas pipe", inlet);
     pipe.setNumberOfLegs(1);
     pipe.setNumberOfNodesInLeg(12);
-    pipe.setPipeDiameters(new double[] { 0.5, 0.5 });
-    pipe.setLegPositions(new double[] { 0.0, 3000.0 });
-    pipe.setHeightProfile(new double[] { 0.0, 0.0 });
-    pipe.setPipeWallRoughness(new double[] { 1.0e-5, 1.0e-5 });
-    pipe.setOuterTemperatures(new double[] { 288.15, 288.15 });
+    pipe.setPipeDiameters(new double[] {0.5, 0.5});
+    pipe.setLegPositions(new double[] {0.0, 3000.0});
+    pipe.setHeightProfile(new double[] {0.0, 0.0});
+    pipe.setPipeWallRoughness(new double[] {1.0e-5, 1.0e-5});
+    pipe.setOuterTemperatures(new double[] {288.15, 288.15});
     return pipe;
   }
 
@@ -643,8 +683,8 @@ public class OnePhasePipeLineCompositionalTest {
     UUID id = UUID.randomUUID();
     pipe.run(id);
     int stepsPerThirtyMinutes = (int) Math.round(1800.0 / timeStepSeconds);
-    pipe.runConservativeTransient(new double[] { 0.0, 1800.0, 3600.0, 5400.0 },
-        new SystemInterface[] { pulseGas, baselineGas, baselineGas.clone() }, stepsPerThirtyMinutes, id);
+    pipe.runConservativeTransient(new double[] {0.0, 1800.0, 3600.0, 5400.0},
+        new SystemInterface[] {pulseGas, baselineGas, baselineGas.clone()}, stepsPerThirtyMinutes, id);
     return pipe;
   }
 
@@ -655,6 +695,34 @@ public class OnePhasePipeLineCompositionalTest {
     assertTrue(report.getMinimumMassFraction() >= 0.0, report.getMessage());
     assertTrue(report.getMaximumMassFraction() <= 1.0, report.getMessage());
     assertTrue(report.getMaximumMassFractionSumError() <= 1.0e-12, report.getMessage());
+  }
+
+  private static void assertLocalInventoryInvariants(OnePhaseSpeciesConservationReport report) {
+    double[] cellInventoryKg = report.getFinalCellInventoryKg();
+    double[][] componentCellInventoryKg = report.getFinalComponentCellInventoryKg();
+    double[][] massFraction = report.getMassFractionProfile();
+    assertTrue(cellInventoryKg.length > 0);
+    assertEquals(report.getComponentNames().length, componentCellInventoryKg.length);
+    assertEquals(report.getComponentNames().length, massFraction.length);
+
+    for (int cell = 0; cell < cellInventoryKg.length; cell++) {
+      assertTrue(Double.isFinite(cellInventoryKg[cell]) && cellInventoryKg[cell] > 0.0);
+      double componentSumKg = 0.0;
+      for (int component = 0; component < componentCellInventoryKg.length; component++) {
+        assertEquals(cellInventoryKg.length, componentCellInventoryKg[component].length);
+        assertTrue(Double.isFinite(componentCellInventoryKg[component][cell]));
+        assertTrue(componentCellInventoryKg[component][cell] >= 0.0);
+        componentSumKg += componentCellInventoryKg[component][cell];
+        assertEquals(massFraction[component][cell], componentCellInventoryKg[component][cell] / cellInventoryKg[cell],
+            1.0e-12);
+      }
+      assertEquals(cellInventoryKg[cell], componentSumKg, Math.max(cellInventoryKg[cell], 1.0) * 1.0e-12);
+    }
+
+    for (int component = 0; component < componentCellInventoryKg.length; component++) {
+      assertEquals(report.getFinalInventoryKg()[component], sum(componentCellInventoryKg[component]),
+          Math.max(report.getFinalInventoryKg()[component], 1.0) * 1.0e-12);
+    }
   }
 
   private static void assertPositiveFiniteState(OnePhasePipeLine pipe) {

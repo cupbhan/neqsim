@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
 import neqsim.process.equipment.stream.Stream;
@@ -21,6 +22,7 @@ import neqsim.thermo.system.SystemSrkEos;
  * @author Copilot
  * @version 1.0
  */
+@Tag("slow")
 public class ColumnStudyRegressionTest {
   /** Logger for timing reports produced by this regression test. */
   private static final Logger logger = LogManager.getLogger(ColumnStudyRegressionTest.class);
@@ -62,49 +64,48 @@ public class ColumnStudyRegressionTest {
   private static final double COMPONENT_MASS_BALANCE_TOLERANCE_KG_HR = 1.0e-3;
 
   /** Names of components as referenced by the column study composition arrays. */
-  private static final String[] COMPONENT_NAMES = { "H2S", "H2O", "Nitrogen", "CO2", "Methane", "Ethane", "Propane",
+  private static final String[] COMPONENT_NAMES = {"H2S", "H2O", "Nitrogen", "CO2", "Methane", "Ethane", "Propane",
       "i-Butane", "n-Butane", "i-Pentane", "n-Pentane", "C6*", "C7*", "C8*", "C9*", "C10-C12*", "C13-C14*", "C15-C16*",
-      "C17-C19*", "C20-C22*", "C23-C25*", "C26-C30*", "C31-C38*", "C39-C80*" };
+      "C17-C19*", "C20-C22*", "C23-C25*", "C26-C30*", "C31-C38*", "C39-C80*"};
 
   /** NeqSim component names matching {@link #COMPONENT_NAMES}. */
-  private static final String[] NEQSIM_COMPONENT_NAMES = { "H2S", "water", "nitrogen", "CO2", "methane", "ethane",
-      "propane", "i-butane", "n-butane", "i-pentane", "n-pentane" };
+  private static final String[] NEQSIM_COMPONENT_NAMES = {"H2S", "water", "nitrogen", "CO2", "methane", "ethane",
+      "propane", "i-butane", "n-butane", "i-pentane", "n-pentane"};
 
   /** Pseudo-component molar masses in kg/mol. */
-  private static final double[] PSEUDO_MOLAR_MASSES_KG_PER_MOL = { 0.08617800140380859, 0.0909560012817383,
+  private static final double[] PSEUDO_MOLAR_MASSES_KG_PER_MOL = {0.08617800140380859, 0.0909560012817383,
       0.103429000854492, 0.117186996459961, 0.145809005737305, 0.181330001831055, 0.21227799987793, 0.248141998291016,
-      0.289217010498047, 0.330338989257813, 0.384696990966797, 0.471157989501953, 0.6624600219726561 };
+      0.289217010498047, 0.330338989257813, 0.384696990966797, 0.471157989501953, 0.6624600219726561};
 
   /** Pseudo-component densities in kg/m3. */
-  private static final double[] PSEUDO_DENSITIES_KG_PER_M3 = { 0.6626640014648439, 0.740698486328125, 0.769004028320313,
+  private static final double[] PSEUDO_DENSITIES_KG_PER_M3 = {0.6626640014648439, 0.740698486328125, 0.769004028320313,
       0.789065673828125, 0.8048148193359379, 0.825066711425781, 0.8377041015625, 0.849904113769531, 0.863837097167969,
-      0.8755130004882811, 0.8886063232421879, 0.9061005249023439, 0.936200378417969 };
+      0.8755130004882811, 0.8886063232421879, 0.9061005249023439, 0.936200378417969};
 
   /** Main feed molar composition in column_study.py component order. */
-  private static final double[] MAIN_FEED_COMPOSITION = { 0.0, 1.26975950126355e-03, 3.88734329545213e-06,
+  private static final double[] MAIN_FEED_COMPOSITION = {0.0, 1.26975950126355e-03, 3.88734329545213e-06,
       2.03669541112211e-03, 8.35885649596034e-03, 0.030312967680537, 9.83075308994837e-02, 4.09665694460258e-02,
       0.114510205790434, 0.060313250815548, 7.73190146573562e-02, 0.104982256950121, 0.139005591552077,
       0.127908100975965, 6.20910685541127e-02, 6.65500502353172e-02, 0.020235118084271, 1.25829097167123e-02,
       0.011709984585876, 7.11881671769593e-03, 4.57627195654846e-03, 4.50555256022543e-03, 3.25896678227350e-03,
-      2.07657328777843e-03 };
+      2.07657328777843e-03};
 
   /** Top reflux feed molar composition in column_study.py component order. */
-  private static final double[] TOP_FEED_COMPOSITION = { 0.0, 4.35105155095748e-04, 7.63046322451461e-07,
+  private static final double[] TOP_FEED_COMPOSITION = {0.0, 4.35105155095748e-04, 7.63046322451461e-07,
       7.26662709595144e-04, 2.18297869906758e-03, 1.65679049317917e-02, 0.121425832401003, 9.52769636340267e-02,
       0.306895179064482, 0.160387157274294, 0.192815999863345, 7.08381536172843e-02, 2.29352443485453e-02,
       7.52373948573269e-03, 1.57073918334608e-03, 3.72237726886924e-04, 3.00684238117462e-05, 1.06371993923885e-05,
       4.12319121029786e-06, 4.63134876824379e-07, 4.37268256091263e-08, 3.14276050239541e-09, 4.02814694571035e-11,
-      2.31802265756544e-14 };
+      2.31802265756544e-14};
 
   /** Answer tray temperatures from top tray to bottom tray in degrees Celsius. */
-  private static final double[] ANSWER_TEMPERATURE_C_TOPDOWN = { 55.0352092263182, 60.4943624688327, 65.1027206540858,
+  private static final double[] ANSWER_TEMPERATURE_C_TOPDOWN = {55.0352092263182, 60.4943624688327, 65.1027206540858,
       70.7739536320417, 82.2452891411628, 88.1350583791952, 93.3124258992463, 98.4324503710853, 104.962736678313,
-      115.150145109534 };
+      115.150145109534};
 
   /** Answer tray pressure profile from top tray to bottom tray in barg. */
-  private static final double[] ANSWER_PRESSURE_BARG_TOPDOWN = { 4.0, 4.00555555555556, 4.01111111111111,
-      4.01666666666667, 4.02222222222222, 4.02777777777778, 4.03333333333333, 4.03888888888889, 4.04444444444444,
-      4.05 };
+  private static final double[] ANSWER_PRESSURE_BARG_TOPDOWN = {4.0, 4.00555555555556, 4.01111111111111,
+      4.01666666666667, 4.02222222222222, 4.02777777777778, 4.03333333333333, 4.03888888888889, 4.04444444444444, 4.05};
 
   /**
    * Runs the column-study case and verifies tray profiles plus total and component mass closure.
@@ -121,9 +122,11 @@ public class ColumnStudyRegressionTest {
     column.run();
 
     assertTrue(column.solved(), "Column-study case should converge with Naphtali-Sandholm");
-    assertEquals(DistillationColumn.SolveStatus.RECONCILED_PRODUCTS, column.getLastSolveStatus(),
-        "a no-side-draw direct result should preserve the established reconciled-product status");
-    assertEquals(17, column.getLastIterationCount(), "Newton iteration count guards against premature SR acceptance");
+    assertEquals(DistillationColumn.SolveStatus.RIGOROUS_CONVERGED, column.getLastSolveStatus(),
+        "the applied no-side-draw state must satisfy the same active gates as its published streams and duties");
+    assertEquals(DistillationColumn.SolverType.NAPHTALI_SANDHOLM, column.getLastSolverTypeUsed(),
+        "the nominal case must be accepted by the simultaneous solver rather than a premature SR fallback");
+    assertTrue(column.getLastIterationCount() > 0, "the nominal rigorous solve should exercise Newton refinement");
     assertTrayTemperatureProfile(column);
     assertTrayPressureProfile(column);
     assertOverallMassBalance(feedStream, topFeedStream, column);
@@ -131,18 +134,17 @@ public class ColumnStudyRegressionTest {
   }
 
   /**
-   * Reject a severely perturbed warm start without spending the entire Newton iteration budget on repeated non-descent
-   * line-search steps.
+   * Converge a severely perturbed warm start without exhausting the Newton iteration budget.
    *
    * <p>
    * The initialized column-study state is deliberately perturbed by up to 90 K before a direct simultaneous-correction
-   * warm start. The case is outside the local Newton basin, but it remains a finite, realistic multicomponent
-   * hydrocarbon column state. The solver should preserve its best physical state and return control to the coordinated
-   * fallback path once three line-search steps have failed to reduce the MESH residual.
+   * warm start. The case is outside the two-sweep Newton basin, but it remains a finite, realistic multicomponent
+   * hydrocarbon column state. A retained state needs one additional fugacity fixed-point sweep to keep the Newton
+   * residual locally consistent enough for the guarded line search to recover the rigorous solution.
    * </p>
    */
   @Test
-  public void severeWarmStartPerturbationStopsNonDescentNewtonStall() {
+  public void severeWarmStartPerturbationConvergesWithRefinedKValues(TestReporter testReporter) {
     SystemInterface baseFluid = createBaseFluid();
     StreamInterface feedStream = createStream("stall_guard_main_feed", baseFluid, MAIN_FEED_COMPOSITION,
         MAIN_FEED_TEMPERATURE_C, MAIN_FEED_PRESSURE_BARA, MAIN_FEED_MASS_FLOW_KG_HR);
@@ -163,13 +165,34 @@ public class ColumnStudyRegressionTest {
     solver.setMaxIterations(80);
     boolean accepted = solver.solve(new UUID(0L, 1L));
 
-    assertFalse(accepted, "the severely perturbed state must be rejected for coordinated fallback");
-    assertTrue(solver.getLastIterations() <= 30,
-        "the non-descent guard should stop the stalled Newton solve before the 80-iteration cap");
-    assertTrue(solver.getLastMassBalanceError() < 1.0e-3,
-        "the restored best state should preserve total molar closure before fallback");
-    assertPhysicalProduct(column.getGasOutStream(), "stalled warm-start gas product");
-    assertPhysicalProduct(column.getLiquidOutStream(), "stalled warm-start liquid product");
+    assertTrue(accepted,
+        () -> "the severely perturbed retained state should recover without coordinated fallback: iterations="
+            + solver.getLastIterations() + ", residual=" + solver.getLastResidualNorm() + ", mass balance="
+            + solver.getLastMassBalanceError() + ", base refinements=" + solver.getLastJacobianBaseRefinementCount()
+            + ", thermo evaluations=" + solver.getLastThermoEvaluationCount() + ", K sweeps="
+            + solver.getLastThermoKValueIterationCount());
+    assertTrue(solver.getLastIterations() <= 45,
+        "the recovered warm solve should remain well below the 80-iteration cap");
+    assertTrue(solver.getLastMassBalanceError() < 1.0e-8, "the recovered state should close total molar balance");
+    assertTrue(solver.getLastResidualNorm() < 1.0e-8, "the recovered state should satisfy the scaled MESH residual");
+    assertTrue(solver.getLastThermoEvaluationCount() < 24000,
+        "the recovered warm solve should keep thermodynamic evaluations bounded");
+    assertTrue(solver.getLastThermoKValueIterationCount() < 70000,
+        "the recovered warm solve should keep forced-root fugacity sweeps bounded");
+    assertTrue(solver.getLastJacobianBaseRefinementCount() > 0,
+        "the difficult solve should exercise residual-aware Jacobian base refinement");
+    assertEquals(0.0, solver.getLastJacobianBaseResidualMutation(), 0.0,
+        "finite-difference assembly must leave the base MESH residual bitwise unchanged");
+    testReporter.publishEntry("severe_jacobian_base_refinements",
+        Integer.toString(solver.getLastJacobianBaseRefinementCount()));
+    testReporter.publishEntry("severe_jacobian_base_residual_mutation",
+        Double.toString(solver.getLastJacobianBaseResidualMutation()));
+    testReporter.publishEntry("severe_thermo_evaluations", Integer.toString(solver.getLastThermoEvaluationCount()));
+    testReporter.publishEntry("severe_k_sweeps", Integer.toString(solver.getLastThermoKValueIterationCount()));
+    assertPhysicalProduct(column.getGasOutStream(), "recovered warm-start gas product");
+    assertPhysicalProduct(column.getLiquidOutStream(), "recovered warm-start liquid product");
+    assertOverallMassBalance(feedStream, topFeedStream, column);
+    assertComponentMassBalances(feedStream, topFeedStream, column);
   }
 
   /**
@@ -184,7 +207,7 @@ public class ColumnStudyRegressionTest {
    */
   @Test
   public void legacyDirectTopFeedParticipatesInNaphtaliSandholmEquations() {
-    double[] topFeedFactors = { 1.0, 1.1 };
+    double[] topFeedFactors = {1.0, 1.1};
     for (int caseIndex = 0; caseIndex < topFeedFactors.length; caseIndex++) {
       double topFeedFactor = topFeedFactors[caseIndex];
       SystemInterface baseFluid = createBaseFluid();
@@ -247,7 +270,7 @@ public class ColumnStudyRegressionTest {
    */
   @Test
   public void naphtaliSandholmLiquidSideDrawParticipatesInMeshBalances() {
-    double[] drawFractions = { 0.05, 0.08 };
+    double[] drawFractions = {0.05, 0.08};
     double previousSideDrawFlow = 0.0;
     for (int caseIndex = 0; caseIndex < drawFractions.length; caseIndex++) {
       double drawFraction = drawFractions[caseIndex];
@@ -437,7 +460,7 @@ public class ColumnStudyRegressionTest {
   @Test
   public void unconvergedPumparoundTearDoesNotReportSolved() {
     final double tearTolerance = 1.0e-16;
-    double[] drawFractions = { 0.03, 0.04 };
+    double[] drawFractions = {0.03, 0.04};
     for (int caseIndex = 0; caseIndex < drawFractions.length; caseIndex++) {
       SystemInterface baseFluid = createBaseFluid();
       StreamInterface feedStream = createStream("limited_pumparound_main_feed_" + caseIndex, baseFluid,
@@ -511,6 +534,8 @@ public class ColumnStudyRegressionTest {
     long changedInletSolveNanos = System.nanoTime() - changedInletStartNanos;
     assertColumnSolveIsValid(column, feedStream, topFeedStream, "10 percent increased-inlet solve");
     int changedInletIterations = column.getLastIterationCount();
+    int changedInletThermo = column.getLastNaphtaliThermoEvaluationCount();
+    int changedInletKSweeps = column.getLastNaphtaliThermoKValueIterationCount();
     ColumnProductSummary changedInletProducts = getProductSummary(column);
 
     logger.info(
@@ -523,8 +548,17 @@ public class ColumnStudyRegressionTest {
     testReporter.publishEntry("cold_solve_ms", Double.toString(nanosToMillis(coldSolveNanos)));
     testReporter.publishEntry("unchanged_warm_solve_ms", Double.toString(nanosToMillis(warmSolveNanos)));
     testReporter.publishEntry("increased_inlet_solve_ms", Double.toString(nanosToMillis(changedInletSolveNanos)));
+    testReporter.publishEntry("increased_inlet_iterations", Integer.toString(changedInletIterations));
+    testReporter.publishEntry("increased_inlet_thermo_evaluations", Integer.toString(changedInletThermo));
+    testReporter.publishEntry("increased_inlet_k_sweeps", Integer.toString(changedInletKSweeps));
     assertTrue(warmStateReused, "unchanged warm solve should reuse the accepted Naphtali-Sandholm state");
     assertEquals(0, warmIterations, "unchanged warm solve should not require initializer or Newton iterations");
+    assertTrue(changedInletIterations <= 4,
+        "the changed-inlet warm solve should converge in at most four Newton iterations");
+    assertTrue(changedInletThermo < 2500,
+        "the changed-inlet warm solve should need fewer than 2500 thermodynamic evaluations");
+    assertTrue(changedInletKSweeps < 7000,
+        "the changed-inlet warm solve should need fewer than 7000 forced-root fugacity sweeps");
   }
 
   /**

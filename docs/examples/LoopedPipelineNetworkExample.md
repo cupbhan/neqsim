@@ -1,12 +1,10 @@
 ---
 layout: default
-title: "LoopedPipelineNetworkExample"
-description: "Jupyter notebook tutorial for NeqSim"
+title: "Looped Pipeline Network Solver - Hardy Cross Method"
+description: "Notebook for Looped Pipeline Network Solver - Hardy Cross Method, including NeqSim Python examples and workflow context."
 parent: Examples
 nav_order: 1
 ---
-
-# LoopedPipelineNetworkExample
 
 > **Note:** This is an auto-generated Markdown version of the Jupyter notebook
 > [`LoopedPipelineNetworkExample.ipynb`](https://github.com/equinor/neqsim/blob/master/docs/examples/LoopedPipelineNetworkExample.ipynb).
@@ -14,8 +12,6 @@ nav_order: 1
 > or [open in Google Colab](https://colab.research.google.com/github/equinor/neqsim/blob/master/docs/examples/LoopedPipelineNetworkExample.ipynb).
 
 ---
-
-# Looped Pipeline Network Solver - Hardy Cross Method
 
 This notebook demonstrates NeqSim's Hardy Cross looped network solver for pipeline networks with multiple flow paths and ring mains.
 
@@ -350,4 +346,3 @@ The Hardy Cross method was developed by Hardy Cross in 1936. For a network with 
 3. Calculates flow correction: $\Delta Q = -\frac{\sum H}{n \sum |H/Q|}$
 4. Updates flows in all pipes of the loop
 5. Repeats until pressure imbalance < tolerance
-

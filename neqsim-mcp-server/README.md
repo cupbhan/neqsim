@@ -124,7 +124,7 @@ observability for enterprise deployments.
 
 ---
 
-## Tier 1 — Trusted Core (23 tools)
+## Tier 1 — Trusted Core (24 tools)
 
 Validated against NIST/experimental data. Available in all deployment modes.
 Each tool has documented accuracy bounds and clear error behavior.
@@ -156,6 +156,7 @@ Each tool has documented accuracy bounds and clear error behavior.
 | `getAutomationLearningReport` | ADVISORY    | Automation correction and failure history                       |
 | `getProgress`                 | ADVISORY    | Progress query for tracked long-running work                    |
 | `manageModel`                 | EXECUTION   | Register a process model once and reuse it by `modelId`         |
+| `inspectApi`                  | ADVISORY    | Inspect version-matched public Java API signatures              |
 
 ### Model handles
 
@@ -217,7 +218,7 @@ code-level `enforceAccess()` — returns structured error JSON, not a silent ski
 | `runPVT`                      | PVT lab experiments (CME, CVD, DL, separator, swelling, GOR)                                                                                         |
 | `runPipeline`                 | Multiphase pipeline flow (Beggs & Brill)                                                                                                             |
 | `runFlowAssurance`            | Hydrate, wax, asphaltene, corrosion, erosion, cooldown, emulsion                                                                                     |
-| `runChemistry`                | Open chemistry and integrity calculations for scale, corrosion, inhibitors, and scavengers                                                           |
+| `runChemistry`                | Pitzer qualification, activity-consistent single/competing scale equilibrium, screening scale, corrosion, inhibitors, and scavengers        |
 | `runWaterHammer`              | Water/liquid-hammer screening for valve closure, pump trip, and check-valve scenarios                                                                |
 | `runRootCauseAnalysis`        | Ranked equipment root-cause hypotheses from reliability, historian, STID, and simulation evidence                                                    |
 | `runMaterialsReview`          | Process-wide material selection, degradation, CUI, and remaining-life review from process/STID data                                                  |
@@ -237,9 +238,9 @@ code-level `enforceAccess()` — returns structured error JSON, not a silent ski
 | `saveSimulationState`         | Save process state as a JSON snapshot                                                                                                                |
 | `runOperationalStudy`         | P&ID/tag-driven valve scenarios, field-data binding, controller response metrics, and evidence-package bottleneck reports on a local simulation copy |
 | `runRelief`                   | PSV sizing per API 520/521                                                                                                                           |
-| `runLOPA`                     | Layer of Protection Analysis per IEC 61511 / CCPS                                                                                                    |
-| `runSIL`                      | SIL verification per IEC 61508 / IEC 61511                                                                                                           |
-| `runRiskMatrix`               | 5x5 risk matrix scoring per ISO 31000 / NORSOK Z-013                                                                                                 |
+| `runLOPA`                     | Bounded caller-supplied LOPA screening; IEC 61511/CCPS context only, with qualified process-safety review required                                   |
+| `runSIL`                      | Bounded caller-supplied SIF PFD screening; indicative SIL band only, with independent functional-safety assessment required                           |
+| `runRiskMatrix`               | Bounded generic 5x5 screening of caller-supplied probability and consequence inputs; no standards-conformance claim                                  |
 | `runFlareNetwork`             | Flare radiation and safe-distance contours                                                                                                           |
 | `runHAZOP`                    | Simulation-backed IEC 61882 HAZOP worksheets from ProcessSystem scenarios                                                                            |
 | `runHazopScenario`            | Quantify a single HAZOP deviation (node + guide-word/parameter) against a process simulation                                                         |
@@ -248,7 +249,7 @@ code-level `enforceAccess()` — returns structured error JSON, not a silent ski
 
 ---
 
-## Tier 3 — Experimental (14 tools)
+## Tier 3 — Experimental (15 tools)
 
 Functional but limited validation or high-autonomy tools. `DESKTOP_ENGINEER`
 only. Blocked in all other modes by code-level `enforceAccess()`.
@@ -260,16 +261,33 @@ Interfaces may change between minor versions.
 | `runFieldEconomics`          | NPV/IRR/cash flow with fiscal regimes + decline curves              |
 | `runDynamic`                 | Transient dynamic simulation with auto-instrumented PID controllers |
 | `runBioprocess`              | Bioprocessing reactors (AD, fermentation, gasification, pyrolysis)  |
-| `solveTask`                  | Autonomous task solver — results require engineer review           |
+| `solveTask`                  | Keyword-routed fixed plans — results require engineer review       |
 | `composeWorkflow`            | Chain simulation steps into multi-domain workflows                  |
 | `bridgeTaskWorkflow`         | Convert MCP tool output to task_solve results.json format           |
 | `manageSession`              | Persistent simulation sessions                                      |
 | `streamSimulation`           | Async simulation with incremental polling                           |
-| `composeMultiServerWorkflow` | Multi-server orchestration                                          |
+| `composeMultiServerWorkflow` | Bounded metadata-only multi-server planning                         |
 | `manageSecurity`             | API key management, rate limiting, audit logging                    |
 | `manageState`                | Persist/restore simulation states                                   |
 | `manageValidationProfile`    | Jurisdiction-specific validation profiles                           |
 | `runPlugin`                  | Run or list registered MCP runner plugins                           |
+| `runCapability`              | Discover runtime methods and invoke bounded JSON-safe static calculations |
+
+### Bounded task-solver contract
+
+`solveTask` requires a non-blank task description and recognizes only the
+documented keyword families for compression, separation, dehydration,
+pipeline, PVT, flow assurance, reservoir, economics, and dynamic studies.
+Each family maps to a deterministic fixed plan of existing NeqSim runners.
+The caller supplies the fluid and runner parameters; unsupported descriptions
+fail closed. Step outputs are collected in the report but are not
+semantically translated into later runner inputs.
+
+This contract does not establish general natural-language planning, arbitrary
+tool or code execution, semantic compatibility between steps, numerical
+validity, convergence, conservation, facility completeness, certification, or
+engineering approval. See
+[the bounded qualification evidence](docs/evidence/TASK_SOLVER_CONTRACT.md).
 
 ### Enforcement Example
 
@@ -319,11 +337,11 @@ Pick **jar** or **Docker** — both are first-class paths.
 
 | OS                              | Command                                           |
 | ------------------------------- | ------------------------------------------------- |
-| **macOS**                 | `brew install openjdk@17`                       |
-| **Linux (Ubuntu/Debian)** | `sudo apt install openjdk-17-jdk`               |
-| **Windows**               | `winget install EclipseAdoptium.Temurin.17.JDK` |
+| **macOS**                 | `brew install openjdk@21`                       |
+| **Linux (Ubuntu/Debian)** | `sudo apt install openjdk-21-jdk`               |
+| **Windows**               | `winget install EclipseAdoptium.Temurin.21.JDK` |
 
-Verify: `java -version` should show 17 or higher.
+Verify: `java -version` should show 21 or higher.
 
 </details>
 
@@ -331,14 +349,37 @@ Verify: `java -version` should show 17 or higher.
 
 ## Capabilities Overview
 
-The server exposes 69 tools organized as 23 trusted-core, 32 engineering-advanced,
-and 14 experimental tools, plus 9 guided-workflow prompts and 13 browsable resources.
+The server exposes 71 tools organized as 24 trusted-core, 32 engineering-advanced,
+and 15 experimental tools, plus 9 guided-workflow prompts and 13 browsable resources.
 
-Discovery is intentionally machine-readable. `getCapabilities` describes all 69 tools with schema
+Discovery is intentionally machine-readable. `getCapabilities` describes all 71 tools with schema
 links, examples, setup templates, unit guidance, process JSON contracts, benchmark trust, lifecycle
 metadata, and safety-review policy. High-use tools have detailed schemas and runnable examples; the
 remaining tools have generic contract-level schemas and starter examples so agents can still detect
 and route every advertised capability.
+
+### Runtime Java Capability Discovery
+
+Use `runCapability` when the required calculation is not represented by a curated domain tool.
+Its search action indexes the NeqSim classes present in the running artifact, so discovery stays
+matched to the deployed version. Each result declares one execution route:
+
+- `static-json` — a public static method with JSON-safe parameters and return type; invoke it with
+  `runCapability` using the exact class, method, parameter types, and ordered arguments.
+- `process-json` — stateful process equipment; construct and run it through `runProcess` rather than
+  reflective instantiation.
+- `inspect-only` — discoverable API that is not eligible for generic execution; use `inspectApi` to
+  confirm signatures and then select a curated tool or implement an explicit adapter.
+
+Generic execution is intentionally narrower than discovery. It permits only public static methods
+in approved NeqSim domain packages with scalar, enum, or bounded-array inputs and outputs. MCP
+runners, agentic dispatchers, raw generic containers, unsafe Java/platform types, oversized
+requests, and oversized results are rejected. Argument conversion and result serialization happen
+inside the five-second worker budget. Timeout cancellation uses Java interruption and is therefore
+cooperative; methods that ignore interruption may continue on a daemon thread, so long-running or
+stateful calculations must use a curated runner or `runProcess`. This supports newly added
+thermodynamic correlations without adding one MCP tool per Java method while preserving the safety
+boundary for stateful simulations.
 
 ## Complete Tool Inventory
 
@@ -558,19 +599,36 @@ The `streamSimulation` tool runs long simulations in the background with increme
 | `cancel` / `cancelOperation`             | Cancel a running operation                                   |
 | `list` / `listOperations`                | List all active operations                                   |
 
+Starts fail closed unless work is explicitly bounded: 1–1000 sweep points,
+1–10,000 dynamic steps, or 1–1000 Monte Carlo iterations. Poll cursors must be
+non-negative and each poll returns at most 100 records, with
+`nextPollIndex` and `hasMoreResults` for continuation. Standard response
+`status` remains `success` or `error`; asynchronous lifecycle state is
+reported separately as `operationStatus`. `listOperations`
+reports these fixed request limits together with the shared execution policy.
+
+Operations are visible only to their initiating principal, retained only in the
+current server process, and removed 30 minutes after terminal activity. A
+restart loses them; cancellation and timeout are cooperative rather than hard
+process isolation. Streaming results preserve the underlying NeqSim model
+behavior and require independent engineering review. See
+[the bounded streaming contract](docs/evidence/STREAMING_SIMULATION_CONTRACT.md).
+
 ---
 
 ## Inline Visualization
 
 The `generateVisualization` tool returns inline visual content:
 
-| Type              | Format  | Description                                              |
-| ----------------- | ------- | -------------------------------------------------------- |
-| `phaseEnvelope` | SVG     | PT phase envelope with bubble/dew curves, critical point |
-| `flowsheet`     | Mermaid | Process flow diagram with equipment-type shapes          |
-| `compressorMap` | SVG     | Compressor performance map with surge/stonewall lines    |
-| `barChart`      | SVG     | Bar chart from key-value data                            |
-| `table`         | HTML    | Styled HTML table with optional highlighting             |
+| Canonical type     | Aliases                         | Format  | Description                                      |
+| ------------------ | ------------------------------- | ------- | ------------------------------------------------ |
+| `phaseEnvelope`  | —                               | SVG     | PT phase envelope                                |
+| `flowsheet`      | `flowsheetDiagram`              | Mermaid | Process diagram from equipment and connections   |
+| `compressorMap`  | —                               | SVG     | Compressor map with operating-point annotations  |
+| `propertyTable`  | `styledTable`, `table`          | HTML    | Styled table from headers and rows                |
+| `barChart`       | —                               | SVG     | Bar chart from labels and values                  |
+| `pieChart`       | —                               | SVG     | Pie chart from categories and values              |
+| `lineChart`      | —                               | SVG     | Line chart from xValues and yValues               |
 
 ---
 
@@ -626,6 +684,18 @@ The `composeMultiServerWorkflow` tool orchestrates across MCP servers:
 
 Pre-registered server types: `cost-estimation`, `plant-historian`, `cad-3d`,
 `document-extraction`, `safety-analysis`.
+
+This is a bounded metadata-only surface. It never opens connections or invokes
+external tools. Requests are capped at 16,384 UTF-8 bytes; plan tasks are
+non-blank and at most 4096 characters; custom metadata is limited to 32 server
+records with bounded, deduplicated tool and format lists. Built-ins are
+protected, and endpoint, command, environment, header, credential, token, API
+key, and secret fields fail closed. The authorized host remains responsible
+for external discovery, authentication, transport security, data governance,
+step execution, semantic compatibility, and independent engineering review.
+Custom records are process-local and are not durable, distributed, or
+tenant-isolated. See
+[the bounded composition contract](docs/evidence/MULTI_SERVER_COMPOSITION_CONTRACT.md).
 
 ---
 
@@ -701,7 +771,7 @@ java -jar target/neqsim-mcp-server-1.0.0-SNAPSHOT-runner.jar
 
 Never widen the CORS allowlist to `*` — it is the Origin gate that prevents
 DNS-rebinding attacks against the Streamable HTTP transport. `NEQSIM_MCP_PROFILE=ENTERPRISE`
-also reduces the exposed surface to the 23 trusted-core tools, which keeps the
+also reduces the exposed surface to the 24 trusted-core tools, which keeps the
 tool list within what a Copilot Studio agent can reason about.
 
 ---
@@ -798,11 +868,16 @@ For detailed parameter documentation, JSON formats, example calls, and
 response schemas for all tools and browsable resources, see
 **[docs/API_REFERENCE.md](docs/API_REFERENCE.md)**.
 
+For the exact protocol-tested inventory of published tools, resources, resource templates, guided
+prompts, deployment profiles, cross-layer capability coverage, test sources, guides, and current
+known-limit/trust gaps, see
+**[docs/SURFACE_INVENTORY.md](docs/SURFACE_INVENTORY.md)**.
+
 ---
 
 ## How the LLM Uses the Server (Typical Flow)
 
-1. **Discovery** — The LLM calls `tools/list` and finds the 69 available tools. It reads
+1. **Discovery** — The LLM calls `tools/list` and finds the 71 available tools. It reads
    the descriptions to understand what each tool does. Or it calls `getCapabilities`
    for a structured manifest of all NeqSim capabilities. It can also browse
    `neqsim://components`, `neqsim://models`, and `neqsim://setup-templates` to
@@ -850,7 +925,7 @@ neqsim-mcp-server/                        # Separate Maven project (Java 21+)
 ├── pom.xml                                # Quarkus 3.33.1 + quarkus-mcp-server 1.12.0
 ├── test_mcp_server.py                     # Comprehensive integration test suite
 └── src/main/java/neqsim/mcp/server/
-  ├── NeqSimTools.java                   # 69 @Tool-annotated MCP tools
+  ├── NeqSimTools.java                   # 71 @Tool-annotated MCP tools
     ├── NeqSimResources.java               # 7 @Resource + 6 @ResourceTemplate (13 endpoints)
     └── NeqSimPrompts.java                 # 9 @Prompt guided workflows
 
@@ -904,7 +979,7 @@ Delegates to runner layer in neqsim core (src/main/java/neqsim/mcp/):
 │   └── ResultProvenance.java              # Trust metadata (EOS, assumptions, limitations)
 └── catalog/
     ├── ExampleCatalog.java                # Examples for base categories and all MCP tools
-    └── SchemaCatalog.java                 # JSON Schema definitions for all 69 MCP tools
+    └── SchemaCatalog.java                 # JSON Schema definitions for all 71 MCP tools
 ```
 
 The MCP server is a **thin Quarkus wrapper** around the framework-agnostic
@@ -933,11 +1008,11 @@ setup templates, and validation behavior:
 ### Integration Tests (MCP Server)
 
 The `test_mcp_server.py` script launches the server, communicates over STDIO,
-and validates all 69 tools across all three tiers:
+and validates all 71 tools across all three tiers:
 
 | Category           | Checks | Description                                                                                                                        |
 | ------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Protocol           | 9      | Tool/resource/template registration (69 tools, 7 resources, 6 templates)                                                           |
+| Protocol           | 9      | Tool/resource/template registration (71 tools, 7 resources, 7 templates)                                                           |
 | Component search   | 9      | Exact, partial, empty, no-match                                                                                                    |
 | Examples & schemas | 10     | Catalog retrieval                                                                                                                  |
 | Flash calculations | 30     | SRK, PR, CPA; single/two-phase; density, Z, viscosity                                                                              |
@@ -982,11 +1057,11 @@ cd ..  # go to parent neqsim directory
 ./mvnw install -DskipTests -Dmaven.javadoc.skip=true
 ```
 
-### Build Fails — "No matching toolchain found for JDK 17+"
+### Build Fails — "No matching toolchain found for JDK 21+"
 
-This project requires JDK 17+. Check with `java -version`.
+This project requires JDK 21+. Check with `java -version`.
 The parent neqsim project compiles with Java 8. Both can coexist — just ensure
-`JAVA_HOME` points to JDK 17+ when building this project.
+`JAVA_HOME` points to JDK 21+ when building this project.
 
 ### Server Hangs or Returns Garbled Output
 

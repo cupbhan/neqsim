@@ -252,7 +252,7 @@ public abstract class SystemEosGE extends SystemEos implements HybridEosGeFlashM
     }
 
     setTotalNumberOfMoles(totalMoles);
-    int[] roleSlots = new int[] { eosGasPhaseSlot, eosOilPhaseSlot, geLiquidPhaseSlot };
+    int[] roleSlots = new int[] {eosGasPhaseSlot, eosOilPhaseSlot, geLiquidPhaseSlot};
     for (int roleSlot : roleSlots) {
       if (roleSlot < 0) {
         continue;
@@ -365,7 +365,8 @@ public abstract class SystemEosGE extends SystemEos implements HybridEosGeFlashM
   }
 
   /**
-   * Check whether the feed contains a hydrocarbon capable of supporting an EOS liquid at the current temperature.
+   * Check whether the feed contains a hydrocarbon or CO2 capable of supporting an EOS liquid at the current
+   * temperature.
    *
    * <p>
    * This prevents a small metastable EOS-liquid root made only from supercritical methane and water from entering a
@@ -379,7 +380,10 @@ public abstract class SystemEosGE extends SystemEos implements HybridEosGeFlashM
     PhaseInterface referencePhase = phaseArray[eosGasPhaseSlot];
     for (int componentIndex = 0; componentIndex < referencePhase.getNumberOfComponents(); componentIndex++) {
       neqsim.thermo.component.ComponentInterface component = referencePhase.getComponent(componentIndex);
-      if (component.getz() > 1.0e-12 && (component.isHydrocarbon() || component.isIsTBPfraction())
+      double wilsonK = component.getPC() / getPressure()
+          * Math.exp(5.373 * (1.0 + component.getAcentricFactor()) * (1.0 - component.getTC() / getTemperature()));
+      boolean denseCo2 = "CO2".equals(component.getComponentName()) && wilsonK <= 1.0;
+      if (component.getz() > 1.0e-12 && (component.isHydrocarbon() || component.isIsTBPfraction() || denseCo2)
           && component.getTC() > getTemperature()) {
         return true;
       }
@@ -513,7 +517,17 @@ public abstract class SystemEosGE extends SystemEos implements HybridEosGeFlashM
         neqsim.thermo.component.ComponentInterface phaseComponent = getPhase(phaseIndex).getComponent(componentIndex);
         double moleFraction = phaseComponent.getx();
         double fugacityCoefficient = phaseComponent.getFugacityCoefficient();
-        if (!(moleFraction > 1.0e-30) || !(fugacityCoefficient > 0.0) || !Double.isFinite(fugacityCoefficient)) {
+        if (!Double.isFinite(moleFraction) || moleFraction < 0.0) {
+          lastHybridLogFugacityResidual = Double.POSITIVE_INFINITY;
+          lastHybridWorstFugacityComponent = phaseComponent.getComponentName();
+          continue;
+        }
+        if (moleFraction <= 1.0e-30) {
+          continue;
+        }
+        if (!(fugacityCoefficient > 0.0) || !Double.isFinite(fugacityCoefficient)) {
+          lastHybridLogFugacityResidual = Double.POSITIVE_INFINITY;
+          lastHybridWorstFugacityComponent = phaseComponent.getComponentName();
           continue;
         }
         double logFugacity = Math.log(moleFraction * fugacityCoefficient * getPhase(phaseIndex).getPressure());
@@ -534,6 +548,7 @@ public abstract class SystemEosGE extends SystemEos implements HybridEosGeFlashM
         && lastHybridLogFugacityResidual <= HYBRID_LOG_FUGACITY_TOLERANCE;
     if (accepted) {
       collapseTraceHybridPhases(Math.max(HYBRID_ACTIVE_PHASE_FRACTION, 100.0 * phaseFractionMinimumLimit));
+      normalizeBeta();
       orderByDensity();
       init(1);
       // Phase implementations may classify any non-gas EOS root as a generic liquid during init. Reassert the
@@ -640,7 +655,7 @@ public abstract class SystemEosGE extends SystemEos implements HybridEosGeFlashM
    * @param activeCount number of active slots
    */
   private void completeInactiveHybridPhaseMapping(int[] activeSlots, int activeCount) {
-    int[] roleSlots = new int[] { eosGasPhaseSlot, eosOilPhaseSlot, geLiquidPhaseSlot };
+    int[] roleSlots = new int[] {eosGasPhaseSlot, eosOilPhaseSlot, geLiquidPhaseSlot};
     int mappingIndex = activeCount;
     for (int roleSlot : roleSlots) {
       boolean active = false;

@@ -3,8 +3,6 @@ title: Measurement Devices and Analysers
 description: NeqSim provides a comprehensive set of measurement devices and process analysers for monitoring fluid properties, compositions, and process conditions.
 ---
 
-# Measurement Devices and Analysers
-
 NeqSim provides a comprehensive set of measurement devices and process analysers for monitoring fluid properties, compositions, and process conditions.
 
 ## Overview
@@ -83,7 +81,7 @@ import neqsim.process.measurementdevice.HydrocarbonDewPointAnalyser;
 
 HydrocarbonDewPointAnalyser hcdp =
     new HydrocarbonDewPointAnalyser("HC Dew Point", gasStream);
-hcdp.setReferencePressure(50.0, "bara");
+hcdp.setReferencePressure(50.0);  // bara
 
 double dewPointC = hcdp.getMeasuredValue("C");  // hydrocarbon dew point, degC
 ```
@@ -97,7 +95,7 @@ import neqsim.process.measurementdevice.WaterDewPointAnalyser;
 
 WaterDewPointAnalyser wdp =
     new WaterDewPointAnalyser("Water Dew Point", gasStream);
-wdp.setReferencePressure(50.0, "bara");
+wdp.setReferencePressure(50.0);  // bara
 
 double waterDewPoint = wdp.getMeasuredValue("C");  // water dew point, degC
 ```
@@ -124,6 +122,18 @@ HydrateEquilibriumTemperatureAnalyser hydrateAnalyser =
     new HydrateEquilibriumTemperatureAnalyser(gasStream);
 double hydrateTemp = hydrateAnalyser.getMeasuredValue("C");  // hydrate formation temperature, degC
 ```
+
+Concrete local instances of these four thermodynamic-limit analysers participate in transient-step
+transactions when registered in a `ProcessSystem`. Rollback restores each stream binding and
+complete inherited measurement/alarm state. It also restores reference pressure for the hydrate,
+hydrocarbon-dew-point and water-dew-point analysers, plus the configured method for both dew-point
+analysers. Scheduled configuration changes therefore replay together with `EventScheduler`
+pending/fired bookkeeping, and Java serialization preserves identity and restart state.
+
+Concrete descendants and online-signal operation fail closed. This support changes no phase
+envelope, dew-point, hydrate or empirical correlation. It establishes rollback mechanics only; it
+does not qualify thermodynamic model selection, fluid characterization, sampling, analyser
+accuracy, alarm/trip integrity, external I/O, virtual commissioning or OTS use.
 
 ## Vibration Analysis
 
@@ -165,6 +175,13 @@ double frms = fivAnalyser.getMeasuredValue("");
 - `"LOF"` - Likelihood of Failure (API RP 14E based)
 - `"FRMS"` - Fatigue Root Mean Square
 
+When a concrete local `FlowInducedVibrationAnalyser` is registered as a process measurement
+device, transient transactions preserve its pipe binding, support and method configuration,
+segment set, and the segment selected by an implicit calculation. Rejected trials can therefore
+restore the analyser configuration and reproduce the same derived value; accepted commits retain
+the update. This is transaction and restart coverage only and does not newly qualify the FIV
+correlations or the underlying pipe model.
+
 ## Process Monitors
 
 ### PressureTransmitter
@@ -191,17 +208,31 @@ tt.setUnit("C");
 double temperature = tt.getMeasuredValue();
 ```
 
+When registered in a `ProcessSystem`, concrete local `PressureTransmitter` and `TemperatureTransmitter` instances take
+part in transient step transactions. Rollback restores their stream binding, noise generator, delay/filter/fault state,
+alarm state, and measurement configuration so a rejected sample can be replayed exactly. Subclasses and online-signal
+bindings fail the transaction-coverage preflight until they provide a complete snapshot or external-I/O commit contract.
+
 ### LevelTransmitter
 
-Monitors liquid level in vessels.
+Monitors the unitless liquid-level fraction reported by a `Separator` or `Tank`. The transmitter
+delegates to the vessel's authoritative Java state; it does not infer instrument technology, nozzle
+design, alarm setpoints, or control intent.
 
 ```java
 import neqsim.process.measurementdevice.LevelTransmitter;
 
-LevelTransmitter lt = new LevelTransmitter(separator);
-lt.setUnit("%");
-double level = lt.getMeasuredValue();
+LevelTransmitter separatorLevel = new LevelTransmitter("LT-2001", separator);
+LevelTransmitter tankLevel = new LevelTransmitter("LT-2002", tank);
+
+double separatorFraction = separatorLevel.getMeasuredValue("");
+double tankFraction = tankLevel.getMeasuredValue("");
 ```
+
+Proteus-compatible P&amp;ID export creates a dedicated sensing tap/nozzle on the owning tank or separator and terminates
+the measuring line there. A vessel's process inlet or phase outlet is never relabelled as the level tap. Automatically
+generated tank or separator measurements remain visibly and machine-readably marked as unreviewed measurement-only
+proposals.
 
 ### VolumeFlowTransmitter
 
@@ -215,6 +246,23 @@ vft.setUnit("m3/hr");
 double volumeFlow = vft.getMeasuredValue();
 ```
 
+### DifferentialPressureTransmitter
+
+Measures the pressure difference between a high- and low-pressure stream. The sign convention is
+`high pressure - low pressure`.
+
+```java
+import neqsim.process.measurementdevice.DifferentialPressureTransmitter;
+
+DifferentialPressureTransmitter pdt =
+    new DifferentialPressureTransmitter("PDT-101", upstream, downstream);
+double differentialPressure = pdt.getMeasuredValue("bar");
+```
+
+A concrete local differential-pressure transmitter registered in a `ProcessSystem` also participates in transient step
+transactions. Its two stream bindings and signal/alarm state are restored in place on rollback. Subclasses and
+online-signal bindings remain fail-closed.
+
 ### VenturiFlowMeter
 
 All five differential-pressure flow meters below share a common base,
@@ -224,6 +272,13 @@ All five differential-pressure flow meters below share a common base,
 exponent/dynamic viscosity readers (each overridable), the Reynolds-number iteration, and the
 mass/actual-volume/standard-volume accessors. They differ only in the discharge coefficient and
 the expansibility factor, `ExpansibilityModel` (`ORIFICE`, `ISENTROPIC` or `CONE`).
+
+When any of the five concrete local meters is registered in a `ProcessSystem`, it participates in transient step
+transactions. Rollback restores geometry, pressure/property overrides, the last Reynolds solve, subtype configuration,
+stream/transmitter bindings, and noise/delay/filter/fault/alarm state. Orifice and Venturi wet-gas caches are invalidated
+and recomputed from restored inputs. A linked `DifferentialPressureTransmitter` must also be registered because it owns
+its own signal state. Subclasses and online-signal bindings remain fail-closed. This rollback support does not extend the
+validity ranges or qualify the meters for allocation or fiscal service.
 
 Derives mass, actual volume and standard volume flow from a measured differential pressure across a
 classical Venturi tube, using the ISO 5167-1 general equation with the ISO 5167-4 Venturi expansibility
@@ -443,9 +498,10 @@ Simulates gas detection for safety systems.
 ```java
 import neqsim.process.measurementdevice.GasDetector;
 
-GasDetector gasDetector = new GasDetector("Gas Detector 1", stream);
-gasDetector.setDetectionLimit(20.0);  // % LEL
-boolean gasDetected = gasDetector.isTriggered();
+GasDetector gasDetector =
+    new GasDetector("Gas Detector 1", GasDetector.GasType.COMBUSTIBLE);
+gasDetector.setGasConcentration(25.0);  // % LEL
+boolean gasDetected = gasDetector.isGasDetected(20.0);
 ```
 
 ### FireDetector
@@ -456,9 +512,39 @@ Simulates fire detection for safety systems.
 import neqsim.process.measurementdevice.FireDetector;
 
 FireDetector fireDetector = new FireDetector("Fire Detector 1");
-fireDetector.setTemperatureThreshold(65.0);  // °C
-boolean fireDetected = fireDetector.isTriggered();
+fireDetector.setDetectionThreshold(0.8);
+fireDetector.setSignalLevel(0.9);
+boolean fireDetected = fireDetector.isFireDetected();
 ```
+
+
+When concrete local `GasDetector` and `FireDetector` instances are registered in a
+`ProcessSystem`, their complete detector and inherited alarm/measurement state participates in
+transient-step transactions. This includes gas type, concentration, species, location, LEL and
+response-time configuration, plus the fire latch, signal, threshold, configured delay and location.
+Scheduled event actions that change these detectors can therefore be rolled back and replayed
+deterministically together with scheduler pending/fired bookkeeping. Concrete descendants and
+online-signal bindings remain fail-closed.
+
+This is an in-memory numerical rollback contract, not fire-and-gas detector certification. The
+configured response time and detection delay are retained settings; the current detector classes do
+not integrate those values as physical sensor dynamics. External I/O, voting logic, ESD action,
+detector coverage, reliability and safety-integrity qualification remain outside this support.
+
+### PushButton transaction boundary
+
+A registered concrete local `PushButton` participates in transient-step transactions. Rollback
+restores its pushed latch, optional blowdown-valve binding, automatic-activation setting,
+logic-binding list and inherited measurement/alarm state. Scheduled pushes can therefore be
+rejected and replayed together with `EventScheduler` pending/fired bookkeeping, and Java
+serialization preserves the transaction identity and local restart state.
+
+Automatic activation of a bound `BlowdownValve` and linked `ProcessLogic` actions fail the
+transaction preflight because they mutate state outside the button. Setting automatic valve
+activation to `false` permits a valve binding to remain as configuration while the push changes
+only local state. Subclasses and online-signal operation also remain fail-closed. This is rollback
+mechanics, not ESD, manual-input reliability, safety-integrity, external-I/O, virtual-commissioning
+or OTS qualification.
 
 ## Quality Analysers
 
@@ -494,6 +580,18 @@ import neqsim.process.measurementdevice.pHProbe;
 pHProbe ph = new pHProbe(aqueousStream);
 double phValue = ph.getMeasuredValue("");  // pH
 ```
+
+The probe extracts the stream's aqueous phase and solves it as a single-phase
+`Electrolyte-CPA-EOS-statoil` system. `setAlkalinity(value)` adds NaOH on a
+mmol/kg-water basis. The calculation fails closed if the selected reactions do not satisfy
+aqueous charge, element-balance, and reaction-residual gates after bounded refinement; it does
+not return an uncertified intermediate pH.
+
+A registered concrete local `pHProbe` participates in transient transactions. Its snapshot
+preserves the stream and reactive-system bindings, alkalinity, reaction-calculation scratch
+objects, and the last cached pH input/result. Rollback therefore restores an exact cached reading
+instead of retaining work from a rejected trial. The coverage does not newly validate aqueous
+chemistry, alkalinity assumptions, sampling, or sensor accuracy.
 
 ## Multi-Phase Measurement
 

@@ -74,7 +74,7 @@ public final class HydrocarbonWaterCriticalEndpointSolver {
     validateInitial(initial);
     SpecifiedTwoPhaseFlashSolver flashSolver = new SpecifiedTwoPhaseFlashSolver(template, retainedPhaseZero,
         retainedPhaseOne).setNumericalControls(80, flashResidualTolerance, 2.0e-5);
-    double[] variables = new double[] { Math.log(initial.getTemperatureK()), Math.log(initial.getPressureBara()) };
+    double[] variables = new double[] {Math.log(initial.getTemperatureK()), Math.log(initial.getPressureBara())};
     FlashSeed seed = new FlashSeed(initial.getBeta(), initial.getPhaseZeroComposition(),
         initial.getPhaseOneComposition());
     Evaluation evaluation;
@@ -112,8 +112,8 @@ public final class HydrocarbonWaterCriticalEndpointSolver {
       boolean accepted = false;
       double damping = 1.0;
       for (int lineSearch = 0; lineSearch < 18; lineSearch++) {
-        double[] trialVariables = new double[] { variables[0] - damping * correction.get(0, 0),
-            variables[1] - damping * correction.get(1, 0) };
+        double[] trialVariables = new double[] {variables[0] - damping * correction.get(0, 0),
+            variables[1] - damping * correction.get(1, 0)};
         clamp(trialVariables);
         try {
           Evaluation trial = evaluate(flashSolver, trialVariables, new FlashSeed(evaluation.flash.getBeta(),
@@ -205,8 +205,7 @@ public final class HydrocarbonWaterCriticalEndpointSolver {
         flash.getPhaseZeroComposition(), flash.getPhaseOneComposition(), criticalComposition);
     IncipientPhaseCurvatureAnalyzer.Result criticality = new IncipientPhaseCurvatureAnalyzer(template, criticalPhase,
         criticalPhase).setFiniteDifferenceStep(curvatureFiniteDifferenceStep).analyze(criticalState);
-    double[] residual = new double[] { criticality.getMinimumEigenvalue(),
-        criticality.getThirdDirectionalDerivative() };
+    double[] residual = new double[] {criticality.getMinimumEigenvalue(), criticality.getThirdDirectionalDerivative()};
     double maximumResidual = Math.max(Math.abs(residual[0]), Math.abs(residual[1]));
     if (!Double.isFinite(maximumResidual)) {
       throw new IllegalStateException("criticality residual is non-finite");
@@ -227,7 +226,7 @@ public final class HydrocarbonWaterCriticalEndpointSolver {
 
   private static void limitCorrection(Matrix correction) {
     double scale = 1.0;
-    double[] maximum = new double[] { 0.08, 0.15 };
+    double[] maximum = new double[] {0.08, 0.15};
     for (int index = 0; index < 2; index++) {
       if (Math.abs(correction.get(index, 0)) > maximum[index]) {
         scale = Math.min(scale, maximum[index] / Math.abs(correction.get(index, 0)));

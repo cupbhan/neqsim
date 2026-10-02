@@ -4,9 +4,11 @@ description: "This document describes the gas hydrate thermodynamic models imple
 keywords: "hydrate, gas hydrate, hydrate formation, hydrate curve, hydrate inhibitor, MEG, methanol, flow assurance, van der Waals, Platteeuw, hydrate equilibrium"
 ---
 
-# Hydrate Models in NeqSim
-
 This document describes the gas hydrate thermodynamic models implemented in NeqSim for predicting hydrate formation, stability, and phase equilibrium.
+
+For electrolyte water activities, see [Pitzer hydrate equilibrium for brines](pitzer_hydrate_equilibrium.md).
+`SystemPitzer` uses `ComponentHydratePitzer` for a consistent aqueous water reference and supports
+onset temperature, pressure and curves. Its hydrate amount, ice and subzero calculations are not supported.
 
 ## Table of Contents
 
@@ -70,11 +72,17 @@ NeqSim supports two common hydrate crystal structures:
 
 ### Structure Selection
 
-The algorithm automatically selects the most stable structure based on Gibbs energy minimization. For mixed gases, the structure depends on composition:
+The default hydrate component model compares the water fugacity of sI and sII at the current fluid guest fugacities.
+`TPHydrateFlash` updates this selection as guests are withdrawn and the fluid is reflashed. It retains one hydrate
+structure; this is not a global Gibbs minimization over simultaneous sI, sII, sH, ice and other solids. The selected
+hydrate composition includes both cavity populations and their empty-site fractions. See
+[Hydrate flash operations](../thermodynamicoperations/hydrate_flash_operations.md) for equations, diagnostics and limits.
+
+For mixed gases, the structure depends on composition:
 
 ```java
 // Get the stable hydrate structure (1 = sI, 2 = sII)
-int structure = fluid.getPhase(PhaseType.HYDRATE).getComponent("methane").getHydrateStructure();
+int structure = ((PhaseHydrate) fluid.getPhase(PhaseType.HYDRATE)).getStableHydrateStructure();
 ```
 
 ---
@@ -125,6 +133,7 @@ The CPA (Cubic Plus Association) hydrate model is the recommended model for syst
 - Accurate for inhibitor systems (MEG, methanol, ethanol)
 - Consistent with CPA mixing rules
 - Validated for North Sea gas compositions
+- Supports explicit electrolyte inventories in gas-aqueous and gas-oil-aqueous phase splits
 
 **Usage:**
 ```java
@@ -133,6 +142,75 @@ fluid.addComponent("methane", 0.9);
 fluid.addComponent("water", 0.1);
 fluid.setMixingRule(10);  // CPA mixing rule
 fluid.setHydrateCheck(true);
+```
+
+#### Electrolyte CPA hydrate equilibrium
+
+Use `SystemElectrolyteCPAstatoil` when the aqueous phase contains explicit ions. Hydrate formation-temperature
+calculations support these material phase configurations:
+
+- gas + aqueous water + salt ions
+- gas + oil + aqueous water + salt ions
+- gas + aqueous water + thermodynamic inhibitor (for example MEG or methanol) + salt ions
+- the same material phase configurations with aqueous reactions, including CO₂-water speciation
+
+The multiphase flash solves the molecular gas-oil-aqueous split on a normalized ion-free basis and then restores the
+conserved ion inventory to the aqueous phase. This keeps ions out of gas and oil while satisfying the component balance
+$z_i = \sum_p \beta_p x_{i,p}$. Salt and organic inhibitor effects enter the hydrate calculation through the water
+fugacity of the converged aqueous phase.
+
+CPA initialization excludes association sites only for components whose overall mole fraction
+is at or below the numerical trace cutoff of $10^{-20}$. It uses the current component and total
+mole counts before resetting phase compositions. A component depleted in a previous phase split
+must retain its sites when its overall concentration is material; otherwise solvent reference
+fugacities, activities, and the resulting salt inhibition can be corrupted.
+
+For a reactive fluid, call `chemicalReactionInit()` before creating the database and selecting the mixing rule. Phase
+and chemical equilibrium are then iterated together. Reactions may change the species inventory—for example, dissolved
+CO₂ can form bicarbonate and carbonate—so the coupled flash propagates reaction-adjusted species amounts while
+conserving elements and aqueous charge. Fixed salt ions remain confined to the aqueous phase.
+
+If a component is added, removed, or renamed after reaction initialization, repeat
+`chemicalReactionInit()`, `createDatabase(true)`, and `setMixingRule(...)`. NeqSim rejects the stale
+reaction topology instead of silently applying the earlier reaction set.
+
+```java
+SystemInterface fluid = new SystemElectrolyteCPAstatoil(273.15 + 10.0, 100.0);
+fluid.addComponent("methane", 0.75);
+fluid.addComponent("ethane", 0.05);
+fluid.addComponent("propane", 0.03);
+fluid.addComponent("water", 0.12);
+fluid.addComponent("MEG", 0.03);
+fluid.addComponent("Na+", 0.01);
+fluid.addComponent("Cl-", 0.01);
+fluid.setMixingRule(10);
+fluid.setHydrateCheck(true);
+
+ThermodynamicOperations operations = new ThermodynamicOperations(fluid);
+operations.hydrateFormationTemperature();
+double hydrateTemperatureC = fluid.getTemperature("C");
+```
+
+Add C5+ components to the same fluid when a separate oil or condensate phase must be included. The hydrate calculation
+uses guest fugacities from the gas phase and water fugacity from the water-rich aqueous phase.
+
+For reactive CO₂-water brine:
+
+```java
+SystemInterface reactiveFluid = new SystemElectrolyteCPAstatoil(273.15 + 10.0, 100.0);
+reactiveFluid.addComponent("methane", 0.70);
+reactiveFluid.addComponent("CO2", 0.05);
+reactiveFluid.addComponent("water", 0.23);
+reactiveFluid.addComponent("Na+", 0.01);
+reactiveFluid.addComponent("Cl-", 0.01);
+reactiveFluid.chemicalReactionInit();
+reactiveFluid.createDatabase(true);
+reactiveFluid.setMixingRule(10);
+reactiveFluid.setMultiPhaseCheck(true);
+reactiveFluid.setHydrateCheck(true);
+
+ThermodynamicOperations reactiveOperations = new ThermodynamicOperations(reactiveFluid);
+reactiveOperations.hydrateFormationTemperature();
 ```
 
 ### PVTsim Hydrate Model

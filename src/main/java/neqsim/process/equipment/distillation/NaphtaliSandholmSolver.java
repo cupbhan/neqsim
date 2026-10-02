@@ -35,11 +35,37 @@ import neqsim.thermodynamicoperations.ThermodynamicOperations;
  * @version 1.0
  */
 public class NaphtaliSandholmSolver {
+  /** Accepted line-search state and its already-evaluated residual. */
+  private static final class LineSearchResult {
+    /** Accepted step length. */
+    private final double alpha;
+    /** Residual vector at the accepted state. */
+    private final double[] residual;
+    /** Residual norm at the accepted state. */
+    private final double norm;
+
+    /**
+     * Create a line-search result.
+     *
+     * @param alpha accepted step length, or zero when no finite trial exists
+     * @param residual residual vector at the accepted state
+     * @param norm residual norm at the accepted state
+     */
+    private LineSearchResult(double alpha, double[] residual, double norm) {
+      this.alpha = alpha;
+      this.residual = residual;
+      this.norm = norm;
+    }
+  }
+
   /** Maximum number of non-descent line-search steps allowed before restoring the best state. */
   private static final int MAX_NON_DESCENT_LINE_SEARCH_STEPS = 3;
 
-  /** Forced-root fugacity fixed-point sweeps performed for one tray evaluation. */
+  /** Maximum forced-root fugacity fixed-point sweeps for one tray evaluation. */
   private static final int THERMO_K_VALUE_ITERATIONS = 2;
+
+  /** Maximum forced-root fugacity sweeps when refining a retained column state. */
+  private static final int THERMO_WARM_START_K_VALUE_ITERATIONS = 3;
 
   /** Convergence tolerance for the largest absolute logarithmic K-value update. */
   private static final double THERMO_K_VALUE_TOLERANCE = 1.0e-8;
@@ -259,6 +285,12 @@ public class NaphtaliSandholmSolver {
   /** Number of cached tray thermodynamic evaluations reused in the last solve. */
   private int lastThermoCacheHitCount;
 
+  /** Number of full-column thermodynamic refinements used to prepare Jacobian base states. */
+  private int lastJacobianBaseRefinementCount;
+
+  /** Largest residual-vector mutation measured across a completed Jacobian build. */
+  private double lastJacobianBaseResidualMutation;
+
   /** Time spent assembling Jacobian matrices in the last solve. */
   private double lastJacobianBuildTimeSeconds;
 
@@ -403,6 +435,24 @@ public class NaphtaliSandholmSolver {
    */
   int getLastThermoCacheHitCount() {
     return lastThermoCacheHitCount;
+  }
+
+  /**
+   * Get the number of residual-aware full-column refinements used to prepare Jacobian base states.
+   *
+   * @return Jacobian base-state refinement count
+   */
+  int getLastJacobianBaseRefinementCount() {
+    return lastJacobianBaseRefinementCount;
+  }
+
+  /**
+   * Get the largest residual-vector mutation across a completed Jacobian build.
+   *
+   * @return L2 norm of the largest post-build residual difference at unchanged primary variables
+   */
+  double getLastJacobianBaseResidualMutation() {
+    return lastJacobianBaseResidualMutation;
   }
 
   /**
@@ -694,7 +744,11 @@ public class NaphtaliSandholmSolver {
       // energy is in the 1-5% range, run Sum-Rates (which adjusts T from the
       // energy balance) — that refines T without invoking Newton, which is
       // documented to diverge for the no-condenser/T-spec topology.
-      if (useOverallMBClosure && mbErrorBP < 0.005 && energyErrorBP < 0.01 && meshClosureAcceptable("Bubble-Point")) {
+      // With both terminal stages, require Newton correction unless the full residual passed
+      // above. The no-condenser shortcut otherwise publishes only approximate tray traffic,
+      // including the previous traffic after a small temperature or feed change.
+      if (useOverallMBClosure && !hasCondenser && mbErrorBP < 0.005 && energyErrorBP < 0.01
+          && meshClosureAcceptable("Bubble-Point")) {
         logger.info("NS: mass+energy balance OK (mb={}%, E={}%), accepting solution",
             String.format("%.4f", mbErrorBP * 100), String.format("%.2f", energyErrorBP * 100));
         logger.debug("NS: accepting Bubble-Point solution without Sum-Rates correction");
@@ -736,7 +790,7 @@ public class NaphtaliSandholmSolver {
         // sensitivities propagate exponentially — observed Newton blowup
         // from ||F||=4 to 1e5 in one step). Once SR has closed mass balance
         // and energy balance, accept that result and skip Newton.
-        if (useOverallMBClosure && mbAfterSR < 0.05 && energyAfterSR < 0.05
+        if (useOverallMBClosure && !hasCondenser && mbAfterSR < 0.05 && energyAfterSR < 0.05
             && meshClosureAcceptable("Sum-Rates without Newton")) {
           logger.debug("NS: accepting Sum-Rates result without Newton because overall-MB closure is ill-conditioned "
               + "(mass balance={}%, energy={}%);", mbAfterSR * 100, energyAfterSR * 100);
@@ -794,7 +848,15 @@ public class NaphtaliSandholmSolver {
           return true;
         }
 
-        // Compute Jacobian analytically
+        // Refine and freeze the derived K/enthalpy state that owns both the
+        // finite-difference base residual and every perturbed Jacobian column.
+        residual = refineJacobianBaseState(residual);
+        norm = vectorNorm(residual);
+        if (norm < bestNorm) {
+          bestNorm = norm;
+          saveTrayState(bestLiq, bestT, bestV);
+        }
+
         double[][] jacobian = computeJacobian(residual);
 
         // Solve J * dx = F using block-tridiagonal solver
@@ -811,6 +873,9 @@ public class NaphtaliSandholmSolver {
             norm = vectorNorm(residual);
             failedSteps++;
             if (failedSteps > 5) {
+              if (warmStartFromColumn) {
+                return retryWithColdInitialization(id);
+              }
               applyResultsToColumn(id, iter, bestNorm, startTime);
               return false;
             }
@@ -829,7 +894,8 @@ public class NaphtaliSandholmSolver {
         }
 
         // Line search: backtrack if step increases residual norm
-        double alpha = lineSearch(dx, norm);
+        LineSearchResult lineSearchResult = lineSearch(dx, norm);
+        double alpha = lineSearchResult.alpha;
         if (alpha <= 0.0) {
           logger.debug("NS: line search found no finite trial step; restoring best state");
           restoreTrayState(bestLiq, bestT, bestV);
@@ -839,14 +905,10 @@ public class NaphtaliSandholmSolver {
           break;
         }
 
-        // Apply update with step size alpha
-        applyUpdate(dx, alpha);
-
-        // Re-evaluate thermodynamics at new state
-        evaluateThermo();
-
-        residual = computeResidual();
-        double newNorm = vectorNorm(residual);
+        // The line search leaves its accepted state applied. Reuse the residual that
+        // selected that state instead of restoring and evaluating the same step again.
+        residual = lineSearchResult.residual;
+        double newNorm = lineSearchResult.norm;
 
         logger.debug("NS iter {}: ||F|| = {} alpha={}", iter, String.format("%.6e", newNorm),
             String.format("%.4f", alpha));
@@ -871,6 +933,9 @@ public class NaphtaliSandholmSolver {
           failedSteps++;
           logger.warn("NS: NaN/Inf — reverting to best (||F||={})", String.format("%.6e", norm));
           if (failedSteps > 5) {
+            if (warmStartFromColumn) {
+              return retryWithColdInitialization(id);
+            }
             applyResultsToColumn(id, iter, bestNorm, startTime);
             return false;
           }
@@ -944,15 +1009,41 @@ public class NaphtaliSandholmSolver {
 
       logger.warn("Naphtali-Sandholm did not converge in {} iterations, ||F|| = {}", completedNewtonIterations,
           String.format("%.6e", norm));
-      applyResultsToColumn(id, completedNewtonIterations, norm, startTime);
       // Partial convergence is only acceptable when each component balance still closes; a leaky
       // profile must be reported as not accepted so the column does not present it as a solution.
-      return norm < tolerance * 100 && meshClosureAcceptable("partial convergence");
+      boolean partialConvergenceAccepted = norm < tolerance * 100 && meshClosureAcceptable("partial convergence");
+      if (!partialConvergenceAccepted && warmStartFromColumn) {
+        return retryWithColdInitialization(id);
+      }
+      applyResultsToColumn(id, completedNewtonIterations, norm, startTime);
+      return partialConvergenceAccepted;
     } catch (Exception ex) {
       logger.error("Naphtali-Sandholm solver exception", ex);
       logger.error("NS EXCEPTION: {}: {}", ex.getClass().getName(), ex.getMessage());
+      if (warmStartFromColumn) {
+        return retryWithColdInitialization(id);
+      }
       return false;
     }
+  }
+
+  /**
+   * Retry a rejected retained-state solve from the column's normal cold initializer.
+   *
+   * <p>
+   * A rejected warm state must not be materialized on the live column before recovery. Otherwise the nominal cold retry
+   * initializes from tray systems and cached products that already contain the rejected Newton profile. Clearing the
+   * warm-start flag and restarting here keeps the live column authoritative until either the cold attempt is accepted
+   * or its best result is applied.
+   * </p>
+   *
+   * @param id calculation identifier for NeqSim
+   * @return {@code true} if the cold retry converges or meets an accepted closure criterion
+   */
+  private boolean retryWithColdInitialization(UUID id) {
+    logger.info("NS: rejected warm-start state; retrying from cold initialization before applying results");
+    warmStartFromColumn = false;
+    return solve(id);
   }
 
   /** Reset solver telemetry before a new solve. */
@@ -964,6 +1055,8 @@ public class NaphtaliSandholmSolver {
     lastThermoKValueNonConvergedCount = 0;
     lastThermoMaxLogKValueUpdate = 0.0;
     lastThermoCacheHitCount = 0;
+    lastJacobianBaseRefinementCount = 0;
+    lastJacobianBaseResidualMutation = 0.0;
     lastJacobianBuildTimeSeconds = 0.0;
     lastBlockLinearSolveCount = 0;
     lastDenseLinearSolveCount = 0;
@@ -3149,21 +3242,24 @@ public class NaphtaliSandholmSolver {
     double pertSize = 1e-4;
     double minPert = 1e-8;
 
+    double[][] baseK = new double[N][C];
+    double[][] baseVap = new double[N][C];
+    double[] baseL = new double[N];
+    double[] baseHL = new double[N];
+    double[] baseHV = new double[N];
+    saveDerivedThermodynamicState(baseK, baseVap, baseL, baseHL, baseHV);
+
     for (int jj = 0; jj < N; jj++) {
       for (int k = 0; k < varsPerTray; k++) {
         int varIdx = jj * varsPerTray + k;
 
-        // Save original value
+        // Save and perturb one primary variable from the same frozen base state.
         double origVal = getVariable(jj, k);
         double h = Math.max(Math.abs(origVal) * pertSize, minPert);
-
-        // Perturb
         setVariable(jj, k, origVal + h);
-
-        // Re-evaluate thermo ONLY for the tray whose variable changed
         evaluateThermoForTray(jj);
 
-        // Compute perturbed residuals for affected trays (j-1, j, j+1)
+        // Only the perturbed tray and its two neighbors can depend on this variable.
         int jStart = Math.max(0, jj - 1);
         int jEnd = Math.min(N - 1, jj + 1);
         for (int j = jStart; j <= jEnd; j++) {
@@ -3174,15 +3270,139 @@ public class NaphtaliSandholmSolver {
           }
         }
 
-        // Restore
+        // Restore primary and derived state exactly. Re-evaluating thermo here
+        // would advance the K fixed point and give the next column a different base.
         setVariable(jj, k, origVal);
-        evaluateThermoForTray(jj);
+        restoreDerivedThermodynamicStateForTray(jj, baseK, baseVap, baseL, baseHL, baseHV);
       }
     }
 
+    double[] restoredResidual = computeResidual();
+    lastJacobianBaseResidualMutation = Math.max(lastJacobianBaseResidualMutation,
+        vectorDifferenceNorm(F0, restoredResidual));
     lastFiniteDifferenceJacobianColumns += totalVars;
     lastJacobianBuildTimeSeconds += (System.nanoTime() - jacobianStart) / 1.0e9;
     return J;
+  }
+
+  /**
+   * Refine the derived tray state before a finite-difference Jacobian build.
+   *
+   * <p>
+   * The primary Newton variables remain unchanged. Up to one full-column thermodynamic pass per local finite-difference
+   * variable is evaluated, matching the restore-evaluation budget that the frozen base replaces. The latest finite
+   * refreshed state is retained so the Jacobian base owns the most thermodynamically consistent K-value fixed point;
+   * the incoming derived state remains only as a fallback if no refinement is finite. Refinement stops early when
+   * consecutive residual vectors differ by no more than one tenth of the outer tolerance. This replaces the accidental,
+   * column-order-dependent K-value refinement that previously occurred while restoring each finite-difference
+   * perturbation.
+   * </p>
+   *
+   * @param initialResidual residual at the current primary state
+   * @return residual owned by the retained derived thermodynamic state
+   */
+  private double[] refineJacobianBaseState(double[] initialResidual) {
+    double[] retainedResidual = null;
+    double[] previousResidual = initialResidual;
+
+    double[][] retainedK = new double[N][C];
+    double[][] retainedVap = new double[N][C];
+    double[] retainedL = new double[N];
+    double[] retainedHL = new double[N];
+    double[] retainedHV = new double[N];
+    saveDerivedThermodynamicState(retainedK, retainedVap, retainedL, retainedHL, retainedHV);
+
+    double residualChangeTolerance = Math.max(1.0e-12, tolerance * 0.1);
+    for (int refinement = 0; refinement < varsPerTray; refinement++) {
+      evaluateThermo();
+      lastJacobianBaseRefinementCount++;
+      double[] candidateResidual = computeResidual();
+      double candidateNorm = vectorNorm(candidateResidual);
+      double residualChange = vectorDifferenceNorm(previousResidual, candidateResidual);
+
+      if (Double.isFinite(candidateNorm)) {
+        retainedResidual = candidateResidual;
+        saveDerivedThermodynamicState(retainedK, retainedVap, retainedL, retainedHL, retainedHV);
+      }
+      if (Double.isFinite(candidateNorm) && residualChange <= residualChangeTolerance) {
+        break;
+      }
+      previousResidual = candidateResidual;
+    }
+
+    restoreDerivedThermodynamicState(retainedK, retainedVap, retainedL, retainedHL, retainedHV);
+    return retainedResidual == null ? initialResidual : retainedResidual;
+  }
+
+  /**
+   * Save all derived thermodynamic tray values that participate in the MESH residual.
+   *
+   * @param saveK K-value destination
+   * @param saveVap vapor component-flow destination
+   * @param saveL total liquid-flow destination
+   * @param saveHL liquid enthalpy destination
+   * @param saveHV vapor enthalpy destination
+   */
+  private void saveDerivedThermodynamicState(double[][] saveK, double[][] saveVap, double[] saveL, double[] saveHL,
+      double[] saveHV) {
+    for (int j = 0; j < N; j++) {
+      System.arraycopy(K[j], 0, saveK[j], 0, C);
+      System.arraycopy(vap[j], 0, saveVap[j], 0, C);
+      saveL[j] = L[j];
+      saveHL[j] = hL[j];
+      saveHV[j] = hV[j];
+    }
+  }
+
+  /**
+   * Restore every derived thermodynamic tray value from a saved state.
+   *
+   * @param saveK saved K-values
+   * @param saveVap saved vapor component flows
+   * @param saveL saved liquid flows
+   * @param saveHL saved liquid enthalpies
+   * @param saveHV saved vapor enthalpies
+   */
+  private void restoreDerivedThermodynamicState(double[][] saveK, double[][] saveVap, double[] saveL, double[] saveHL,
+      double[] saveHV) {
+    for (int j = 0; j < N; j++) {
+      restoreDerivedThermodynamicStateForTray(j, saveK, saveVap, saveL, saveHL, saveHV);
+    }
+  }
+
+  /**
+   * Restore one tray's derived thermodynamic state.
+   *
+   * @param j tray index
+   * @param saveK saved K-values
+   * @param saveVap saved vapor component flows
+   * @param saveL saved liquid flows
+   * @param saveHL saved liquid enthalpies
+   * @param saveHV saved vapor enthalpies
+   */
+  private void restoreDerivedThermodynamicStateForTray(int j, double[][] saveK, double[][] saveVap, double[] saveL,
+      double[] saveHL, double[] saveHV) {
+    System.arraycopy(saveK[j], 0, K[j], 0, C);
+    System.arraycopy(saveVap[j], 0, vap[j], 0, C);
+    L[j] = saveL[j];
+    hL[j] = saveHL[j];
+    hV[j] = saveHV[j];
+  }
+
+  /**
+   * Compute the L2 norm of the difference between two vectors.
+   *
+   * @param first first vector
+   * @param second second vector
+   * @return L2 norm of {@code first - second}
+   */
+  private double vectorDifferenceNorm(double[] first, double[] second) {
+    double sum = 0.0;
+    for (int i = 0; i < first.length; i++) {
+      double difference = first[i] - second[i];
+      sum += difference * difference;
+    }
+    return Math.sqrt(sum);
   }
 
   /**
@@ -3333,13 +3553,16 @@ public class NaphtaliSandholmSolver {
     }
 
     // Self-consistency loop: K = phi_L(x) / phi_V(y), then y = K x / sum(K x).
-    // Preserve the established two-sweep behavior, but measure the remaining
-    // scale-invariant logarithmic K-value update instead of assuming convergence.
+    // Perform at most two sweeps for a cold state and one additional sweep when
+    // refining a retained state. Stop once the existing convergence criterion is
+    // met so already-converged compositions do not pay for a redundant EOS call.
     boolean kOk = phiOk;
     boolean kConverged = false;
     double finalMaxLogKUpdate = Double.POSITIVE_INFINITY;
     if (kOk) {
-      for (int sweep = 0; sweep < THERMO_K_VALUE_ITERATIONS; sweep++) {
+      int maximumKValueIterations = warmStartFromColumn ? THERMO_WARM_START_K_VALUE_ITERATIONS
+          : THERMO_K_VALUE_ITERATIONS;
+      for (int sweep = 0; sweep < maximumKValueIterations; sweep++) {
         if (!computeSinglePhaseFugacityCoefficients(y, T[j], Pbar, true, phiV)) {
           kOk = false;
           break;
@@ -3365,6 +3588,7 @@ public class NaphtaliSandholmSolver {
         }
         if (finalMaxLogKUpdate <= THERMO_K_VALUE_TOLERANCE) {
           kConverged = true;
+          break;
         } else {
           kConverged = false;
         }
@@ -4340,50 +4564,53 @@ public class NaphtaliSandholmSolver {
    *
    * @param dx Newton direction
    * @param currentNorm current residual norm
-   * @return step size alpha in [0, 1]; zero when no finite trial exists
+   * @return accepted state and its already-evaluated residual; alpha is zero when no finite trial exists
    */
-  private double lineSearch(double[] dx, double currentNorm) {
+  private LineSearchResult lineSearch(double[] dx, double currentNorm) {
     double alpha = 1.0;
     double c = 1e-4; // Armijo constant
     double rho = 0.5; // backtracking factor
     int maxBacktrack = 15;
 
-    // Save current state
+    // Save the complete current state. Every backtracking trial must start
+    // from the same primary and derived thermodynamic base; otherwise a
+    // rejected larger step silently changes the K-value seed of the next trial.
     double[][] saveLiq = new double[N][C];
     double[] saveT = new double[N];
     double[] saveV = new double[N];
-    for (int j = 0; j < N; j++) {
-      System.arraycopy(liq[j], 0, saveLiq[j], 0, C);
-      saveT[j] = T[j];
-      saveV[j] = V[j];
-    }
+    saveTrayState(saveLiq, saveT, saveV);
+    double[][] saveK = new double[N][C];
+    double[][] saveVap = new double[N][C];
+    double[] saveL = new double[N];
+    double[] saveHL = new double[N];
+    double[] saveHV = new double[N];
+    saveDerivedThermodynamicState(saveK, saveVap, saveL, saveHL, saveHV);
 
     double bestAlpha = 0.0;
     double bestTrialNorm = Double.POSITIVE_INFINITY;
+    double[] bestResidual = null;
+    double lastEvaluatedAlpha = Double.NaN;
 
     for (int bt = 0; bt < maxBacktrack; bt++) {
-      // Trial update
-      for (int j = 0; j < N; j++) {
-        for (int i = 0; i < C; i++) {
-          liq[j][i] = Math.max(saveLiq[j][i] - alpha * dx[j * varsPerTray + i], 1e-20);
-        }
-        if (Double.isNaN(fixedTemperature[j])) {
-          T[j] = Math.max(saveT[j] - alpha * dx[j * varsPerTray + C], 100.0);
-          T[j] = Math.min(T[j], 1000.0);
-        }
-        V[j] = Math.max(saveV[j] - alpha * dx[j * varsPerTray + C + 1], 0.0);
-      }
+      // Trial update from one reproducible primary and derived base.
+      restoreTrayState(saveLiq, saveT, saveV);
+      restoreDerivedThermodynamicState(saveK, saveVap, saveL, saveHL, saveHV);
+      applyUpdate(dx, alpha);
 
       evaluateThermo();
       double[] Ftrial = computeResidual();
       double trialNorm = vectorNorm(Ftrial);
+      lastEvaluatedAlpha = alpha;
 
       if (Double.isFinite(trialNorm) && trialNorm < bestTrialNorm) {
         bestTrialNorm = trialNorm;
         bestAlpha = alpha;
+        bestResidual = Ftrial;
       }
       if (Double.isFinite(trialNorm) && trialNorm < (1.0 - c * alpha) * currentNorm) {
         bestAlpha = alpha;
+        bestTrialNorm = trialNorm;
+        bestResidual = Ftrial;
         break;
       }
       if (alpha < 0.01) {
@@ -4393,16 +4620,22 @@ public class NaphtaliSandholmSolver {
       alpha *= rho;
     }
 
-    // ALWAYS restore the original state — the main loop's applyUpdate handles the
-    // final step
-    for (int j = 0; j < N; j++) {
-      System.arraycopy(saveLiq[j], 0, liq[j], 0, C);
-      T[j] = saveT[j];
-      V[j] = saveV[j];
+    if (bestAlpha <= 0.0 || bestResidual == null) {
+      restoreTrayState(saveLiq, saveT, saveV);
+      restoreDerivedThermodynamicState(saveK, saveVap, saveL, saveHL, saveHV);
+      return new LineSearchResult(0.0, null, Double.POSITIVE_INFINITY);
     }
-    evaluateThermo();
 
-    return bestAlpha;
+    if (bestAlpha != lastEvaluatedAlpha) {
+      restoreTrayState(saveLiq, saveT, saveV);
+      restoreDerivedThermodynamicState(saveK, saveVap, saveL, saveHL, saveHV);
+      applyUpdate(dx, bestAlpha);
+      evaluateThermo();
+      bestResidual = computeResidual();
+      bestTrialNorm = vectorNorm(bestResidual);
+    }
+
+    return new LineSearchResult(bestAlpha, bestResidual, bestTrialNorm);
   }
 
   /**
@@ -4861,8 +5094,9 @@ public class NaphtaliSandholmSolver {
         gasSystem.setPressure(P[j] / 1e5);
         gasSystem.setTotalNumberOfMoles(V[j] / 3600.0);
         gasSystem.setMolarComposition(y);
-        gasSystem.setNumberOfPhases(1);
         gasSystem.init(0);
+        gasSystem.setNumberOfPhases(1);
+        gasSystem.setPhaseType(0, PhaseType.GAS);
         gasSystem.init(2);
         tray.setCachedGasOutStream(new neqsim.process.equipment.stream.Stream("gas_" + j, gasSystem));
 
@@ -4871,8 +5105,9 @@ public class NaphtaliSandholmSolver {
         liqSystem.setPressure(P[j] / 1e5);
         liqSystem.setTotalNumberOfMoles(L[j] / 3600.0);
         liqSystem.setMolarComposition(x);
-        liqSystem.setNumberOfPhases(1);
         liqSystem.init(0);
+        liqSystem.setNumberOfPhases(1);
+        liqSystem.setPhaseType(0, PhaseType.LIQUID);
         liqSystem.init(2);
         tray.setCachedLiquidOutStream(new neqsim.process.equipment.stream.Stream("liq_" + j, liqSystem));
       }

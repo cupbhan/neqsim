@@ -82,11 +82,11 @@ public final class HydrocarbonWaterThreePhaseTopologyFinder {
   private static CandidatePhase[] otherPhases(CandidatePhase mother) {
     switch (mother) {
     case GAS:
-      return new CandidatePhase[] { CandidatePhase.OIL, CandidatePhase.AQUEOUS };
+      return new CandidatePhase[] {CandidatePhase.OIL, CandidatePhase.AQUEOUS};
     case OIL:
-      return new CandidatePhase[] { CandidatePhase.GAS, CandidatePhase.AQUEOUS };
+      return new CandidatePhase[] {CandidatePhase.GAS, CandidatePhase.AQUEOUS};
     case AQUEOUS:
-      return new CandidatePhase[] { CandidatePhase.GAS, CandidatePhase.OIL };
+      return new CandidatePhase[] {CandidatePhase.GAS, CandidatePhase.OIL};
     default:
       throw new IllegalArgumentException("unsupported mother phase " + mother);
     }

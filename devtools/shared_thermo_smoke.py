@@ -107,6 +107,9 @@ def run_smoke(jar, version, report_dir, repo_root, java="java"):
         tools = client.send("tools/list")
         names = {tool["name"] for tool in tools["tools"]}
         required = {"runFlash", "runFieldFluid", "runFluidFlash", "runWaterIF97"}
+        policy_path = Path(repo_root) / "distribution/cupbhan/personal-enhancements.json"
+        if policy_path.is_file():
+            required.update(json.loads(policy_path.read_text(encoding="utf-8"))["requiredTools"])
         if not required.issubset(names):
             raise RuntimeError("Missing public tools: " + str(required - names))
         checks.append({"name": "tool-discovery", "passed": True, "count": len(names)})

@@ -15,6 +15,27 @@
  * <li><b>Equipment semantics</b> - Separator outlets correctly positioned</li>
  * <li><b>DEXPI integration</b> - Import P&amp;ID data and generate diagrams</li>
  * <li><b>Canonical topology</b> - Stable plant, area, equipment, port, and connection identities</li>
+ * <li><b>Operating evidence</b> - Opt-in case-scoped stream values with explicit units and provenance</li>
+ * <li><b>Controlled document views</b> - Immutable drawing/sheet identities, revision metadata, and reciprocal off-page
+ * references</li>
+ * <li><b>Reviewed designations</b> - Opt-in equipment tags and stream numbers retain project review evidence without
+ * replacing canonical source labels</li>
+ * <li><b>Manual layout evidence</b> - Opt-in stable sheet assignments, pinned positions, protected routes, and
+ * non-connectivity overview indexes retain project review evidence without changing process topology</li>
+ * <li><b>Native controlled output</b> - Deterministic vector SVG sheets and multi-page PDF consume the same controlled
+ * document model without requiring Graphviz</li>
+ * <li><b>Assessed delivery</b> - One fail-closed facade publishes controlled JSON, DEXPI Process exchange, native
+ * SVG/PDF, hashes, and explicit review-required evidence for ProcessSystem or multi-area ProcessModel inputs</li>
+ * <li><b>Independent delivery intake</b> - Bounded fail-closed verification of transferred manifest fingerprints,
+ * artifact hashes, paths, media types, exact file sets, and review boundaries</li>
+ * <li><b>Delivery comparison</b> - Deterministic artifact-level revision evidence and review scopes from two complete
+ * independent intake assessments, with fail-closed changed-content revision reuse</li>
+ * <li><b>Drawing-quality diagnostics</b> - Deterministic collision, clipping, route/object, connection-label,
+ * label-overflow, and broken-reference evidence remains structured and fail-visible without silently moving reviewed
+ * geometry</li>
+ * <li><b>Visual regression evidence</b> - Normalized per-sheet fingerprints cover visible geometry, text, and style
+ * shared by native SVG/PDF without implying visual approval</li>
+ * <li><b>Revision impact</b> - Deterministic changed-object, affected-sheet, and affected-drawing evidence</li>
  * <li><b>Multiple detail levels</b> - MINIMAL, STANDARD, DETAILED, DEBUG</li>
  * <li><b>Deterministic output</b> - Same model always produces same diagram</li>
  * </ul>
@@ -53,6 +74,16 @@
  * <ul>
  * <li>{@link neqsim.process.processmodel.diagram.ProcessDiagramGraphAdapter} - Neutral adapter to the shared
  * engineering graph model</li>
+ * <li>{@link neqsim.process.processmodel.diagram.ProcessDiagramDocumentSetAdapter} - Immutable controlled drawing and
+ * sheet proposal adapter</li>
+ * <li>{@link neqsim.process.processmodel.diagram.NativeEngineeringDiagramRenderer} - Deterministic native SVG/PDF
+ * renderer for controlled drawing sets</li>
+ * <li>{@link neqsim.process.processmodel.diagram.EngineeringDiagramDeliveryAssessment} - Independent integrity
+ * assessment for stored or transferred controlled deliveries</li>
+ * <li>{@link neqsim.process.processmodel.diagram.EngineeringDiagramDeliveryComparison} - Deterministic artifact-level
+ * comparison of complete independently assessed deliveries</li>
+ * <li>{@link neqsim.process.engineering.model.EngineeringDiagramLayoutRegister} - Persistent reviewed manual sheet,
+ * position, and route intent</li>
  * <li>{@link neqsim.process.processmodel.diagram.ProcessDiagramExporter} - Main exporter class</li>
  * <li>{@link neqsim.process.processmodel.diagram.PFDLayoutPolicy} - Layout intelligence layer</li>
  * <li>{@link neqsim.process.processmodel.diagram.EquipmentRole} - Equipment role classification</li>

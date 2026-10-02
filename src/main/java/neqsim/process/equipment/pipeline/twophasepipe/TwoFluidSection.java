@@ -112,6 +112,16 @@ public class TwoFluidSection extends PipeSection {
   /** Water cut (water fraction of total liquid). */
   private double waterCut = 0.0;
 
+  /**
+   * No-slip water volume fraction of the liquid, q_w / (q_w + q_o).
+   *
+   * <p>
+   * This is the transported (input) fraction set from the local flash, as distinct from {@link #waterCut}, which is the
+   * in-situ holdup fraction after slip. The two are equal only when oil and water travel at the same speed.
+   * </p>
+   */
+  private double inputWaterVolumeFraction = 0.0;
+
   /** Water holdup (fraction of pipe area). α_w */
   private double waterHoldup = 0.0;
 
@@ -135,6 +145,12 @@ public class TwoFluidSection extends PipeSection {
 
   /** Oil velocity (m/s). */
   private double oilVelocity = 0.0;
+
+  /** Whether the caller explicitly supplied water velocity independently of the bulk liquid velocity. */
+  private boolean waterVelocityInitialized = false;
+
+  /** Whether the caller explicitly supplied oil velocity independently of the bulk liquid velocity. */
+  private boolean oilVelocityInitialized = false;
 
   /** Oil density (kg/m³). */
   private double oilDensity;
@@ -271,50 +287,33 @@ public class TwoFluidSection extends PipeSection {
     double rhoG = getGasDensity();
     double rhoL = getLiquidDensity();
     double vG = getGasVelocity();
-    double vL = getLiquidVelocity();
 
     gasMassPerLength = alphaG * rhoG * A;
-    liquidMassPerLength = alphaL * rhoL * A;
     gasMomentumPerLength = alphaG * rhoG * vG * A;
-    liquidMomentumPerLength = alphaL * rhoL * vL * A;
 
-    // For the 7-equation model, split liquid into oil and water using proper densities
-    // waterCut is the volume fraction of water in the liquid phase
-    if (waterCut > 0 && waterCut < 1.0) {
-      // Three-phase: use individual phase densities for mass calculation
-      // Volume fractions within total cross-section
-      double alphaO = alphaL * (1.0 - waterCut); // Oil holdup = liquid holdup * oil fraction
-      double alphaW = alphaL * waterCut; // Water holdup = liquid holdup * water fraction
+    // Water cut is a volume fraction, including the exact oil-only and water-only limits.
+    oilHoldup = alphaL * (1.0 - waterCut);
+    waterHoldup = alphaL * waterCut;
+    double rhoO = Double.isFinite(oilDensity) && oilDensity > 0.0 ? oilDensity : rhoL;
+    double rhoW = Double.isFinite(waterDensity) && waterDensity > 0.0 ? waterDensity : 1000.0;
+    initializeNewLiquidPhaseVelocities(oilHoldup * rhoO * A, waterHoldup * rhoW * A);
+    oilMassPerLength = oilHoldup * rhoO * A;
+    waterMassPerLength = waterHoldup * rhoW * A;
+    liquidMassPerLength = oilMassPerLength + waterMassPerLength;
 
-      // Use phase-specific densities for mass
-      double rhoO = (oilDensity > 100) ? oilDensity : rhoL;
-      double rhoW = (waterDensity > 100) ? waterDensity : 1000.0;
+    // Phase fields hold either caller-specified, bulk-propagated, or recovered velocities.
+    // Rebuilding the conservative state must preserve recovered slip as well.
+    oilVelocity = oilMassPerLength > 0.0 ? oilVelocity : 0.0;
+    waterVelocity = waterMassPerLength > 0.0 ? waterVelocity : 0.0;
+    oilMomentumPerLength = oilMassPerLength * oilVelocity;
+    waterMomentumPerLength = waterMassPerLength * waterVelocity;
+    liquidMomentumPerLength = oilMomentumPerLength + waterMomentumPerLength;
 
-      oilMassPerLength = alphaO * rhoO * A;
-      waterMassPerLength = alphaW * rhoW * A;
-
-      // Recalculate total liquid mass for consistency
-      liquidMassPerLength = oilMassPerLength + waterMassPerLength;
-
-      // Split momentum using volume fractions (same velocity assumption)
-      oilMomentumPerLength = oilMassPerLength * vL;
-      waterMomentumPerLength = waterMassPerLength * vL;
-      liquidMomentumPerLength = oilMomentumPerLength + waterMomentumPerLength;
-    } else {
-      // Two-phase: all liquid is oil (no water)
-      double rhoO = (oilDensity > 100) ? oilDensity : rhoL;
-      oilMassPerLength = alphaL * rhoO * A;
-      waterMassPerLength = 0;
-      oilMomentumPerLength = oilMassPerLength * vL;
-      waterMomentumPerLength = 0;
-      liquidMassPerLength = oilMassPerLength;
-      liquidMomentumPerLength = oilMomentumPerLength;
-    }
-
-    // Total energy (internal + kinetic)
-    double eG = getGasEnthalpy() - getPressure() / rhoG + 0.5 * vG * vG; // Internal + kinetic
-    double eL = getLiquidEnthalpy() - getPressure() / rhoL + 0.5 * vL * vL;
-    energyPerLength = (alphaG * rhoG * eG + alphaL * rhoL * eL) * A;
+    // Total internal plus kinetic energy, using the independently moving liquid phases.
+    // Subtract pressure times occupied area directly to avoid 0/0 for an absent phase.
+    energyPerLength = gasMassPerLength * (getGasEnthalpy() + 0.5 * vG * vG) + liquidMassPerLength * getLiquidEnthalpy()
+        + 0.5 * oilMassPerLength * oilVelocity * oilVelocity + 0.5 * waterMassPerLength * waterVelocity * waterVelocity
+        - getPressure() * A * (alphaG + alphaL);
   }
 
   /**
@@ -323,6 +322,13 @@ public class TwoFluidSection extends PipeSection {
    * <p>
    * This is the inverse operation of updateConservativeVariables. Requires equation of state evaluation for complete
    * solution. Conservative positivity limiting is applied before converting to primitive variables.
+   * </p>
+   *
+   * <p>
+   * Legacy velocity guards are retained while the transient pressure and momentum solver is qualified for phase
+   * disappearance. They limit recovered gas velocity to 100 m/s and liquid velocities to 50 m/s without modifying
+   * conservative momentum. Consequently primitive/conservative velocity consistency is only guaranteed within these
+   * bounds. Removing these guards requires a stable, conservative treatment of trace-phase momentum.
    * </p>
    */
   public void extractPrimitiveVariables() {
@@ -340,12 +346,15 @@ public class TwoFluidSection extends PipeSection {
 
     // Extract holdups from mass per length
     double rhoG = getGasDensity();
-    if (rhoG < 0.1)
-      rhoG = 1.0; // Minimum gas density
+    if (!Double.isFinite(rhoG) || rhoG <= 0.0) {
+      rhoG = 1.0;
+    }
 
-    // Use individual phase densities for oil and water
-    double rhoO = oilDensity > 100 ? oilDensity : 700.0;
-    double rhoW = waterDensity > 100 ? waterDensity : 1000.0;
+    // Valid phase densities must not change between initialization and recovery.
+    double rhoL = getLiquidDensity();
+    double rhoO = Double.isFinite(oilDensity) && oilDensity > 0.0 ? oilDensity
+        : (Double.isFinite(rhoL) && rhoL > 0.0 ? rhoL : 700.0);
+    double rhoW = Double.isFinite(waterDensity) && waterDensity > 0.0 ? waterDensity : 1000.0;
 
     double alphaG = 0;
     double alphaO = 0;
@@ -417,23 +426,19 @@ public class TwoFluidSection extends PipeSection {
     waterCut = calculatedWaterCut;
     oilFractionInLiquid = 1.0 - waterCut;
 
-    // Extract velocities with stability guards
+    // Preserve established guards: unbounded recovery exposes unstable trace-phase
+    // momentum and collapses the current explicit/implicit solver's CFL timestep.
     if (gasMassPerLength > 1e-12) {
-      double vG = gasMomentumPerLength / gasMassPerLength;
-      // Limit velocity to physical range
-      vG = Math.max(-100, Math.min(100, vG));
-      if (!Double.isNaN(vG)) {
-        setGasVelocity(vG);
-      }
+      setGasVelocity(Math.max(-100.0, Math.min(100.0, gasMomentumPerLength / gasMassPerLength)));
+    } else if (gasMassPerLength == 0.0) {
+      setGasVelocity(0.0);
     }
     if (liquidMassPerLength > 1e-12) {
-      double vL = liquidMomentumPerLength / liquidMassPerLength;
-      // Limit velocity to physical range
-      vL = Math.max(-50, Math.min(50, vL));
-      if (!Double.isNaN(vL)) {
-        setLiquidVelocity(vL);
-      }
+      super.setLiquidVelocity(Math.max(-50.0, Math.min(50.0, liquidMomentumPerLength / liquidMassPerLength)));
+    } else if (liquidMassPerLength == 0.0) {
+      super.setLiquidVelocity(0.0);
     }
+    updateWaterOilHoldups();
 
     // Update derived quantities
     updateDerivedQuantities();
@@ -445,12 +450,96 @@ public class TwoFluidSection extends PipeSection {
    * @return Conservative state [gasMass, oilMass, waterMass, gasMom, oilMom, waterMom, energy]
    */
   public double[] getStateVector() {
-    return new double[] { gasMassPerLength, oilMassPerLength, waterMassPerLength, gasMomentumPerLength,
-        oilMomentumPerLength, waterMomentumPerLength, energyPerLength };
+    return new double[] {gasMassPerLength, oilMassPerLength, waterMassPerLength, gasMomentumPerLength,
+        oilMomentumPerLength, waterMomentumPerLength, energyPerLength};
+  }
+
+  /**
+   * Install an admissible conservative endpoint without repairing mass, momentum, energy, holdup or velocity.
+   *
+   * <p>
+   * Phase densities and pressure must already represent the candidate endpoint. The occupied area is checked against
+   * the pipe area, but is never normalized. Every positive inventory, however small, recovers its own velocity as
+   * momentum divided by mass; exactly absent phases require exactly zero momentum. Unlike
+   * {@link #extractPrimitiveVariables()}, this path has no legacy velocity caps or phase-density fallbacks. For an
+   * exactly absent liquid, the unused bulk-liquid density is the supplied oil density. Bulk liquid velocity remains
+   * mass-weighted; superficial liquid velocity instead sums the independent oil and water volume fluxes. It is not a
+   * phase-appearance model. Validation completes before any section field is changed. Only conserved and algebraic
+   * primitive fields are recovered: regime, friction, oil-water correlations and thermodynamic/thermal properties must
+   * be refreshed separately before reporting endpoint closure diagnostics.
+   * </p>
+   *
+   * @param state exactly seven conservative variables in the order returned by {@link #getStateVector()}
+   * @param relativeVolumeTolerance finite positive tolerance for occupied area divided by cell area minus one
+   * @throws IllegalArgumentException if state, properties or occupied volume are inadmissible
+   */
+  public void setConservativeEndpoint(double[] state, double relativeVolumeTolerance) {
+    if (state == null || state.length != 7 || !(relativeVolumeTolerance > 0.0)
+        || !Double.isFinite(relativeVolumeTolerance)) {
+      throw new IllegalArgumentException("An endpoint requires seven variables and a positive finite volume tolerance");
+    }
+    double area = getArea();
+    if (!(area > 0.0) || !Double.isFinite(area) || !(getPressure() > 0.0) || !Double.isFinite(getPressure())) {
+      throw new IllegalArgumentException("Endpoint area and pressure must be positive and finite");
+    }
+    double[] densities = {getGasDensity(), getOilDensity(), getWaterDensity()};
+    double[] holdups = new double[3];
+    double[] velocities = new double[3];
+    double occupiedFraction = 0.0;
+    for (double value : state) {
+      if (!Double.isFinite(value)) {
+        throw new IllegalArgumentException("Endpoint conservative values must be finite");
+      }
+    }
+    for (int phase = 0; phase < 3; phase++) {
+      if (state[phase] < 0.0 || !(densities[phase] > 0.0) || !Double.isFinite(densities[phase])) {
+        throw new IllegalArgumentException("Endpoint mass must be nonnegative and phase density positive and finite");
+      }
+      if (state[phase] == 0.0 && state[phase + 3] != 0.0) {
+        throw new IllegalArgumentException("An absent endpoint phase cannot carry momentum");
+      }
+      velocities[phase] = state[phase] == 0.0 ? 0.0 : state[phase + 3] / state[phase];
+      holdups[phase] = (state[phase] / densities[phase]) / area;
+      if (!Double.isFinite(velocities[phase]) || !Double.isFinite(holdups[phase])
+          || state[phase] > 0.0 && !(holdups[phase] > 0.0)) {
+        throw new IllegalArgumentException("Endpoint primitive values must be finite");
+      }
+      occupiedFraction += holdups[phase];
+    }
+    double liquidMass = state[1] + state[2];
+    double liquidMomentum = state[4] + state[5];
+    double liquidVelocity = liquidMass == 0.0 ? 0.0 : liquidMomentum / liquidMass;
+    double liquidHoldup = holdups[1] + holdups[2];
+    double liquidDensity = liquidHoldup > 0.0 ? liquidMass / (liquidHoldup * area) : densities[1];
+    if (!Double.isFinite(occupiedFraction) || Math.abs(occupiedFraction - 1.0) > relativeVolumeTolerance
+        || !Double.isFinite(liquidMass) || !Double.isFinite(liquidMomentum) || !Double.isFinite(liquidVelocity)
+        || !(liquidDensity > 0.0) || !Double.isFinite(liquidDensity)) {
+      throw new IllegalArgumentException("Endpoint occupied volume or bulk liquid state is inadmissible");
+    }
+
+    setStateVector(state);
+    setGasHoldup(holdups[0]);
+    super.setLiquidHoldup(liquidHoldup);
+    oilHoldup = holdups[1];
+    waterHoldup = holdups[2];
+    waterCut = oilHoldup + waterHoldup > 0.0 ? waterHoldup / (oilHoldup + waterHoldup) : 0.0;
+    oilFractionInLiquid = 1.0 - waterCut;
+    setGasVelocity(velocities[0]);
+    setRecoveredLiquidVelocities(liquidVelocity, velocities[1], velocities[2]);
+    setLiquidDensity(liquidDensity);
+    updateDerivedQuantitiesWithoutNormalization(holdups[0] * velocities[0],
+        holdups[1] * velocities[1] + holdups[2] * velocities[2]);
   }
 
   /**
    * Set state from vector (7-equation model with water-oil slip).
+   *
+   * <p>
+   * The five-variable legacy state supplies combined liquid mass and momentum. It is expanded using the configured
+   * liquid water volume fraction and phase densities, with a common liquid velocity. The six-variable legacy state
+   * supplies both liquid masses and is expanded using their mass fractions. Every conversion replaces all phase masses
+   * and momenta, including exact-zero and positive trace inventories.
+   * </p>
    *
    * @param state Conservative state [gasMass, oilMass, waterMass, gasMom, oilMom, waterMom, energy]
    */
@@ -476,11 +565,7 @@ public class TwoFluidSection extends PipeSection {
       gasMomentumPerLength = state[3];
       liquidMomentumPerLength = state[4];
       // Split momentum proportionally to mass
-      double totalLiqMass = oilMassPerLength + waterMassPerLength;
-      if (totalLiqMass > 1e-10) {
-        oilMomentumPerLength = liquidMomentumPerLength * oilMassPerLength / totalLiqMass;
-        waterMomentumPerLength = liquidMomentumPerLength * waterMassPerLength / totalLiqMass;
-      }
+      splitLegacyLiquidMomentum();
       energyPerLength = state[5];
     } else if (state.length >= 5) {
       // Legacy 5-variable state (no water separation)
@@ -489,29 +574,46 @@ public class TwoFluidSection extends PipeSection {
       gasMomentumPerLength = state[2];
       liquidMomentumPerLength = state[3];
       energyPerLength = state[4];
+      double fractionWater = Math.max(0.0, Math.min(1.0, waterCut));
+      double rhoL = getLiquidDensity();
+      double rhoO = Double.isFinite(oilDensity) && oilDensity > 0.0 ? oilDensity
+          : (Double.isFinite(rhoL) && rhoL > 0.0 ? rhoL : 700.0);
+      double rhoW = Double.isFinite(waterDensity) && waterDensity > 0.0 ? waterDensity : 1000.0;
+      double mixtureDensity = (1.0 - fractionWater) * rhoO + fractionWater * rhoW;
+      double oilMassFraction = (1.0 - fractionWater) * rhoO / mixtureDensity;
+      oilMassPerLength = liquidMassPerLength * oilMassFraction;
+      waterMassPerLength = liquidMassPerLength - oilMassPerLength;
+      splitLegacyLiquidMomentum();
+    }
+  }
+
+  /** Expand combined legacy liquid momentum without retaining stale or dropping trace-phase values. */
+  private void splitLegacyLiquidMomentum() {
+    double totalLiquidMass = oilMassPerLength + waterMassPerLength;
+    if (totalLiquidMass > 0.0) {
+      oilMomentumPerLength = liquidMomentumPerLength * (oilMassPerLength / totalLiquidMass);
+      waterMomentumPerLength = liquidMomentumPerLength - oilMomentumPerLength;
+    } else {
+      oilMomentumPerLength = 0.0;
+      waterMomentumPerLength = 0.0;
     }
   }
 
   /**
-   * Update water and oil holdups from conservative variables. Should be called after extractPrimitiveVariables if
-   * separate tracking is needed. Note: extractPrimitiveVariables now also sets oil/water holdups, so this is mainly for
-   * velocity extraction.
+   * Recover independent water and oil velocities with the legacy magnitude limits described in
+   * {@link #extractPrimitiveVariables()}. Positive trace inventories below 1e-12 kg/m retain their previous velocity;
+   * exact-zero phases have zero velocity. This does not modify transported mass or momentum.
    */
   public void updateWaterOilHoldups() {
-    // Extract velocities from momenta (with slip)
     if (oilMassPerLength > 1e-12) {
-      double vO = oilMomentumPerLength / oilMassPerLength;
-      vO = Math.max(-50, Math.min(50, vO)); // Clamp to physical range
-      if (!Double.isNaN(vO)) {
-        oilVelocity = vO;
-      }
+      oilVelocity = Math.max(-50.0, Math.min(50.0, oilMomentumPerLength / oilMassPerLength));
+    } else if (oilMassPerLength == 0.0) {
+      oilVelocity = 0.0;
     }
     if (waterMassPerLength > 1e-12) {
-      double vW = waterMomentumPerLength / waterMassPerLength;
-      vW = Math.max(-50, Math.min(50, vW)); // Clamp to physical range
-      if (!Double.isNaN(vW)) {
-        waterVelocity = vW;
-      }
+      waterVelocity = Math.max(-50.0, Math.min(50.0, waterMomentumPerLength / waterMassPerLength));
+    } else if (waterMassPerLength == 0.0) {
+      waterVelocity = 0.0;
     }
   }
 
@@ -590,7 +692,7 @@ public class TwoFluidSection extends PipeSection {
     double Fg = -getGasHoldup() * getGasDensity() * g * A * sinTheta;
     double Fl = -getLiquidHoldup() * getLiquidDensity() * g * A * sinTheta;
 
-    return new double[] { Fg, Fl };
+    return new double[] {Fg, Fl};
   }
 
   // ============ Getters and Setters ============
@@ -828,6 +930,24 @@ public class TwoFluidSection extends PipeSection {
     this.oilFractionInLiquid = 1.0 - waterCut;
   }
 
+  /**
+   * Get the transported (no-slip) water volume fraction of the liquid.
+   *
+   * @return q_w / (q_w + q_o), in [0, 1]
+   */
+  public double getInputWaterVolumeFraction() {
+    return inputWaterVolumeFraction;
+  }
+
+  /**
+   * Set the transported (no-slip) water volume fraction of the liquid.
+   *
+   * @param inputWaterVolumeFraction q_w / (q_w + q_o), clamped to [0, 1]
+   */
+  public void setInputWaterVolumeFraction(double inputWaterVolumeFraction) {
+    this.inputWaterVolumeFraction = Math.max(0.0, Math.min(1.0, inputWaterVolumeFraction));
+  }
+
   public double getOilDensity() {
     return oilDensity;
   }
@@ -973,8 +1093,55 @@ public class TwoFluidSection extends PipeSection {
     return waterVelocity;
   }
 
+  /**
+   * Set bulk liquid velocity and propagate it to phases whose velocities the caller has not explicitly specified.
+   * Internal momentum recovery does not claim explicit ownership of a phase velocity.
+   *
+   * @param liquidVelocity bulk liquid velocity in m/s
+   */
+  @Override
+  public void setLiquidVelocity(double liquidVelocity) {
+    super.setLiquidVelocity(liquidVelocity);
+    if (!oilVelocityInitialized) {
+      oilVelocity = liquidVelocity;
+    }
+    if (!waterVelocityInitialized) {
+      waterVelocity = liquidVelocity;
+    }
+  }
+
+  /**
+   * Store recovered liquid velocities without treating them as explicit caller settings or collapsing phase slip.
+   *
+   * @param liquidVelocity recovered bulk liquid velocity in m/s
+   * @param oilVelocity recovered oil velocity in m/s
+   * @param waterVelocity recovered water velocity in m/s
+   */
+  protected void setRecoveredLiquidVelocities(double liquidVelocity, double oilVelocity, double waterVelocity) {
+    super.setLiquidVelocity(liquidVelocity);
+    this.oilVelocity = oilVelocity;
+    this.waterVelocity = waterVelocity;
+  }
+
+  /**
+   * Initialize newly present phases during a caller's primitive-state rebuild. Conservative transport and momentum
+   * recovery bypass this fallback and retain their donor momentum.
+   *
+   * @param newOilMass new oil mass per length in kg/m
+   * @param newWaterMass new water mass per length in kg/m
+   */
+  protected void initializeNewLiquidPhaseVelocities(double newOilMass, double newWaterMass) {
+    if (!oilVelocityInitialized && oilMassPerLength == 0.0 && newOilMass > 0.0) {
+      oilVelocity = getLiquidVelocity();
+    }
+    if (!waterVelocityInitialized && waterMassPerLength == 0.0 && newWaterMass > 0.0) {
+      waterVelocity = getLiquidVelocity();
+    }
+  }
+
   public void setWaterVelocity(double waterVelocity) {
     this.waterVelocity = waterVelocity;
+    this.waterVelocityInitialized = true;
   }
 
   public double getOilVelocity() {
@@ -983,6 +1150,7 @@ public class TwoFluidSection extends PipeSection {
 
   public void setOilVelocity(double oilVelocity) {
     this.oilVelocity = oilVelocity;
+    this.oilVelocityInitialized = true;
   }
 
   // ============ Terrain tracking getters/setters ============
@@ -1065,10 +1233,10 @@ public class TwoFluidSection extends PipeSection {
   @Override
   public TwoFluidSection clone() {
     TwoFluidSection copy = (TwoFluidSection) super.clone();
-    // Deep copy transient fields
+    // Geometry can be recalculated, but a rejected-step snapshot must retain the
+    // configured oil-water closure and its last accepted immutable result.
     copy.geometryCalc = null; // Will be recreated on demand
-    copy.oilWaterDetector = null; // Will be recreated on demand
-    copy.oilWaterResult = null; // Will be recomputed
+    copy.oilWaterDetector = oilWaterDetector == null ? null : oilWaterDetector.clone();
     return copy;
   }
 

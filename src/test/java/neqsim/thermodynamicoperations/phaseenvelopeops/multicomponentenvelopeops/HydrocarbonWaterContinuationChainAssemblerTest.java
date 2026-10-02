@@ -64,7 +64,7 @@ class HydrocarbonWaterContinuationChainAssemblerTest {
 
   private static State state(double temperatureK, double pressureBara, double shift) {
     return State.create(CandidatePhase.OIL, CandidatePhase.AQUEOUS, CandidatePhase.GAS, temperatureK, pressureBara, 0.4,
-        new double[] { 0.8 - shift, 0.1 + shift, 0.1 }, new double[] { 0.01, 0.01, 0.98 },
-        new double[] { 0.7 - shift, 0.2 + shift, 0.1 });
+        new double[] {0.8 - shift, 0.1 + shift, 0.1}, new double[] {0.01, 0.01, 0.98},
+        new double[] {0.7 - shift, 0.2 + shift, 0.1});
   }
 }

@@ -5,17 +5,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import neqsim.thermo.phase.PhaseEos;
 import neqsim.thermo.phase.PhaseGEInterface;
 import neqsim.thermo.phase.PhaseGEVanLaarAcid;
-import neqsim.thermo.phase.PhaseType;
 import neqsim.thermo.phase.PhasePureComponentSolid;
+import neqsim.thermo.phase.PhaseType;
 import neqsim.thermo.util.empiric.NitricSulfuricAcidVaporPressure;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
 import neqsim.util.exception.IsNaNException;
 
 /** Tests the reusable EOS-GE topology and thermodynamic-operation support. */
+@Tag("slow")
 public class SystemEosGEOperationsTest extends neqsim.NeqSimTest {
   /** Number of pascals per bar. */
   private static final double PASCALS_PER_BAR = 1.0e5;
@@ -58,8 +60,8 @@ public class SystemEosGEOperationsTest extends neqsim.NeqSimTest {
   /** Established Wilson, NRTL and UNIFAC systems use the same reusable phase topology. */
   @Test
   public void testEstablishedEosGeSystemsUseSharedTopology() {
-    SystemEosGE[] systems = new SystemEosGE[] { new SystemGEWilson(273.15, 1.0), new SystemNRTL(273.15, 1.0),
-        new SystemUNIFAC(273.15, 1.0), new SystemUNIFACpsrk(273.15, 1.0) };
+    SystemEosGE[] systems = new SystemEosGE[] {new SystemGEWilson(273.15, 1.0), new SystemNRTL(273.15, 1.0),
+        new SystemUNIFAC(273.15, 1.0), new SystemUNIFACpsrk(273.15, 1.0)};
 
     for (SystemEosGE system : systems) {
       assertTrue(system.getEquationOfStatePhase() instanceof PhaseEos);
@@ -128,7 +130,7 @@ public class SystemEosGEOperationsTest extends neqsim.NeqSimTest {
         NitricSulfuricAcidVaporPressure.partialPressureNitricAcid(liquidComposition[0], liquidComposition[1],
             liquidComposition[2], temperature) / PASCALS_PER_BAR,
         NitricSulfuricAcidVaporPressure.partialPressureSulfuricAcid(liquidComposition[0], liquidComposition[1],
-            liquidComposition[2], temperature) / PASCALS_PER_BAR };
+            liquidComposition[2], temperature) / PASCALS_PER_BAR};
     double expectedPressure = partialPressuresBar[0] + partialPressuresBar[1] + partialPressuresBar[2];
 
     SystemVanLaarActivitySRK bubbleSystem = new SystemVanLaarActivitySRK(temperature, 1.0);

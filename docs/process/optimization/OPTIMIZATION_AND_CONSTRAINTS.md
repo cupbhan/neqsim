@@ -16,6 +16,7 @@ This document provides an integrated view of NeqSim's optimization and constrain
 - [Overview](#overview)
 - [Constraint Framework Architecture](#constraint-framework-architecture)
   - [Core Constraint Classes](#core-constraint-classes)
+  - [Process-Boundary Constraint Evidence](#process-boundary-constraint-evidence)
   - [Equipment Capacity Strategies](#equipment-capacity-strategies)
   - [Constraint Types and Severity](#constraint-types-and-severity)
 - [Optimization Framework](#optimization-framework)
@@ -137,13 +138,45 @@ CapacityConstraint speedConstraint = new CapacityConstraint("speed", "RPM", Cons
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `getCurrentValue()` | `double` | Current value from the valueSupplier |
-| `getUtilization()` | `double` | Current value / design value (1.0 = 100%) |
+| `getUtilization()` | `double` | Current/design for maximum limits; minimum/current for minimum limits (1.0 = 100%) |
 | `getUtilizationPercent()` | `double` | Utilization as percentage |
 | `isViolated()` | `boolean` | True if utilization > 1.0 |
 | `isHardLimitExceeded()` | `boolean` | True if HARD constraint exceeds max value |
 | `isNearLimit()` | `boolean` | True if above warning threshold (default 90%) |
 | `getMargin()` | `double` | Remaining headroom (1.0 - utilization) |
 | `isEnabled()` | `boolean` | True if constraint participates in capacity analysis |
+
+### Process-Boundary Constraint Evidence
+
+`ProcessModelSimulationEvaluator` can register injection, receiving-capacity, export-capacity,
+product-quality, and nomination limits as qualified process-boundary constraints. Each completed
+operating point returns immutable `ProcessBoundaryConstraintEvidence` containing:
+
+- stable area/point/constraint identity and boundary kind;
+- flow direction and an explicit mass, molar, standard-volume, actual-volume, or energy basis;
+- physical unit, fixed bounds or target/tolerance, sampled value, and signed physical margin;
+- non-negative physical violation plus a separately scaled dimensionless violation;
+- provenance, confidence, effective-period labels, applicability, calculation status, and diagnostics.
+
+Missing, non-finite, not-calculable, or explicitly out-of-validity evidence fails a hard boundary
+constraint closed. A boundary callback is sampled exactly once after the `ProcessModel` run, and
+the resulting evidence is propagated to single-action and coupled action-set evaluations. The
+`NetworkNomination` and `NetworkQualityResult` adapters retain their existing rate-basis, quality
+method, reference-condition, margin, and provenance metadata without changing the underlying
+network or thermodynamic calculation.
+
+```java
+evaluator.addNominationConstraint(
+    "sales nomination", "export", nomination, periodIndex,
+    ProcessBoundaryConstraintEvidence.FlowDirection.OUT_OF_PROCESS,
+    model -> model.getVariableValue("export::sales gas.flowRate", "kg/hr"),
+    true, 1000.0, 1000.0, "shipper nomination");
+```
+
+The residual scale is expressed in the same physical unit as the constraint. It is used only to
+form the dimensionless optimization penalty; it never changes the reported engineering value,
+limit, or margin. These APIs qualify optimization-facing evidence and do not implement nominations,
+market settlement, gas-quality physics, injection physics, or equipment solvers.
 
 ### Equipment Capacity Strategies
 
@@ -189,9 +222,9 @@ Each equipment type has a capacity strategy that knows how to:
 
 | Severity | Impact | Optimizer Behavior |
 |----------|--------|-------------------|
-| `CRITICAL` | Safety hazard or equipment damage | Optimization must stop immediately |
+| `CRITICAL` | Critical evidence severity | Treatment depends on the evaluator; inspect its feasibility result |
 | `HARD` | Exceeds design limits | Marks solution as infeasible |
-| `SOFT` | Exceeds recommended limits | Applies penalty to objective |
+| `SOFT` | Exceeds recommended limits | Custom optimizer constraints apply penalties; enabled capacity utilization still enters the equipment ceiling |
 | `ADVISORY` | Information only | No impact on optimization |
 
 ---
@@ -210,21 +243,23 @@ Each equipment type has a capacity strategy that knows how to:
 
 ```java
 import neqsim.process.util.optimizer.ProcessOptimizationEngine;
-import neqsim.process.util.optimizer.ProcessOptimizationEngine.OptimizationResult;
+
 
 // Create engine with process system
-ProcessOptimizationEngine engine = new ProcessOptimizationEngine(process);
+ProcessOptimizationEngine engine = new ProcessOptimizationEngine(process)
+    .setFeedStreamName(feed.getName())
+    .setOutletStreamName("outlet");
 
 // Find max throughput at given pressures
-OptimizationResult result = engine.findMaximumThroughput(
+ProcessOptimizationEngine.OptimizationResult result = engine.findMaximumThroughput(
     50.0,      // inlet pressure (bara)
     10.0,      // outlet pressure (bara)
     1000.0,    // min flow rate (kg/hr)
     100000.0   // max flow rate (kg/hr)
 );
 
-System.out.println("Max flow: " + result.getOptimalValue() + " kg/hr");
-System.out.println("Bottleneck: " + result.getBottleneck());
+logger.info("{}", "Max flow: " + result.getOptimalValue() + " kg/hr");
+logger.info("{}", "Bottleneck: " + result.getBottleneck());
 ```
 
 ### ProductionOptimizer
@@ -244,18 +279,20 @@ import neqsim.process.util.optimizer.ProductionOptimizer.*;
 // Create optimizer and config
 ProductionOptimizer optimizer = new ProductionOptimizer();
 OptimizationConfig config = new OptimizationConfig(50000.0, 200000.0)  // flow range
+    .rateUnit("kg/hr")
+    .rateUnit("kg/hr")
     .tolerance(100.0)
     .maxIterations(30)
-    .searchMode(SearchMode.GOLDEN_SECTION_SCORE)
+    .searchMode(SearchMode.BINARY_FEASIBILITY)
     .defaultUtilizationLimit(0.95)
     .stagnationIterations(5);  // Early termination if no improvement
 
 // Run optimization
 OptimizationResult result = optimizer.optimize(process, feed, config, null, null);
 
-System.out.println("Optimal rate: " + result.getOptimalRate() + " " + result.getRateUnit());
-System.out.println("Bottleneck: " + result.getBottleneck().getName());
-System.out.println("Feasible: " + result.isFeasible());
+logger.info("{}", "Optimal rate: " + result.getOptimalRate() + " " + result.getRateUnit());
+logger.info("{}", "Bottleneck: " + (result.getBottleneck() == null ? "None" : result.getBottleneck().getName()));
+logger.info("{}", "Feasible: " + result.isFeasible());
 ```
 
 ### Search Algorithms
@@ -263,7 +300,7 @@ System.out.println("Feasible: " + result.isFeasible());
 | Algorithm | Code | Best For |
 |-----------|------|----------|
 | **Binary Feasibility** | `SearchMode.BINARY_FEASIBILITY` | Single-variable, monotonic problems |
-| **Golden Section** | `SearchMode.GOLDEN_SECTION_SCORE` | Single-variable, non-monotonic |
+| **Golden Section** | `SearchMode.GOLDEN_SECTION_SCORE` | Single-variable, unimodal score |
 | **Nelder-Mead** | `SearchMode.NELDER_MEAD_SCORE` | Multi-variable (2-10 vars), no gradients |
 | **Particle Swarm** | `SearchMode.PARTICLE_SWARM_SCORE` | Global search, non-convex problems |
 | **Gradient Descent** | `SearchMode.GRADIENT_DESCENT_SCORE` | Multi-variable (5-20+ vars), smooth problems |
@@ -287,10 +324,10 @@ Pareto optimization finds non-dominated solutions when objectives conflict:
 // Define multiple objectives
 List<OptimizationObjective> objectives = Arrays.asList(
     new OptimizationObjective("throughput",
-        proc -> proc.getUnit("outlet").getFlowRate("kg/hr"),
+        proc -> ((StreamInterface) proc.getUnit("outlet")).getFlowRate("kg/hr"),
         1.0, ObjectiveType.MAXIMIZE),
     new OptimizationObjective("powerConsumption",
-        proc -> proc.getUnit("compressor").getPower("kW"),
+        proc -> ((Compressor) proc.getUnit("compressor")).getPower("kW"),
         1.0, ObjectiveType.MINIMIZE)
 );
 
@@ -300,9 +337,9 @@ ParetoResult pareto = new ProductionOptimizer().optimizePareto(
 
 // Analyze Pareto front
 for (ParetoPoint point : pareto.getParetoFront()) {
-    System.out.printf("Throughput: %.0f kg/hr, Power: %.1f kW%n",
+    logger.info("{}", String.format("Throughput: %.0f kg/hr, Power: %.1f kW%n",
         point.getObjectiveValues().get("throughput"),
-        point.getObjectiveValues().get("powerConsumption"));
+        point.getObjectiveValues().get("powerConsumption")));
 }
 ```
 
@@ -327,7 +364,7 @@ comp.setOutletPressure(100.0);
 comp.autoSize(1.2);  // Creates constraints AND compressor curves
 
 // Pipeline - creates velocity, pressureDrop, FIV constraints
-Pipeline pipe = new PipeBeggsAndBrills("Export", comp.getOutletStream());
+PipeBeggsAndBrills pipe = new PipeBeggsAndBrills("Export", comp.getOutletStream());
 pipe.setLength(30000.0);
 pipe.setDiameter(0.3);
 pipe.autoSize(1.2);
@@ -370,21 +407,21 @@ separator.useAPIConstraints();      // K-value, retention per API 12J
 separator.useAllConstraints();      // All constraint types
 
 // Method 2: Enable all constraints
-separator.enableConstraints();
+separator.enableAllConstraints();
 
 // Method 3: Enable specific constraint
-separator.getConstraints().get(StandardConstraintType.SEPARATOR_K_VALUE).setEnabled(true);
+separator.getCapacityConstraints().get("kValue").setEnabled(true);
 ```
 
 #### Constraint Enablement by Equipment Type
 
 | Equipment | Default State | Enablement Method |
 |-----------|---------------|-------------------|
-| **Separator** | All disabled | `useEquinorConstraints()`, `useAPIConstraints()`, `enableConstraints()` |
-| **Compressor** | All enabled | Created by `autoSize()` - enabled by default |
-| **ThrottlingValve** | All disabled | `enableConstraints()` |
-| **Pipeline** | All disabled | `enableConstraints()` |
-| **Pump** | All disabled | `enableConstraints()` |
+| **Separator** | All disabled | `useEquinorConstraints()`, `useAPIConstraints()`, `enableAllConstraints()` |
+| **Compressor** | Power/rated power enabled; map constraints require an active chart | Configure power and an active performance chart |
+| **ThrottlingValve** | All disabled | `enableAllConstraints()` |
+| **Pipeline** | All disabled | `enableAllConstraints()` |
+| **Pump** | All disabled | `enableAllConstraints()` |
 
 ### Utilization Limits
 
@@ -400,7 +437,7 @@ OptimizationConfig config = new OptimizationConfig(minRate, maxRate)
     .utilizationLimitForType(Separator.class, 0.98)   // 98% for separators
 
     // Equipment-specific
-    .utilizationLimitForEquipment("HP Compressor", 0.85);  // 85% for this specific unit
+    .utilizationLimitForName("HP Compressor", 0.85);  // 85% for this specific unit
 ```
 
 ---
@@ -412,7 +449,7 @@ OptimizationConfig config = new OptimizationConfig(minRate, maxRate)
 Find the maximum production rate respecting all equipment constraints:
 
 ```java
-// Create process
+// Create and solve the design point before sizing.
 ProcessSystem process = new ProcessSystem();
 
 SystemInterface fluid = new SystemSrkEos(298.15, 50.0);
@@ -424,15 +461,19 @@ fluid.setMixingRule("classic");
 Stream feed = new Stream("Well Feed", fluid);
 feed.setFlowRate(10000.0, "kg/hr");
 process.add(feed);
+feed.run();
 
 Separator separator = new Separator("HP Separator", feed);
+separator.run();
 separator.autoSize(1.2);
-separator.enableConstraints();
+separator.enableConstraints("gasLoadFactor");
 process.add(separator);
 
 Compressor compressor = new Compressor("Export Compressor", separator.getGasOutStream());
 compressor.setOutletPressure(100.0, "bara");
-compressor.autoSize(1.2);
+compressor.run();
+// Establish an explicit power budget 20% above the solved design duty.
+compressor.getMechanicalDesign().setMaxDesignPower(1.2 * compressor.getPower("kW"));
 process.add(compressor);
 
 process.run();
@@ -442,14 +483,19 @@ OptimizationConfig config = new OptimizationConfig(1000.0, 50000.0)
     .rateUnit("kg/hr")
     .tolerance(10.0)
     .maxIterations(25)
-    .searchMode(SearchMode.GOLDEN_SECTION_SCORE);
+    .searchMode(SearchMode.BINARY_FEASIBILITY);
 
 OptimizationResult result = new ProductionOptimizer().optimize(process, feed, config, null, null);
+if (!result.isFeasible()) {
+    throw new IllegalStateException(result.getInfeasibilityDiagnosis());
+}
+feed.setFlowRate(result.getOptimalRate(), result.getRateUnit());
+process.run();
 
-System.out.printf("Maximum throughput: %.0f %s%n",
-    result.getOptimalRate(), result.getRateUnit());
-System.out.println("Bottleneck: " + result.getBottleneck().getName());
-System.out.printf("Utilization: %.1f%%%n", result.getBottleneckUtilization() * 100);
+logger.info("{}", String.format("Maximum throughput: %.0f %s%n",
+    result.getOptimalRate(), result.getRateUnit()));
+logger.info("{}", "Bottleneck: " + (result.getBottleneck() == null ? "None" : result.getBottleneck().getName()));
+logger.info("{}", String.format("Utilization: %.1f%%%n", result.getBottleneckUtilization() * 100));
 ```
 
 ### Bottleneck Analysis
@@ -463,29 +509,29 @@ import neqsim.process.equipment.capacity.CapacityConstraint;
 // After running process
 BottleneckResult bottleneck = process.findBottleneck();
 
-if (!bottleneck.isEmpty()) {
-    System.out.println("=== BOTTLENECK ANALYSIS ===");
-    System.out.println("Equipment: " + bottleneck.getEquipmentName());
-    System.out.println("Constraint: " + bottleneck.getConstraintName());
-    System.out.printf("Utilization: %.1f%%%n", bottleneck.getUtilizationPercent());
+if (bottleneck.hasBottleneck()) {
+    logger.info("{}", "=== BOTTLENECK ANALYSIS ===");
+    logger.info("{}", "Equipment: " + bottleneck.getEquipmentName());
+    logger.info("{}", "Constraint: " + bottleneck.getConstraintName());
+    logger.info("{}", String.format("Utilization: %.1f%%%n", bottleneck.getUtilizationPercent()));
 
     // Get constraint details
     CapacityConstraint constraint = bottleneck.getConstraint();
-    System.out.printf("Current value: %.2f %s%n",
-        constraint.getCurrentValue(), constraint.getUnit());
-    System.out.printf("Design limit: %.2f %s%n",
-        constraint.getDesignValue(), constraint.getUnit());
-    System.out.printf("Type: %s%n", constraint.getType());
+    logger.info("{}", String.format("Current value: %.2f %s%n",
+        constraint.getCurrentValue(), constraint.getUnit()));
+    logger.info("{}", String.format("Design limit: %.2f %s%n",
+        constraint.getDisplayDesignValue(), constraint.getUnit()));
+    logger.info("{}", String.format("Type: %s%n", constraint.getType()));
 }
 
 // List all equipment near capacity
-System.out.println("\n=== EQUIPMENT NEAR CAPACITY (>80%) ===");
+logger.info("{}", "\n=== EQUIPMENT ABOVE ITS CONFIGURED WARNING THRESHOLD ===");
 for (String equipName : process.getEquipmentNearCapacityLimit()) {
     ProcessEquipmentInterface unit = process.getUnit(equipName);
-    System.out.printf("%s: %.1f%% (constraint: %s)%n",
+    logger.info("{}", String.format("%s: %.1f%% (constraint: %s)%n",
         unit.getName(),
         unit.getMaxUtilizationPercent(),
-        unit.getBottleneckConstraint().getName());
+        unit.getBottleneckConstraint().getName()));
 }
 ```
 
@@ -512,7 +558,7 @@ List<ManipulatedVariable> variables = Arrays.asList(
 List<OptimizationObjective> objectives = Arrays.asList(
     new OptimizationObjective("profit",
         proc -> {
-            double revenue = proc.getUnit("outlet").getFlowRate("kg/hr") * 0.5;  // $/kg
+            double revenue = ((StreamInterface) proc.getUnit("outlet")).getFlowRate("kg/hr") * 0.5;  // $/kg
             double powerCost = ((Compressor)proc.getUnit("compressor")).getPower("kW") * 0.10;  // $/kWh
             return revenue - powerCost;
         },
@@ -528,11 +574,11 @@ OptimizationConfig config = new OptimizationConfig(0, 1)  // bounds ignored for 
 // Run optimization
 OptimizationResult result = new ProductionOptimizer().optimize(process, variables, config, objectives, null);
 
-System.out.println("Optimal decision variables:");
+logger.info("{}", "Optimal decision variables:");
 for (Map.Entry<String, Double> entry : result.getDecisionVariables().entrySet()) {
-    System.out.printf("  %s: %.2f%n", entry.getKey(), entry.getValue());
+    logger.info("{}", String.format("  %s: %.2f%n", entry.getKey(), entry.getValue()));
 }
-System.out.printf("Optimal profit: $%.2f/hr%n", result.getObjectiveValues().get("profit"));
+logger.info("{}", String.format("Optimal profit: $%.2f/hr%n", result.getObjectiveValues().get("profit")));
 ```
 
 ### Pareto Optimization
@@ -543,12 +589,12 @@ Trade off competing objectives:
 // Define conflicting objectives
 List<OptimizationObjective> objectives = Arrays.asList(
     new OptimizationObjective("throughput",
-        proc -> proc.getUnit("outlet").getFlowRate("kg/hr"),
+        proc -> ((StreamInterface) proc.getUnit("outlet")).getFlowRate("kg/hr"),
         1.0, ObjectiveType.MAXIMIZE),
     new OptimizationObjective("specificPower",
         proc -> {
             double power = ((Compressor)proc.getUnit("comp")).getPower("kW");
-            double flow = proc.getUnit("outlet").getFlowRate("kg/hr");
+            double flow = ((StreamInterface) proc.getUnit("outlet")).getFlowRate("kg/hr");
             return power / flow * 1000;  // kWh/tonne
         },
         1.0, ObjectiveType.MINIMIZE)
@@ -559,13 +605,13 @@ ParetoResult pareto = new ProductionOptimizer().optimizePareto(
     process, feed, config, objectives, null);
 
 // Output Pareto front
-System.out.println("=== PARETO FRONT ===");
-System.out.println("Throughput (kg/hr) | Specific Power (kWh/t)");
-System.out.println("-------------------|-----------------------");
+logger.info("{}", "=== PARETO FRONT ===");
+logger.info("{}", "Throughput (kg/hr) | Specific Power (kWh/t)");
+logger.info("{}", "-------------------|-----------------------");
 for (ParetoPoint point : pareto.getParetoFront()) {
     Map<String, Double> vals = point.getObjectiveValues();
-    System.out.printf("%18.0f | %22.1f%n",
-        vals.get("throughput"), vals.get("specificPower"));
+    logger.info("{}", String.format("%18.0f | %22.1f%n",
+        vals.get("throughput"), vals.get("specificPower")));
 }
 ```
 
@@ -578,46 +624,56 @@ NeqSim can be used with external optimizers via `ProcessSimulationEvaluator`:
 ### Python/SciPy Example
 
 ```python
-from neqsim.neqsimpython import jneqsim
-from scipy.optimize import minimize, NonlinearConstraint
+from neqsim import jneqsim
+import jpype
 import numpy as np
+from scipy.optimize import minimize
 
-# Get Java classes
-ProcessSimulationEvaluator = jneqsim.process.util.optimizer.ProcessSimulationEvaluator
+# Reuse the Well Feed / Export Compressor process from Maximum Throughput.
+Evaluator = jneqsim.process.util.optimizer.ProcessSimulationEvaluator
+evaluator = Evaluator(process)
+evaluator.addParameter("Well Feed", "flowRate", 8000.0, 11000.0, "kg/hr")
+evaluator.addParameter("Export Compressor", "outletPressure", 95.0, 105.0, "bara")
 
-# Create evaluator wrapper
-evaluator = ProcessSimulationEvaluator(process)
+# Tutorial prices: 0.5 currency/kg and 0.10 currency/kWh.
+profit = jpype.JProxy("java.util.function.ToDoubleFunction", dict(
+    applyAsDouble=lambda ps: (
+        ps.getUnit("Well Feed").getFlowRate("kg/hr") * 0.5
+        - ps.getUnit("Export Compressor").getPower("kW") * 0.10
+    )
+))
+utilization = jpype.JProxy("java.util.function.ToDoubleFunction", dict(
+    applyAsDouble=lambda ps: ps.getBottleneckUtilization()
+))
+evaluator.addObjective("profit", profit, Evaluator.ObjectiveDefinition.Direction.MAXIMIZE)
+evaluator.addConstraintUpperBound("capacity", utilization, 0.95)
 
-# Define objective function
+def evaluate(x):
+    trial = evaluator.evaluate(jpype.JArray(jpype.JDouble)(x.tolist()))
+    if not trial.isSimulationConverged() or trial.getErrorMessage() is not None:
+        raise RuntimeError(str(trial.getErrorMessage()))
+    return trial
+
 def objective(x):
-    flow_rate, pressure = x
-    evaluator.setFlowRate(flow_rate)
-    evaluator.setPressure(pressure)
-    evaluator.run()
-    return -evaluator.getProfit()  # Negative for maximization
+    return float(evaluate(x).getObjective())  # Already negated for MAXIMIZE.
 
-# Define constraint (max utilization < 95%)
-def constraint(x):
-    flow_rate, pressure = x
-    evaluator.setFlowRate(flow_rate)
-    evaluator.setPressure(pressure)
-    evaluator.run()
-    return 0.95 - evaluator.getMaxUtilization()
+def capacity_margin(x):
+    return float(evaluate(x).getConstraintMargins()[0])
 
-nlc = NonlinearConstraint(constraint, 0, np.inf)
-
-# Run SciPy optimization
 result = minimize(
     objective,
-    x0=[100000, 100],        # Initial guess
-    bounds=[(50000, 200000), (80, 150)],  # Bounds
-    constraints=nlc,
-    method='SLSQP'
+    x0=np.array([9000.0, 100.0]),
+    bounds=[(8000.0, 11000.0), (95.0, 105.0)],
+    constraints={"type": "ineq", "fun": capacity_margin},
+    method="SLSQP",
+    options={"maxiter": 30, "ftol": 1.0e-6},
 )
-
+candidate = evaluate(result.x)
+if not result.success or not candidate.isFeasible():
+    raise RuntimeError(f"Optimization did not return a feasible solution: {result.message}")
 print(f"Optimal flow: {result.x[0]:.0f} kg/hr")
 print(f"Optimal pressure: {result.x[1]:.1f} bara")
-print(f"Maximum profit: ${-result.fun:.2f}/hr")
+print(f"Profit: {-candidate.getObjective():.2f} currency/hr")
 ```
 
 ### YAML Configuration
@@ -625,42 +681,40 @@ print(f"Maximum profit: ${-result.fun:.2f}/hr")
 Load optimization configuration from YAML files:
 
 ```yaml
-# optimization_config.yaml
-optimization:
-  type: production
-  algorithm: GOLDEN_SECTION_SCORE
-  bounds:
-    min_rate: 50000
-    max_rate: 200000
-    unit: kg/hr
-  tolerance: 100.0
-  max_iterations: 30
-
-  utilization_limits:
-    default: 0.95
-    by_type:
-      Compressor: 0.90
-      Separator: 0.98
-    by_name:
-      "HP Compressor": 0.85
-
-  objectives:
-    - name: throughput
-      direction: maximize
-      weight: 1.0
-
-  constraints:
-    - name: max_power
-      value: 5000
-      unit: kW
-      type: less_than
+# Save as optimization_config.yaml
+scenarios:
+  - name: production
+    process: plant
+    feedStream: feed
+    lowerBound: 1000.0
+    upperBound: 20000.0
+    rateUnit: kg/hr
+    searchMode: BINARY_FEASIBILITY
+    tolerance: 10.0
+    maxIterations: 30
+    objectives:
+      - name: throughput
+        metric: feedRate
+        weight: 1.0
+        type: MAXIMIZE
+    constraints:
+      - name: max_power
+        metric: totalPower
+        limit: 5000.0
+        direction: LESS_THAN
+        severity: HARD
 ```
 
 ```java
-// Load and run
-ProductionOptimizationSpecLoader loader = new ProductionOptimizationSpecLoader();
-OptimizationConfig config = loader.loadConfig("optimization_config.yaml");
-OptimizationResult result = new ProductionOptimizer().optimize(process, feed, config, null, null);
+// Save the YAML above first. This block throws IOException if it cannot be read.
+Map<String, ProcessSystem> processes = Collections.singletonMap("plant", process);
+Map<String, StreamInterface> feeds = Collections.singletonMap("feed", feed);
+Map<String, java.util.function.ToDoubleFunction<ProcessSystem>> metrics = new HashMap<>();
+metrics.put("feedRate", ps -> ((StreamInterface) ps.getUnit(feed.getName())).getFlowRate("kg/hr"));
+metrics.put("totalPower", ps -> ps.getPower("kW"));
+List<ScenarioRequest> scenarios = ProductionOptimizationSpecLoader.load(
+    java.nio.file.Paths.get("optimization_config.yaml"), processes, feeds, metrics);
+List<ScenarioResult> results = new ProductionOptimizer().optimizeScenarios(scenarios);
 ```
 
 ---
@@ -671,8 +725,8 @@ OptimizationResult result = new ProductionOptimizer().optimize(process, feed, co
 
 | Method | Description | Default |
 |--------|-------------|---------|
-| `tolerance(double)` | Convergence tolerance | 100.0 |
-| `maxIterations(int)` | Maximum iterations | 20 |
+| `tolerance(double)` | Convergence tolerance in decision-variable units | 1.0e-3 |
+| `maxIterations(int)` | Maximum iterations | 30 |
 | `rateUnit(String)` | Flow rate unit | "kg/hr" |
 | `searchMode(SearchMode)` | Algorithm selection | BINARY_FEASIBILITY |
 | `defaultUtilizationLimit(double)` | Max equipment utilization | 0.95 |
@@ -695,6 +749,184 @@ OptimizationResult result = new ProductionOptimizer().optimize(process, feed, co
 | `getDecisionVariables()` | Map of optimized variable values |
 | `getIterations()` | Number of iterations used |
 | `getInfeasibilityDiagnosis()` | Detailed constraint violation report |
+
+
+---
+
+## Paired Installed-Capacity Alternatives
+
+Use `ProcessModelDebottleneckStudy` when an installed direct `CapacityConstraint` has
+one documented replacement or expansion basis and both the existing and proposed cases must be
+searched with the same deterministic policy. The study:
+
+1. resolves the exact `area::equipment/constraint` identity;
+2. freezes the installed limit, direction, unit, severity, provenance, confidence, validity range,
+   and shadow-price field;
+3. searches and independently verifies the baseline;
+4. applies the proposed limit and its evidence metadata, then searches and verifies the alternative;
+5. samples registered production, power, energy, emissions, or screening-economic metrics once at
+   each selected operating point; and
+6. restores the installed constraint and pre-study parameter vector and reconverges the model.
+
+Only direct equipment constraints are eligible. Strategy-generated defaults are deliberately
+excluded because they are not a stable installed asset transaction.
+
+```java
+List<double[]> candidates = Arrays.asList(
+    new double[] {800.0},
+    new double[] {999.0},
+    new double[] {1199.0});
+
+ProcessModelDebottleneckStudy.CandidateListSearch search =
+    new ProcessModelDebottleneckStudy.CandidateListSearch(
+        "throughput-grid",
+        "Ordered throughput grid",
+        "screening candidate set rev A",
+        candidates,
+        0,
+        0.0);
+
+ProcessModelDebottleneckStudy.CapacityAlternative alternative =
+    new ProcessModelDebottleneckStudy.CapacityAlternative(
+        "separator-gas-1200",
+        "Raise separator gas capacity",
+        "brownfield screening case rev A",
+        "separation",
+        "separator",
+        "installed gas rate",
+        1200.0,
+        "kg/hr",
+        ProcessModelDebottleneckStudy.LimitDirection.MAXIMUM,
+        "vendor budget curve rev A",
+        0.8,
+        900.0,
+        1300.0);
+
+ProcessModelDebottleneckStudy study = new ProcessModelDebottleneckStudy(
+    "separator-study",
+    "Paired separator capacity study",
+    "2026 screening basis",
+    evaluator,
+    alternative,
+    search,
+    0);
+
+study.addMetric(new ProcessModelDebottleneckStudy.MetricDefinition(
+    "production",
+    "Feed production",
+    ProcessModelDebottleneckStudy.MetricKind.PRODUCTION,
+    "kg/hr",
+    "wet feed mass rate",
+    "NeqSim stream result",
+    "single steady state",
+    1.0,
+    true,
+    model -> model.getVariableValue("wells::feed.flowRate", "kg/hr")));
+
+ProcessModelDebottleneckStudy.StudyResult result = study.evaluate();
+```
+
+The 999 and 1199 kg/hr candidates deliberately retain 1 kg/hr below the documented
+1000 and 1200 kg/hr installed limits. Keep a declared engineering/numerical feasibility margin
+instead of depending on floating-point reconstruction of stream flow to equal a hard limit exactly.
+
+A `COMPLETED` outcome requires two converged, feasible verification runs, all required metrics,
+and successful state recovery. Inspect `getOriginalCapacityState()`,
+`getAppliedCapacityState()`, both scenario evidence objects, `getMetricComparisons()`, and
+`getDiagnostics()`. Scenario evidence retains objective values, physical constraint margins,
+installed-equipment evidence, and boundary evidence. Arrays and lists returned by the result are
+defensive copies or unmodifiable views, and the result is Java-serializable for Python/JPype and
+restartable study records.
+
+Metric deltas are always `alternative - baseline`. Units, physical or commercial basis,
+provenance, effective period, confidence, and required/optional status are explicit. Economic
+metrics are screening indicators only; no price, discount rate, emissions factor, or cost is
+implied by NeqSim.
+
+The paired result is sampled simulator evidence over the declared candidates. It is not proof of
+causality, a global optimum, a KKT shadow price, certified emissions, mechanical design adequacy,
+or investment approval.
+
+---
+
+## Ranking Independent Debottleneck Alternatives
+
+Use `ProcessModelDebottleneckRanking` after two or more independent
+`ProcessModelDebottleneckStudy` runs have completed. It ranks one explicitly declared metric at a
+time and rejects evidence that is not directly comparable. It does not normalize, weight, or add
+production, power, energy, emissions, and screening economics.
+
+```java
+ProcessModelDebottleneckRanking.RankingPolicy productionPolicy =
+    new ProcessModelDebottleneckRanking.RankingPolicy(
+        "production-delta",
+        "Production delta ranking",
+        "screening portfolio rev A",
+        "production",
+        "Feed production",
+        ProcessModelDebottleneckStudy.MetricKind.PRODUCTION,
+        "kg/hr",
+        "wet feed mass rate",
+        "NeqSim stream result",
+        "single steady state",
+        ProcessModelDebottleneckRanking.RankingDirection.MAXIMIZE,
+        1.0e-8,
+        1.0e-8,
+        0.5,
+        0.9);
+
+ProcessModelDebottleneckRanking ranking =
+    new ProcessModelDebottleneckRanking(
+        "separator-portfolio",
+        "Separator alternatives portfolio",
+        "brownfield screening alternatives rev A",
+        productionPolicy);
+
+ProcessModelDebottleneckRanking.RankingResult ranked =
+    ranking.rank(Arrays.asList(study1100, study1150, study1200));
+
+ProcessModelDebottleneckRanking.CandidateEvidence best = ranked.getBestCandidate();
+List<ProcessModelDebottleneckRanking.CandidateEvidence> rejected =
+    ranked.getRejectedCandidates();
+```
+
+The policy above requires exact metric id, name, kind, unit, basis, provenance, and effective
+period. The first tolerance is in `kg/hr` for ranking ties. The second is dimensionless and applies
+only to repeated finite simulator values from an otherwise identical baseline; metadata and selected
+parameter values still match exactly. The two confidence floors apply separately to the documented
+capacity alternative and the baseline/alternative metric evidence; use `Double.NaN` only when a
+confidence floor is deliberately unset. A submitted study is rankable only when it:
+
+- completed both scenarios and independently verified convergence and feasibility;
+- restored the complete installed-capacity state and reconverged the pre-study process state;
+- supplies a finite `alternative - baseline` delta for the declared metric; and
+- reproduces the reference baseline's search identity/provenance, selected parameter vector and
+  evidence schema exactly, with finite metric/objective/constraint values inside the declared
+  dimensionless relative tolerance.
+
+The first otherwise-qualified submission establishes the baseline reference. This deliberately
+strict comparison prevents alternatives based on a changed candidate set, process configuration,
+constraint registration, objective definition, data period, emission factor, or price basis from
+being silently mixed into one list. Rejected rows remain available through
+`getRejectedCandidates()` and `getCandidatesInInputOrder()` with a `CandidateStatus` and explicit
+diagnostics.
+
+Ranking values are always the declared metric's paired delta in its stated unit. Candidates are
+ordered by the policy direction. The tie tolerance is in that same unit; ties receive competition
+ranks and retain deterministic input order. Run separate rankings for production, power, emissions,
+or screening value. A screening-economic ranking is only comparable when currency/time basis,
+factor provenance, effective period, and confidence match exactly; it is not an NPV calculation or
+investment decision.
+
+For weighted field-concept decisions across economics, risk, emissions, strategic fit, and other
+normalized criteria, use the field-development `DevelopmentOptionRanker`. That is a separate MCDA
+layer with accountable weights. `ProcessModelDebottleneckRanking` deliberately stays at the
+simulator-evidence layer and never invents those weights.
+
+`RankingPolicy`, `CandidateEvidence`, and `RankingResult` are immutable and Java-serializable. The
+result retains each complete immutable `StudyResult`, so JPype callers can inspect the original and
+applied capacity states, selected operating points, physical constraint margins, boundary evidence,
+all registered metrics, restoration flags, and diagnostics after ranking.
 
 ---
 

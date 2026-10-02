@@ -1,12 +1,10 @@
 ---
 layout: default
-title: "MultiScenarioVFP Tutorial"
-description: "Jupyter notebook tutorial for NeqSim"
+title: "Multi-Scenario VFP Generation with NeqSim"
+description: "Notebook for Multi-Scenario VFP Generation with NeqSim, including NeqSim Python examples and workflow context."
 parent: Examples
 nav_order: 1
 ---
-
-# MultiScenarioVFP Tutorial
 
 > **Note:** This is an auto-generated Markdown version of the Jupyter notebook
 > [`MultiScenarioVFP_Tutorial.ipynb`](https://github.com/equinor/neqsim/blob/master/docs/examples/MultiScenarioVFP_Tutorial.ipynb).
@@ -14,8 +12,6 @@ nav_order: 1
 > or [open in Google Colab](https://colab.research.google.com/github/equinor/neqsim/blob/master/docs/examples/MultiScenarioVFP_Tutorial.ipynb).
 
 ---
-
-# Multi-Scenario VFP Generation with NeqSim
 
 This notebook demonstrates how to generate VFP (Vertical Flow Performance) tables that account for varying Gas-Oil Ratio (GOR) and Water Cut (WC) conditions. This is essential for reservoir simulation coupling where fluid properties change over the field life.
 
@@ -495,6 +491,8 @@ Figure saved as 'vfp_curves.png'
 
 </details>
 
+![Result figure from cell 15](figures/MultiScenarioVFP_Tutorial_cell_15_output_2.png)
+
 ## 7.1 VFP Feasibility Visualization
 
 Visualize which GOR/WC combinations produce feasible VFP points at a given rate.
@@ -601,6 +599,8 @@ Figure saved as 'vfp_feasibility.png'
 
 </details>
 
+![Result figure from cell 17](figures/MultiScenarioVFP_Tutorial_cell_17_output_2.png)
+
 ## 8. Using the Java MultiScenarioVFPGenerator
 
 For full-scale VFP generation with parallel execution and Eclipse export, use the Java `MultiScenarioVFPGenerator` class directly. This is most easily done from Java code.
@@ -692,4 +692,3 @@ This notebook demonstrated:
 - Use the Java `MultiScenarioVFPGenerator` for production VFP generation
 - Export VFP tables to Eclipse reservoir simulator
 - Integrate with field development optimization workflows
-

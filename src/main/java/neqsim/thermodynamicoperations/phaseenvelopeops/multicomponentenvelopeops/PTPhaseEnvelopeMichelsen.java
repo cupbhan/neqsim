@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import neqsim.thermo.phase.PhaseGERG2008Eos;
+import neqsim.thermo.phase.PhaseInterface;
 import neqsim.thermo.system.SystemInterface;
 import neqsim.thermodynamicoperations.BaseOperation;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
@@ -52,7 +54,7 @@ import neqsim.thermodynamicoperations.ThermodynamicOperations;
  * <li>Non-recursive restart (no stack overflow risk)</li>
  * <li>Dynamic ArrayList storage (no fixed 10,000-point limit)</li>
  * <li>Configurable step limits and pressure bounds</li>
- * <li>K-value reset and Tmin stopping criterion for restart branch</li>
+ * <li>K-value reset and independent opposite-side restart</li>
  * <li>Clean separated data output for bubble and dew point branches</li>
  * </ul>
  *
@@ -136,6 +138,9 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   /** True once K-values have diverged sufficiently after a CP (for multiple CP detection). */
   private boolean kValuesDivergedAfterCP = false;
 
+  /** True if a configured trace limit prevented completion. */
+  private boolean reachedTraceLimit = false;
+
   // --- Results: dynamic storage ---
   private ArrayList<Double> dewPointTemperatures = new ArrayList<Double>();
   private ArrayList<Double> dewPointPressures = new ArrayList<Double>();
@@ -168,18 +173,21 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   // --- Critical point and characteristic points ---
   private double[] cricondenTherm = new double[3];
   private double[] cricondenBar = new double[3];
-  private double[] cricondenThermX = new double[100];
-  private double[] cricondenThermY = new double[100];
-  private double[] cricondenBarX = new double[100];
-  private double[] cricondenBarY = new double[100];
+  // Sized to the component count when results are cleared; these hold one mole fraction
+  // per component, so a fixed length caps the number of components the envelope
+  // can handle.
+  private double[] cricondenThermX = new double[0];
+  private double[] cricondenThermY = new double[0];
+  private double[] cricondenBarX = new double[0];
+  private double[] cricondenBarY = new double[0];
 
   // --- Saved first-pass data for merging after restart ---
   private double[] cricondenThermFirst = new double[3];
   private double[] cricondenBarFirst = new double[3];
-  private double[] cricondenThermXFirst = new double[100];
-  private double[] cricondenThermYFirst = new double[100];
-  private double[] cricondenBarXFirst = new double[100];
-  private double[] cricondenBarYFirst = new double[100];
+  private double[] cricondenThermXFirst = new double[0];
+  private double[] cricondenThermYFirst = new double[0];
+  private double[] cricondenBarXFirst = new double[0];
+  private double[] cricondenBarYFirst = new double[0];
 
   // --- Critical points (supports multiple CPs for complex mixtures) ---
   private ArrayList<double[]> criticalPoints = new ArrayList<double[]>();
@@ -266,6 +274,8 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
    * through the full envelope. If it crashes, a second pass traces from the opposite side to fill in the gap. This
    * avoids the recursive restart used in legacy implementations.
    * </p>
+   *
+   * @throws IllegalStateException if no point converges or a pressure/point limit truncates the trace
    */
   /**
    * Reports whether the two phases currently differ, so the trivial {@code K = 1} root is rejected.
@@ -351,19 +361,68 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
 
   @Override
   public void run() {
+    clearResults();
+    setReferencePhaseEnvelopeCalculation(system, true);
+    try {
+      traceEnvelope();
+    } finally {
+      setReferencePhaseEnvelopeCalculation(system, false);
+    }
+  }
+
+  /**
+   * Allocate the cricondentherm and cricondenbar composition arrays for the current fluid.
+   *
+   * <p>
+   * Each array holds one mole fraction per component, and the tracking loops index them with the component counter, so
+   * the length has to follow the fluid rather than a fixed constant. They were previously declared with length 100,
+   * which threw {@code ArrayIndexOutOfBoundsException} for any fluid with more than 100 components.
+   * </p>
+   */
+  private void allocateCricondenCompositions() {
+    int numberOfComponents = system.getPhase(0).getNumberOfComponents();
+    cricondenThermX = new double[numberOfComponents];
+    cricondenThermY = new double[numberOfComponents];
+    cricondenBarX = new double[numberOfComponents];
+    cricondenBarY = new double[numberOfComponents];
+  }
+
+  /** Clear previous results so a failed repeat cannot expose an earlier envelope or extrema. */
+  private void clearResults() {
     iterationLimitReached = false;
     terminationReasons.clear();
     boundaryStateSeeds.clear();
-    double initialTemp = system.getTemperature();
-    double initialPres = system.getPressure();
+    reachedTraceLimit = false;
+    dewPointTemperatures.clear();
+    dewPointPressures.clear();
+    bubblePointTemperatures.clear();
+    bubblePointPressures.clear();
+    dewPointEnthalpies.clear();
+    bubblePointEnthalpies.clear();
+    dewPointDensities.clear();
+    bubblePointDensities.clear();
+    dewPointEntropies.clear();
+    bubblePointEntropies.clear();
+    criticalPoints.clear();
+    qualityLineData.clear();
+    qualityBetaValues = new double[0];
+    threePhaseRegionT = new double[0];
+    threePhaseRegionP = new double[0];
+    kValuesDivergedAfterCP = false;
+    cricondenTherm = new double[3];
+    cricondenBar = new double[3];
+    allocateCricondenCompositions();
+    buildOutputArrays();
+  }
 
+  /** Trace the phase envelope after model-specific calculation state has been configured. */
+  private void traceEnvelope() {
     // isDewPhase determines which list receives each traced point.
     // When starting from dew side (bubblePointFirst=false, phaseFraction~1),
     // points go to dew lists. At CP, they switch to bubble lists.
-    isDewPhase = true;
+    isDewPhase = !bubblePointFirst;
 
     boolean needRestart = false;
-    double restartTmin = 0.0;
 
     // === Two-pass loop: primary trace + optional restart ===
     for (int pass = 0; pass < 2; pass++) {
@@ -383,15 +442,12 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
         // Reset tracking for second pass
         cricondenTherm = new double[3];
         cricondenBar = new double[3];
-        cricondenThermX = new double[100];
-        cricondenThermY = new double[100];
-        cricondenBarX = new double[100];
-        cricondenBarY = new double[100];
+        allocateCricondenCompositions();
 
         // Flip conditions for second pass
         phaseFraction = 1.0 - phaseFraction;
         bubblePointFirst = !bubblePointFirst;
-        isDewPhase = false;
+        isDewPhase = !bubblePointFirst;
         kValuesDivergedAfterCP = false;
 
         // Insert NaN "break" markers so plotters do not draw a straight line
@@ -446,6 +502,8 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
       boolean firstPointConverged = false;
       for (int attempt = 0; attempt < FIRST_POINT_ATTEMPTS; attempt++) {
         try {
+          // A failed saturation flash may leave pressure non-finite; restore the retry state.
+          system.setPressure(lowPres);
           if (phaseFraction < 0.5) {
             temp += attempt * FIRST_POINT_STEP;
             system.setTemperature(temp);
@@ -459,7 +517,7 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
           continue;
         }
         double tempNy = system.getTemperature();
-        if (!Double.isNaN(tempNy)) {
+        if (Double.isFinite(tempNy) && tempNy > 0.0) {
           temp = tempNy;
           firstPointConverged = true;
           break;
@@ -483,10 +541,12 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
       }
       if (!firstPointConverged) {
         logger.warn("Could not converge first envelope point for pass={}, beta={}", pass, phaseFraction);
+        needRestart = pass == 0;
         continue;
       }
 
       // Set up for continuation
+      logger.debug("Phase envelope seed: pass={}, T={} K, P={} bara", pass, temp, lowPres);
       system.setBeta(phaseFraction);
       system.setPressure(lowPres);
       system.setTemperature(temp);
@@ -505,28 +565,10 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
           nonLinSolver.calcInc(np);
           nonLinSolver.solve(np);
         } catch (Exception e0) {
-          if (System.getProperty("neqsim.probe.firstPoint") != null) {
-            System.err.printf("[probe] continuation failed at np=%d T=%.2f P=%.4f : %s: %s%n", np,
-                system.getTemperature(), system.getPressure(), e0.getClass().getSimpleName(), e0.getMessage());
-            StackTraceElement[] frames = e0.getStackTrace();
-            for (int f = 0; f < Math.min(4, frames.length); f++) {
-              System.err.println("[probe]     at " + frames[f]);
-            }
-          }
+          logger.debug("Phase envelope pass {} stopped at point {}: {}", pass, np, e0.getMessage());
           if (pass == 0) {
             // Primary trace crashed: schedule restart from opposite side
             needRestart = true;
-            if (np > 2) {
-              // Use recent stored temperature as Tmin for second pass
-              ArrayList<Double> tempList = isDewPhase ? dewPointTemperatures : bubblePointTemperatures;
-              if (!tempList.isEmpty()) {
-                restartTmin = tempList.get(tempList.size() - 1);
-              } else {
-                restartTmin = system.getTemperature();
-              }
-            } else {
-              restartTmin = system.getTemperature();
-            }
           }
           np = np - 1;
           break;
@@ -534,6 +576,12 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
 
         double currentT = system.getTemperature();
         double currentP = system.getPressure();
+        if (currentP > maxPressure) {
+          terminationReasons.add(TerminationReason.PRESSURE_CEILING);
+          reachedTraceLimit = true;
+          needRestart = pass == 0 || needRestart;
+          break;
+        }
 
         // === Critical point detection via K-value convergence ===
         double Kvallc = system.getPhase(0).getComponent(nonLinSolver.lc).getx()
@@ -542,13 +590,14 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
             / system.getPhase(1).getComponent(nonLinSolver.hc).getx();
 
         if (!nonLinSolver.etterCP) {
-          if (Kvallc < 1.05 && Kvalhc > 0.95) {
+          // A pure component has K=1 along its entire saturation curve, not just at criticality.
+          if (nonLinSolver.numberOfComponents > 1 && Kvallc < 1.05 && Kvalhc > 0.95) {
             nonLinSolver.npCrit = np;
             system.invertPhaseTypes();
             nonLinSolver.etterCP = true;
             isDewPhase = !isDewPhase;
             nonLinSolver.calcCrit();
-            criticalPoints.add(new double[] { system.getTC(), system.getPC() });
+            criticalPoints.add(new double[] {system.getTC(), system.getPC()});
             kValuesDivergedAfterCP = false;
             addBranchBreak();
           }
@@ -567,12 +616,13 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
             // Additional safety guards: must be far enough from first CP (>50
             // steps)
             // and at pressure above 5 bar (not at the tail end of the envelope).
-            if (Kvallc < 1.05 && Kvalhc > 0.95 && (np - nonLinSolver.npCrit) > 50 && currentP > 5.0) {
+            if (Math.abs(Math.log(Kvallc)) < Math.log(1.05) && Math.abs(Math.log(Kvalhc)) < Math.log(1.05)
+                && (np - nonLinSolver.npCrit) > 50 && currentP > 5.0) {
               nonLinSolver.npCrit = np;
               system.invertPhaseTypes();
               isDewPhase = !isDewPhase;
               nonLinSolver.calcCrit();
-              criticalPoints.add(new double[] { system.getTC(), system.getPC() });
+              criticalPoints.add(new double[] {system.getTC(), system.getPC()});
               kValuesDivergedAfterCP = false;
               addBranchBreak();
             }
@@ -607,17 +657,9 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
           terminationReasons.add(TerminationReason.PRESSURE_FLOOR);
           break;
         }
-        if (currentP > maxPressure) {
-          terminationReasons.add(TerminationReason.PRESSURE_CEILING);
-          break;
-        }
-        if (pass == 1 && restartTmin > 0 && currentT > restartTmin) {
-          terminationReasons.add(TerminationReason.RESTART_OVERLAP);
-          break;
-        }
 
         // === Store the point ===
-        if (currentT > 1e-6 && currentP > 1e-6 && !Double.isNaN(currentT) && !Double.isNaN(currentP)) {
+        if (currentT > 1e-6 && currentP > 1e-6 && Double.isFinite(currentT) && Double.isFinite(currentP)) {
           double enthalpy = system.getPhase(1).getEnthalpy() / system.getPhase(1).getNumberOfMolesInPhase()
               / system.getPhase(1).getMolarMass() / 1e3;
           double density = system.getPhase(1).getDensity();
@@ -650,6 +692,11 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
         terminationReasons.add(TerminationReason.CONTINUATION_END);
       }
 
+      if (np >= maximumEnvelopeIterations) {
+        reachedTraceLimit = true;
+        needRestart = pass == 0 || needRestart;
+      }
+
       // Set critical point on the system
       system.setTemperature(system.getTC());
       system.setPressure(system.getPC());
@@ -669,20 +716,30 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
       }
     }
 
-    // Validate final cricondenbar and cricondentherm
-    if (!Double.isFinite(cricondenBar[0]) || !Double.isFinite(cricondenBar[1])
-        || (cricondenBar[0] == 0.0 && cricondenBar[1] == 0.0)) {
-      cricondenBar[0] = initialTemp;
-      cricondenBar[1] = initialPres;
-    }
-    if (!Double.isFinite(cricondenTherm[0]) || !Double.isFinite(cricondenTherm[1])
-        || (cricondenTherm[0] == 0.0 && cricondenTherm[1] == 0.0)) {
-      cricondenTherm[0] = initialTemp;
-      cricondenTherm[1] = initialPres;
+    if (dewPointTemperatures.stream().noneMatch(Double::isFinite)
+        && bubblePointTemperatures.stream().noneMatch(Double::isFinite)) {
+      cricondenBar = new double[] {Double.NaN, Double.NaN, Double.NaN};
+      cricondenTherm = new double[] {Double.NaN, Double.NaN, Double.NaN};
+      throw new IllegalStateException("Phase envelope tracing failed: no converged equilibrium points");
     }
 
     // Convert ArrayLists to output arrays
     buildOutputArrays();
+    if (reachedTraceLimit) {
+      cricondenBar = new double[] {Double.NaN, Double.NaN, Double.NaN};
+      cricondenTherm = new double[] {Double.NaN, Double.NaN, Double.NaN};
+      throw new IllegalStateException("Phase envelope tracing reached its pressure or point limit; "
+          + "the retained segments are incomplete and cannot define envelope extrema");
+    }
+  }
+
+  /** Enable or disable reference-EOS derivative handling without changing the continuation algorithm. */
+  private void setReferencePhaseEnvelopeCalculation(SystemInterface candidateSystem, boolean enabled) {
+    for (PhaseInterface phase : candidateSystem.getPhases()) {
+      if (phase instanceof PhaseGERG2008Eos) {
+        ((PhaseGERG2008Eos) phase).setPhaseEnvelopeCalculation(enabled);
+      }
+    }
   }
 
   /**
@@ -763,6 +820,7 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
       }
 
       SystemInterface clonedSystem = system.clone();
+      setReferencePhaseEnvelopeCalculation(clonedSystem, true);
 
       // Estimate initial temperature at low pressure for this beta
       double temp = tempKWilsonForSystem(clonedSystem, beta, lowPres);
@@ -777,6 +835,8 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
       boolean converged = false;
       for (int attempt = 0; attempt < FIRST_POINT_ATTEMPTS; attempt++) {
         try {
+          // A failed saturation flash may leave pressure non-finite; restore the retry state.
+          clonedSystem.setPressure(lowPres);
           double tempAttempt = temp + attempt * FIRST_POINT_STEP;
           clonedSystem.setTemperature(tempAttempt);
           if (beta < 0.5) {
@@ -788,7 +848,7 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
           continue;
         }
         double tempNy = clonedSystem.getTemperature();
-        if (!Double.isNaN(tempNy)) {
+        if (Double.isFinite(tempNy) && tempNy > 0.0) {
           temp = tempNy;
           converged = true;
           break;
@@ -1001,7 +1061,7 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
     if (qT == null) {
       return null;
     }
-    return new double[][] { qT, qP, qV, qM };
+    return new double[][] {qT, qP, qV, qM};
   }
 
   /**
@@ -1301,10 +1361,9 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   private SecondaryStabilitySample refineBracketMidpoint(SecondaryStabilitySample twoPhase,
       SecondaryStabilitySample threePhase, double temperature, double pressureGuess) {
     double branchBeta = twoPhase.getBranch() == EnvelopeSegment.PhaseType.DEW ? 1.0 - 1.0e-10 : 1.0e-10;
-    double[][] logKSeeds = new double[][] { interpolateLogK(twoPhase.getLogK(), threePhase.getLogK()),
-        twoPhase.getLogK(), threePhase.getLogK() };
-    double[] betaSeeds = new double[] { 0.5 * (twoPhase.getBeta() + threePhase.getBeta()), branchBeta,
-        1.0 - branchBeta };
+    double[][] logKSeeds = new double[][] {interpolateLogK(twoPhase.getLogK(), threePhase.getLogK()),
+        twoPhase.getLogK(), threePhase.getLogK()};
+    double[] betaSeeds = new double[] {0.5 * (twoPhase.getBeta() + threePhase.getBeta()), branchBeta, 1.0 - branchBeta};
     SecondaryStabilitySample lastFailure = null;
     for (double[] logKSeed : logKSeeds) {
       for (double betaSeed : betaSeeds) {
@@ -1779,8 +1838,8 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
       oD.add(D[i]);
       oS.add(S[i]);
     }
-    return new double[][] { toDoubleArray(oT), toDoubleArray(oP), toDoubleArray(oH), toDoubleArray(oD),
-        toDoubleArray(oS) };
+    return new double[][] {toDoubleArray(oT), toDoubleArray(oP), toDoubleArray(oH), toDoubleArray(oD),
+        toDoubleArray(oS)};
   }
 
   /**
@@ -2088,7 +2147,7 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
   /** {@inheritDoc} */
   @Override
   public double[][] getPoints(int i) {
-    return new double[][] { dewTempArray, dewPresArray, bubTempArray, bubPresArray };
+    return new double[][] {dewTempArray, dewPresArray, bubTempArray, bubPresArray};
   }
 
   /**
@@ -2173,19 +2232,19 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
       if (!criticalPoints.isEmpty()) {
         return criticalPoints.get(0);
       }
-      return new double[] { system.getTC(), system.getPC() };
+      return new double[] {system.getTC(), system.getPC()};
     }
     if (name.equals("criticalPoint2")) {
       if (criticalPoints.size() >= 2) {
         return criticalPoints.get(1);
       }
-      return new double[] { 0, 0 };
+      return new double[] {0, 0};
     }
     if (name.equals("criticalPoint3")) {
       if (criticalPoints.size() >= 3) {
         return criticalPoints.get(2);
       }
-      return new double[] { 0, 0 };
+      return new double[] {0, 0};
     }
     // Quality line keys: qualityT_X, qualityP_X, qualityVolFrac_X, qualityMassFrac_X
     if (name.startsWith("quality")) {

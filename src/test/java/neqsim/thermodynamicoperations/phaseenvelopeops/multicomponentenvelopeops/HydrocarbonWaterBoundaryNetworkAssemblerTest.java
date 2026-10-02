@@ -139,9 +139,9 @@ class HydrocarbonWaterBoundaryNetworkAssemblerTest extends NeqSimTest {
   @Tag("slow")
   void fluidTwoAttachesRefinedOilSpinodalButKeepsOtherEndDiagnostic() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
-    double[] temperatures = new double[] { 423.15, 448.15, 473.15, 493.15, 503.15, 508.15, 513.15, 523.15, 548.15,
-        573.15 };
-    double[] pressures = new double[] { 250.0, 260.0, 270.0, 275.0 };
+    double[] temperatures = new double[] {423.15, 448.15, 473.15, 493.15, 503.15, 508.15, 513.15, 523.15, 548.15,
+        573.15};
+    double[] pressures = new double[] {250.0, 260.0, 270.0, 275.0};
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result discovery = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
         .setCorrectionControls(32, 80, 1.0e-5, 1.0e-8).discoverFromStableRegionTransitions(temperatures, pressures)
         .getDiscovery();

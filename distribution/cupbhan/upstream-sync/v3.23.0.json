@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "officialTag": "v3.23.0",
+  "officialCommit": "280152d97763672fb79c9139e421adf85663a930",
+  "previousPersonalCommit": "3e9d6b4214eceeba26d77ff3808997ff19ce347b",
+  "backupBranch": "archive/pre-upstream-v3.23.0-20261002",
+  "officialCommitsIntegrated": 1002,
+  "overlappingFileCount": 20,
+  "conflictingFiles": [
+    "AGENTS.md",
+    "neqsim-mcp-server/src/main/java/neqsim/mcp/server/NeqSimPrompts.java",
+    "neqsim-mcp-server/src/main/java/neqsim/mcp/server/NeqSimTools.java",
+    "src/main/java/neqsim/thermodynamicoperations/flashops/TPflash.java",
+    "src/main/java/neqsim/thermodynamicoperations/flashops/TPmultiflash.java",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/PTPhaseEnvelopeMichelsen.java",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SysNewtonRhapsonPhaseEnvelope.java"
+  ],
+  "resolution": [
+    "Preserve all 74 personal-baseline MCP tool names, boxed optional parameters and five personal tools; include two additional upstream tools.",
+    "Use upstream bounded phase-envelope continuation while retaining physical-domain step damping, boundary seeds and explicit truncation diagnostics.",
+    "Allow upstream validated endpoint recovery before final personal diagnostic acceptance; keep failed-iterate phase deletion guarded.",
+    "Retain the upstream clamp termination signal for dry neutral hydrocarbon feeds; keep conservative water-bearing and reactive recovery.",
+    "Count failed and out-of-domain temperature-scan boundary samples as rejected; verify every requested sample is accounted for.",
+    "Retain heavy-oil model parameters and tabulated interaction rules with frozen resource hashes."
+  ],
+  "diagnosticComparison": {
+    "officialArtifact": "neqsim-3.23.0.jar",
+    "officialArtifactSha256": "2afff2377963e47565b8c473f3f9bbd69fae6fd383b7c0f53399ab2956e3974a",
+    "focusedTestsAfterFixes": 31,
+    "focusedFailures": 0,
+    "fullCandidateValidation": "pending clean committed build",
+    "additionalIntegrationScan": "Initial broad run interrupted in PTPhaseEnvelopeTest UMR-PRU coarse-grid scan; not a passing result. Routine gate uses the explicit suites in personal-enhancements.json."
+  },
+  "runtimeSelection": "unchanged pending candidate and consumer validation",
+  "pvtsimRerun": false,
+  "localDiagnostics": "build/upstream-sync/20261002-v3.23.0"
+}

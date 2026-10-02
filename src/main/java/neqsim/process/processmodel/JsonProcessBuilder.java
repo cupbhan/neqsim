@@ -504,7 +504,7 @@ public class JsonProcessBuilder {
    */
   private JsonObject applyDesignCapacities(ProcessSystem process, JsonObject designCapacities) {
     JsonObject report = new JsonObject();
-    Map<String, EquipmentDesignData.ApplyResult> results = EquipmentDesignData.apply(process, designCapacities);
+    Map<String, EquipmentDesignData.ApplyResult> results = process.applyDesignCapacitiesJson(designCapacities);
     for (Map.Entry<String, EquipmentDesignData.ApplyResult> entry : results.entrySet()) {
       report.add(entry.getKey(), entry.getValue().toJson());
     }
@@ -901,7 +901,8 @@ public class JsonProcessBuilder {
 
       // Set mixing rule
       if (!fluidDef.has("e300FilePath")) {
-        String mixingRule = fluidDef.has("mixingRule") ? fluidDef.get("mixingRule").getAsString() : "classic";
+        String mixingRule = fluidDef.has("mixingRule") ? fluidDef.get("mixingRule").getAsString()
+            : neqsim.thermo.mixingrule.EosMixingRuleType.defaultForModel(model).name();
         applyMixingRule(fluid, mixingRule);
       }
 
@@ -1369,10 +1370,6 @@ public class JsonProcessBuilder {
    * @return true if the unit has inlet references that need to be resolved
    */
   private boolean needsWiring(JsonObject unitDef) {
-    String type = unitDef.has("type") ? unitDef.get("type").getAsString() : "";
-    if ("Stream".equalsIgnoreCase(type)) {
-      return false;
-    }
     return unitDef.has("inlet") || unitDef.has("inlets");
   }
 
@@ -1984,6 +1981,15 @@ public class JsonProcessBuilder {
     if (equipment instanceof Compressor && properties.has("driver") && properties.get("driver").isJsonObject()) {
       applyCompressorDriver((Compressor) equipment, properties.getAsJsonObject("driver"));
     }
+    if (equipment instanceof Compressor && properties.has("polytropicEfficiency")
+        && !properties.has("usePolytropicCalc")) {
+      // Mirrors Compressor.Builder#polytropicEfficiency: specifying a polytropic
+      // efficiency implies polytropic calculation mode. Without this, the
+      // compressor silently keeps using its default 100% isentropic efficiency
+      // and the requested value has no effect on the run (see issue: JSON
+      // 'polytropicEfficiency' ignored unless 'usePolytropicCalc' is also set).
+      ((Compressor) equipment).setUsePolytropicCalc(true);
+    }
     for (Map.Entry<String, JsonElement> entry : properties.entrySet()) {
       String propName = entry.getKey();
       if (handledProps.contains(propName)) {
@@ -2393,7 +2399,7 @@ public class JsonProcessBuilder {
     if (values.length != 2) {
       return values;
     }
-    return new double[] { values[0], 0.5 * (values[0] + values[1]), values[1] };
+    return new double[] {values[0], 0.5 * (values[0] + values[1]), values[1]};
   }
 
   /**
@@ -2613,9 +2619,16 @@ public class JsonProcessBuilder {
 
     try {
       if (value.isJsonArray()) {
-        // Array format: [value, "unit"] — e.g., [50000, "kg/hr"]
         JsonArray arr = value.getAsJsonArray();
-        if (arr.size() >= 2) {
+        if (isNumericArray(arr)) {
+          double[] values = new double[arr.size()];
+          for (int i = 0; i < arr.size(); i++) {
+            values[i] = arr.get(i).getAsDouble();
+          }
+          java.lang.reflect.Method method = target.getClass().getMethod(setterName, double[].class);
+          method.invoke(target, new Object[] {values});
+        } else if (arr.size() >= 2) {
+          // Unit-bearing array format: [value, "unit"] — e.g., [50000, "kg/hr"]
           double numValue = arr.get(0).getAsDouble();
           String unit = arr.get(1).getAsString();
           java.lang.reflect.Method method = target.getClass().getMethod(setterName, double.class, String.class);
@@ -2645,6 +2658,24 @@ public class JsonProcessBuilder {
     } catch (Exception e) {
       warnings.add("Error setting '" + propName + "' on " + targetName + ": " + e.getMessage());
     }
+  }
+
+  /**
+   * Reports whether every element in a JSON array is numeric.
+   *
+   * @param array array to inspect
+   * @return {@code true} when the array is non-empty and contains only numeric primitives
+   */
+  private boolean isNumericArray(JsonArray array) {
+    if (array.size() == 0) {
+      return false;
+    }
+    for (JsonElement element : array) {
+      if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private void invokeNoArg(Object target, String targetName, String methodName) {

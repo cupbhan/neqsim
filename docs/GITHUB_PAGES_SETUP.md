@@ -3,7 +3,6 @@ title: GitHub Pages Setup Guide for NeqSim Documentation
 description: "This guide explains how to enable GitHub Pages for the NeqSim repository to host the documentation at https://equinor.github.io/neqsim/."
 ---
 
-# GitHub Pages Setup Guide for NeqSim Documentation
 
 This guide explains how to enable GitHub Pages for the NeqSim repository to host the documentation at `https://equinor.github.io/neqsim/`.
 
@@ -144,7 +143,7 @@ Check the Actions tab in GitHub for build logs. Common issues:
 
 Ensure you're using relative paths without the `/docs` prefix:
 - ✅ `[Thermo](thermo/)`
-- ❌ `[Thermo](/docs/thermo/)`
+- ❌ `[Thermo](/docs/thermo/)` — the `/docs` source-directory prefix is not part of the published URL
 
 ### Images Not Loading
 

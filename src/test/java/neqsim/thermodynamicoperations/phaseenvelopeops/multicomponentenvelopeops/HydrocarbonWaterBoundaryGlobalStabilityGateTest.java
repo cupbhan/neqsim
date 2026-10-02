@@ -29,8 +29,8 @@ class HydrocarbonWaterBoundaryGlobalStabilityGateTest extends NeqSimTest {
   void rejectsFluidTwoMetastableRootsInsideStableThreePhaseRegion() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result discovery = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
-        .setCorrectionControls(32, 60, 2.0e-5, 1.0e-8).discover(
-            new double[] { 180.0, 220.0, 260.0, 300.0, 350.0, 425.0, 500.0 }, new double[] { 50.0 }, 100.0, 650.0);
+        .setCorrectionControls(32, 60, 2.0e-5, 1.0e-8)
+        .discover(new double[] {180.0, 220.0, 260.0, 300.0, 350.0, 425.0, 500.0}, new double[] {50.0}, 100.0, 650.0);
 
     int evaluated = 0;
     for (HydrocarbonWaterBoundaryAnchorDiscoverer.EndpointCandidate candidate : discovery.getEndpointCandidates()) {

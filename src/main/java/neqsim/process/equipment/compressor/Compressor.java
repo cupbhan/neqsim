@@ -56,6 +56,16 @@ public class Compressor extends TwoPortEquipment
   /** Logger object for class. */
   static Logger logger = LogManager.getLogger(Compressor.class);
 
+  /**
+   * Calculation strategy used when the compressor participates in a dynamic process.
+   */
+  public enum TransientCalculationMode {
+    /** Preserve the historical behavior where the compressor map solves the upstream flow. */
+    MAP_FLOW_SOLVER,
+    /** Preserve the upstream flow and evaluate the compressor map algebraically at each time step. */
+    QUASI_STEADY
+  }
+
   /** Minimum total entropy residual accepted by compressor PS fallback calculations. */
   private static final double MIN_ENTROPY_FLASH_TOLERANCE = 1.0e-4;
 
@@ -165,6 +175,8 @@ public class Compressor extends TwoPortEquipment
   private double maxDecelerationRate = 200.0; // RPM/s maximum deceleration
   private double targetSpeed = 0.0; // Target speed for dynamic control
   private boolean autoSpeedMode = false; // Automatically calculate speed from operating point
+  private TransientCalculationMode transientCalculationMode = TransientCalculationMode.MAP_FLOW_SOLVER;
+  private boolean controllerSpeedRateLimitEnabled = false;
 
   // Performance degradation modeling
   private double degradationFactor = 1.0; // 1.0 = new, <1.0 = degraded
@@ -826,6 +838,25 @@ public class Compressor extends TwoPortEquipment
   }
 
   /**
+   * Match the PS solver to the entropy reference used for the compressor inlet.
+   *
+   * @param thermoOps operations bound to the compressor fluid
+   * @param targetEntropy total entropy from the selected property model in J/K
+   */
+  private void runPsFlashForSelectedModel(ThermodynamicOperations thermoOps, double targetEntropy) {
+    // Match the precedence used when the inlet entropy and enthalpy are selected in run().
+    if (useVega && inStream.getThermoSystem().getNumberOfPhases() == 1) {
+      thermoOps.PSflashVega(targetEntropy);
+    } else if (useLeachman && inStream.getThermoSystem().getNumberOfPhases() == 1) {
+      thermoOps.PSflashLeachman(targetEntropy);
+    } else if (useGERG2008 && inStream.getThermoSystem().getNumberOfPhases() == 1) {
+      thermoOps.PSflashGERG2008(targetEntropy);
+    } else {
+      runRegularPsFlash(thermoOps, targetEntropy);
+    }
+  }
+
+  /**
    * Run a pressure-entropy flash with a robust CPA multiphase shortcut.
    *
    * @param thermoOps thermodynamic operations bound to the compressor thermo system
@@ -975,7 +1006,7 @@ public class Compressor extends TwoPortEquipment
       getThermoSystem().setTemperature(bestTemperature);
       thermoOps.TPflash();
     }
-    getThermoSystem().init(2);
+    getThermoSystem().init(3);
   }
 
   /**
@@ -1025,7 +1056,7 @@ public class Compressor extends TwoPortEquipment
     }
 
     ThermodynamicOperations thermoOps = new ThermodynamicOperations(getThermoSystem());
-    getThermoSystem().init(3);
+    getThermoSystem().init(2);
     getThermoSystem().initPhysicalProperties(PhysicalPropertyType.MASS_DENSITY);
 
     // Optimization: disable stability analysis for single-phase inlet gas, where no
@@ -1137,16 +1168,7 @@ public class Compressor extends TwoPortEquipment
       } else {
         double MW = thermoSystem.getMolarMass();
         thermoSystem.setPressure(getOutletPressure(), pressureUnit);
-        runRegularPsFlash(thermoOps, entropy);
-        if (useGERG2008 && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-          thermoOps.PSflashGERG2008(entropy);
-        }
-        if (useLeachman && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-          thermoOps.PSflashLeachman(entropy);
-        }
-        if (useVega && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-          thermoOps.PSflashVega(entropy);
-        }
+        runPsFlashForSelectedModel(thermoOps, entropy);
         thermoSystem.initPhysicalProperties(PhysicalPropertyType.MASS_DENSITY);
         double densOutIsentropic = thermoSystem.getDensity("kg/m3");
         double enthalpyOutIsentropic = thermoSystem.getEnthalpy();
@@ -1354,7 +1376,11 @@ public class Compressor extends TwoPortEquipment
             speedUpdate = Math.signum(speedUpdate) * maxSpeedUpdate;
           }
 
-          currentSpeed += relaxationFactor * speedUpdate;
+          // Head, efficiency and power below describe currentSpeed. Do not move an already accepted root: doing so
+          // reports a different speed and lets repeated runs drift across an equipment capacity boundary.
+          if (Math.abs(currentPressure - targetPressure) > tolerance) {
+            currentSpeed += relaxationFactor * speedUpdate;
+          }
           if (currentSpeed < 0) {
             if (minSpeed > 1) {
               currentSpeed = minSpeed;
@@ -1562,15 +1588,7 @@ public class Compressor extends TwoPortEquipment
             }
             getThermoSystem().setPressure(getThermoSystem().getPressure() + dp, pressureUnit);
             thermoOps = new ThermodynamicOperations(getThermoSystem());
-            if (useGERG2008 && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-              thermoOps.PSflashGERG2008(entropy);
-            } else if (useLeachman && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-              thermoOps.PSflashLeachman(entropy);
-            } else if (useVega && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-              thermoOps.PSflashVega(entropy);
-            } else {
-              runRegularPsFlash(thermoOps, entropy);
-            }
+            runPsFlashForSelectedModel(thermoOps, entropy);
             double newEnt = getThermoSystem().getEnthalpy();
             if (useGERG2008 && inStream.getThermoSystem().getNumberOfPhases() == 1) {
               double[] gergProps;
@@ -1606,26 +1624,23 @@ public class Compressor extends TwoPortEquipment
           double schultzX = thermoSystem.getTemperature() / thermoSystem.getVolume() * thermoSystem.getdVdTpn() - 1.0;
           double schultzY = -thermoSystem.getPressure() / thermoSystem.getVolume() * thermoSystem.getdVdPtn();
           thermoSystem.setPressure(getOutletPressure(), pressureUnit);
-          runRegularPsFlash(thermoOps, entropy);
+          runPsFlashForSelectedModel(thermoOps, entropy);
           thermoSystem.initProperties();
           double densOutIsentropic = thermoSystem.getDensity("kg/m3");
           double enthalpyOutIsentropic = thermoSystem.getEnthalpy();
           if (useGERG2008 && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-            thermoOps.PSflashGERG2008(entropy);
             double[] gergProps;
             gergProps = getThermoSystem().getPhase(0).getProperties_GERG2008();
             densOutIsentropic = getThermoSystem().getPhase(0).getDensity_GERG2008();
             enthalpyOutIsentropic = gergProps[7] * getThermoSystem().getPhase(0).getNumberOfMolesInPhase();
           }
           if (useLeachman && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-            thermoOps.PSflashLeachman(entropy);
             double[] LeachmanProps;
             LeachmanProps = getThermoSystem().getPhase(0).getProperties_Leachman();
             densOutIsentropic = getThermoSystem().getPhase(0).getDensity_Leachman();
             enthalpyOutIsentropic = LeachmanProps[7] * getThermoSystem().getPhase(0).getNumberOfMolesInPhase();
           }
           if (useVega && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-            thermoOps.PSflashVega(entropy);
             double[] VegaProps;
             VegaProps = getThermoSystem().getPhase(0).getProperties_Vega();
             densOutIsentropic = getThermoSystem().getPhase(0).getDensity_Vega();
@@ -1656,26 +1671,23 @@ public class Compressor extends TwoPortEquipment
           }
         } else {
           thermoSystem.setPressure(getOutletPressure(), pressureUnit);
-          runRegularPsFlash(thermoOps, entropy);
+          runPsFlashForSelectedModel(thermoOps, entropy);
           thermoSystem.initProperties();
           double densOutIsentropic = thermoSystem.getDensity("kg/m3");
           double enthalpyOutIsentropic = thermoSystem.getEnthalpy();
           if (useGERG2008 && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-            thermoOps.PSflashGERG2008(entropy);
             double[] gergProps;
             gergProps = getThermoSystem().getPhase(0).getProperties_GERG2008();
             densOutIsentropic = getThermoSystem().getPhase(0).getDensity_GERG2008();
             enthalpyOutIsentropic = gergProps[7] * getThermoSystem().getPhase(0).getNumberOfMolesInPhase();
           }
           if (useLeachman && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-            thermoOps.PSflashLeachman(entropy);
             double[] LeachmanProps;
             LeachmanProps = getThermoSystem().getPhase(0).getProperties_Leachman();
             densOutIsentropic = getThermoSystem().getPhase(0).getDensity_Leachman();
             enthalpyOutIsentropic = LeachmanProps[7] * getThermoSystem().getPhase(0).getNumberOfMolesInPhase();
           }
           if (useVega && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-            thermoOps.PSflashVega(entropy);
             double[] VegaProps;
             VegaProps = getThermoSystem().getPhase(0).getProperties_Vega();
             densOutIsentropic = getThermoSystem().getPhase(0).getDensity_Vega();
@@ -1710,16 +1722,7 @@ public class Compressor extends TwoPortEquipment
       getThermoSystem().setPressure(pressure, pressureUnit);
       // System.out.println("entropy inn.." + entropy);
       thermoOps = new ThermodynamicOperations(getThermoSystem());
-      runRegularPsFlash(thermoOps, entropy);
-      if (useGERG2008 && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-        thermoOps.PSflashGERG2008(entropy);
-      }
-      if (useLeachman && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-        thermoOps.PSflashLeachman(entropy);
-      }
-      if (useVega && inStream.getThermoSystem().getNumberOfPhases() == 1) {
-        thermoOps.PSflashVega(entropy);
-      }
+      runPsFlashForSelectedModel(thermoOps, entropy);
       // double densOutIdeal = getThermoSystem().getDensity();
       double newEnt = getThermoSystem().getEnthalpy();
       if (!powerSet) {
@@ -1815,9 +1818,12 @@ public class Compressor extends TwoPortEquipment
   /** {@inheritDoc} */
   @Override
   public void runTransient(double dt, UUID id) {
+    boolean alreadyEvaluatedForStep = id != null && id.equals(getCalculationIdentifier());
     if (getCalculateSteadyState()) {
       run(id);
-      increaseTime(dt);
+      if (!alreadyEvaluatedForStep) {
+        increaseTime(dt);
+      }
       return;
     }
 
@@ -1827,6 +1833,30 @@ public class Compressor extends TwoPortEquipment
     }
 
     runController(dt, id);
+
+    if (transientCalculationMode == TransientCalculationMode.QUASI_STEADY) {
+      // A compressor has negligible process inventory compared with separators and
+      // piping. In a pressure-driven dynamic network it therefore acts as an
+      // algebraic map element: upstream equipment owns the flow, while speed and the
+      // map determine discharge pressure, head and power for the current step.
+      run(id);
+      if (!alreadyEvaluatedForStep) {
+        increaseTime(dt);
+      }
+      return;
+    }
+
+    // Dynamic upstream equipment can momentarily hand over an empty stream while its
+    // inventory and controllers are initialized. Specific enthalpy is undefined at zero
+    // mass, so populate the compressor outlet with one algebraic bootstrap evaluation
+    // before entering the compressor-map transient equations.
+    if (inStream.getFlowRate("kg/hr") < getMinimumFlow() || outStream.getFlowRate("kg/hr") < getMinimumFlow()) {
+      run(id);
+      if (!alreadyEvaluatedForStep) {
+        increaseTime(dt);
+      }
+      return;
+    }
 
     inStream.getThermoSystem().init(3);
     outStream.getThermoSystem().init(3);
@@ -1873,6 +1903,9 @@ public class Compressor extends TwoPortEquipment
     dH = polytropicFluidHead * 1000.0 * thermoSystem.getMolarMass() / getPolytropicEfficiency()
         * inStream.getThermoSystem().getTotalNumberOfMoles();
     setCalculationIdentifier(id);
+    if (!alreadyEvaluatedForStep) {
+      increaseTime(dt);
+    }
   }
 
   /**
@@ -1881,17 +1914,17 @@ public class Compressor extends TwoPortEquipment
   public void generateCompressorCurves() {
     double flowRef = getThermoSystem().getFlowRate("m3/hr");
     double factor = flowRef / 4000.0;
-    double[] chartConditions = new double[] { 0.3, 1.0, 1.0, 1.0 };
-    double[] speed = new double[] { 12913, 12298, 11683, 11098, 10453, 9224, 8609, 8200 };
+    double[] chartConditions = new double[] {0.3, 1.0, 1.0, 1.0};
+    double[] speed = new double[] {12913, 12298, 11683, 11098, 10453, 9224, 8609, 8200};
     double[][] flow = new double[][] {
-        { 2789.1285, 3174.0375, 3689.2288, 4179.4503, 4570.2768, 4954.7728, 5246.0329, 5661.0331 },
-        { 2571.1753, 2943.7254, 3440.2675, 3837.4448, 4253.0898, 4668.6643, 4997.1926, 5387.4952 },
-        { 2415.3793, 2763.0706, 3141.7095, 3594.7436, 4047.6467, 4494.1889, 4853.7353, 5138.7858 },
-        { 2247.2043, 2799.7342, 3178.3428, 3656.1551, 4102.778, 4394.1591, 4648.3224, 4840.4998 },
-        { 2072.8397, 2463.9483, 2836.4078, 3202.5266, 3599.6333, 3978.0203, 4257.0022, 4517.345 },
-        { 1835.9552, 2208.455, 2618.1322, 2940.8034, 3244.7852, 3530.1279, 3753.3738, 3895.9746 },
-        { 1711.3386, 1965.8848, 2356.9431, 2685.9247, 3008.5154, 3337.2855, 3591.5092 },
-        { 1636.5807, 2002.8708, 2338.0319, 2642.1245, 2896.4894, 3113.6264, 3274.8764, 3411.2977 } };
+        {2789.1285, 3174.0375, 3689.2288, 4179.4503, 4570.2768, 4954.7728, 5246.0329, 5661.0331},
+        {2571.1753, 2943.7254, 3440.2675, 3837.4448, 4253.0898, 4668.6643, 4997.1926, 5387.4952},
+        {2415.3793, 2763.0706, 3141.7095, 3594.7436, 4047.6467, 4494.1889, 4853.7353, 5138.7858},
+        {2247.2043, 2799.7342, 3178.3428, 3656.1551, 4102.778, 4394.1591, 4648.3224, 4840.4998},
+        {2072.8397, 2463.9483, 2836.4078, 3202.5266, 3599.6333, 3978.0203, 4257.0022, 4517.345},
+        {1835.9552, 2208.455, 2618.1322, 2940.8034, 3244.7852, 3530.1279, 3753.3738, 3895.9746},
+        {1711.3386, 1965.8848, 2356.9431, 2685.9247, 3008.5154, 3337.2855, 3591.5092},
+        {1636.5807, 2002.8708, 2338.0319, 2642.1245, 2896.4894, 3113.6264, 3274.8764, 3411.2977}};
 
     for (int i = 0; i < flow.length; i++) {
       for (int j = 0; j < flow[i].length; j++) {
@@ -1899,14 +1932,14 @@ public class Compressor extends TwoPortEquipment
       }
     }
 
-    double[][] head = new double[][] { { 80.0375, 78.8934, 76.2142, 71.8678, 67.0062, 60.6061, 53.0499, 39.728 },
-        { 72.2122, 71.8369, 68.9009, 65.8341, 60.7167, 54.702, 47.2749, 35.7471 },
-        { 65.1576, 64.5253, 62.6118, 59.1619, 54.0455, 47.0059, 39.195, 31.6387 },
-        { 58.6154, 56.9627, 54.6647, 50.4462, 44.4322, 38.4144, 32.9084, 28.8109 },
-        { 52.3295, 51.0573, 49.5283, 46.3326, 42.3685, 37.2502, 31.4884, 25.598 },
-        { 40.6578, 39.6416, 37.6008, 34.6603, 30.9503, 27.1116, 23.2713, 20.4546 },
-        { 35.2705, 34.6359, 32.7228, 31.0645, 27.0985, 22.7482, 18.0113 },
-        { 32.192, 31.1756, 29.1329, 26.833, 23.8909, 21.3324, 18.7726, 16.3403 }, };
+    double[][] head = new double[][] {{80.0375, 78.8934, 76.2142, 71.8678, 67.0062, 60.6061, 53.0499, 39.728},
+        {72.2122, 71.8369, 68.9009, 65.8341, 60.7167, 54.702, 47.2749, 35.7471},
+        {65.1576, 64.5253, 62.6118, 59.1619, 54.0455, 47.0059, 39.195, 31.6387},
+        {58.6154, 56.9627, 54.6647, 50.4462, 44.4322, 38.4144, 32.9084, 28.8109},
+        {52.3295, 51.0573, 49.5283, 46.3326, 42.3685, 37.2502, 31.4884, 25.598},
+        {40.6578, 39.6416, 37.6008, 34.6603, 30.9503, 27.1116, 23.2713, 20.4546},
+        {35.2705, 34.6359, 32.7228, 31.0645, 27.0985, 22.7482, 18.0113},
+        {32.192, 31.1756, 29.1329, 26.833, 23.8909, 21.3324, 18.7726, 16.3403},};
 
     for (int i = 0; i < head.length; i++) {
       for (int j = 0; j < head[i].length; j++) {
@@ -1914,22 +1947,22 @@ public class Compressor extends TwoPortEquipment
       }
     }
     double[][] polyEff = new double[][] {
-        { 77.2452238409573, 79.4154186459363, 80.737960012489, 80.5229826589649, 79.2210931638144, 75.4719133864634,
-            69.6034181197298, 58.7322388482707 },
-        { 77.0107837113504, 79.3069974136389, 80.8941189021135, 80.7190194665918, 79.5313242980328, 75.5912622896367,
-            69.6846136362097, 60.0043057990909 },
-        { 77.0043065299874, 79.1690958847856, 80.8038169975675, 80.6543975614197, 78.8532389102705, 73.6664774270613,
-            66.2735600426727, 57.671664571658 },
-        { 77.0716623789093, 80.4629750233093, 81.1390811169072, 79.6374242667478, 75.380928428817, 69.5332969549779,
-            63.7997587622339, 58.8120614497758 },
-        { 76.9705872525642, 79.8335492585324, 80.9468133671171, 80.5806471927835, 78.0462158225426, 73.0403707523258,
-            66.5572286338589, 59.8624822515064 },
-        { 77.5063036680357, 80.2056198362559, 81.0339108025933, 79.6085962687939, 76.3814534404405, 70.8027503005902,
-            64.6437367160571, 60.5299349982342 },
-        { 77.8175271586685, 80.065165942218, 81.0631362122632, 79.8955051771299, 76.1983240929369, 69.289982774309,
-            60.8567149372229 },
-        { 78.0924334304045, 80.9353551568667, 80.7904437766234, 78.8639325223295, 75.2170936751143, 70.3105081673411,
-            65.5507568533569, 61.0391468300337 } };
+        {77.2452238409573, 79.4154186459363, 80.737960012489, 80.5229826589649, 79.2210931638144, 75.4719133864634,
+            69.6034181197298, 58.7322388482707},
+        {77.0107837113504, 79.3069974136389, 80.8941189021135, 80.7190194665918, 79.5313242980328, 75.5912622896367,
+            69.6846136362097, 60.0043057990909},
+        {77.0043065299874, 79.1690958847856, 80.8038169975675, 80.6543975614197, 78.8532389102705, 73.6664774270613,
+            66.2735600426727, 57.671664571658},
+        {77.0716623789093, 80.4629750233093, 81.1390811169072, 79.6374242667478, 75.380928428817, 69.5332969549779,
+            63.7997587622339, 58.8120614497758},
+        {76.9705872525642, 79.8335492585324, 80.9468133671171, 80.5806471927835, 78.0462158225426, 73.0403707523258,
+            66.5572286338589, 59.8624822515064},
+        {77.5063036680357, 80.2056198362559, 81.0339108025933, 79.6085962687939, 76.3814534404405, 70.8027503005902,
+            64.6437367160571, 60.5299349982342},
+        {77.8175271586685, 80.065165942218, 81.0631362122632, 79.8955051771299, 76.1983240929369, 69.289982774309,
+            60.8567149372229},
+        {78.0924334304045, 80.9353551568667, 80.7904437766234, 78.8639325223295, 75.2170936751143, 70.3105081673411,
+            65.5507568533569, 61.0391468300337}};
 
     getCompressorChart().setCurves(chartConditions, speed, flow, head, polyEff);
     getCompressorChart().setHeadUnit("kJ/kg");
@@ -1949,7 +1982,7 @@ public class Compressor extends TwoPortEquipment
 
     getThermoSystem().initPhysicalProperties();
     String[][] table = new String[50][5];
-    String[] names = { "", "Phase 1", "Phase 2", "Phase 3", "Unit" };
+    String[] names = {"", "Phase 1", "Phase 2", "Phase 3", "Unit"};
     table[0][0] = "";
     table[0][1] = "";
     table[0][2] = "";
@@ -3212,7 +3245,7 @@ public class Compressor extends TwoPortEquipment
     // Get head at the safe flow rate
     double safeHead = getCompressorChart().getPolytropicHead(safeFlow, currentSpeed);
 
-    return new double[] { safeFlow, safeHead };
+    return new double[] {safeFlow, safeHead};
   }
 
   /**
@@ -3674,15 +3707,20 @@ public class Compressor extends TwoPortEquipment
    */
   public void runController(double dt, UUID id) {
     if (hasController && getController().isActive()) {
+      double initialSpeed = this.speed;
       getController().runTransient(this.speed, dt, id);
-      this.speed = getController().getResponse();
-      if (this.speed > maxspeed) {
-        this.speed = maxspeed;
+      double requestedSpeed = getController().getResponse();
+      if (requestedSpeed > maxspeed) {
+        requestedSpeed = maxspeed;
       }
-      if (this.speed < minspeed) {
-        this.speed = minspeed;
+      if (requestedSpeed < minspeed) {
+        requestedSpeed = minspeed;
       }
-      // System.out.println("valve opening " + this.percentValveOpening + " %");
+      if (controllerSpeedRateLimitEnabled) {
+        requestedSpeed = Math.min(requestedSpeed, initialSpeed + maxAccelerationRate * dt);
+        requestedSpeed = Math.max(requestedSpeed, initialSpeed - maxDecelerationRate * dt);
+      }
+      this.speed = requestedSpeed;
     }
     setCalculationIdentifier(id);
   }
@@ -4151,7 +4189,7 @@ public class Compressor extends TwoPortEquipment
    * <li>Driver rated power with 10% overload margin</li>
    * </ol>
    *
-   * @return maximum design power in Watts (converted from kW if from driver)
+   * @return maximum design power in Watts (converted from the driver or mechanical-design rating in kW)
    */
   @Override
   public double getCapacityMax() {
@@ -4172,7 +4210,7 @@ public class Compressor extends TwoPortEquipment
     }
     // Priority 3: Mechanical design max power
     if (getMechanicalDesign().maxDesignPower > 0) {
-      return getMechanicalDesign().maxDesignPower;
+      return getMechanicalDesign().maxDesignPower * 1000.0; // kW to W, as for driver ratings
     }
     // Priority 4: Driver rated power with 10% overload margin
     if (driver != null && driver.getRatedPower() > 0) {
@@ -4486,6 +4524,50 @@ public class Compressor extends TwoPortEquipment
    */
   public void setMaxDecelerationRate(double rate) {
     this.maxDecelerationRate = rate;
+  }
+
+  /**
+   * Get the transient compressor calculation strategy.
+   *
+   * @return configured transient calculation mode
+   */
+  public TransientCalculationMode getTransientCalculationMode() {
+    return transientCalculationMode;
+  }
+
+  /**
+   * Select how the compressor participates in a dynamic process network.
+   *
+   * <p>
+   * {@link TransientCalculationMode#QUASI_STEADY} is intended for pressure-driven process simulations where vessels,
+   * valves and piping own the dynamic inventory and flow calculation. It prevents the compressor map from overwriting
+   * the flow supplied by upstream equipment.
+   *
+   * @param mode transient calculation mode
+   */
+  public void setTransientCalculationMode(TransientCalculationMode mode) {
+    if (mode == null) {
+      throw new IllegalArgumentException("Transient calculation mode cannot be null");
+    }
+    this.transientCalculationMode = mode;
+  }
+
+  /**
+   * Check whether a controller response is constrained by the configured acceleration rates.
+   *
+   * @return true when controller speed rate limiting is enabled
+   */
+  public boolean isControllerSpeedRateLimitEnabled() {
+    return controllerSpeedRateLimitEnabled;
+  }
+
+  /**
+   * Enable or disable acceleration and deceleration limits for controller speed commands.
+   *
+   * @param enabled true to constrain controller speed commands
+   */
+  public void setControllerSpeedRateLimitEnabled(boolean enabled) {
+    this.controllerSpeedRateLimitEnabled = enabled;
   }
 
   /**
@@ -5273,7 +5355,7 @@ public class Compressor extends TwoPortEquipment
     // Power constraint - dynamically evaluates against speed-dependent max power
     // from driver curve
     // This shows the actual operating margin at current speed
-    addCapacityConstraint(StandardConstraintType.COMPRESSOR_POWER.createConstraint().setDesignValue(100.0) // 100%
+    addCapacityConstraint(StandardConstraintType.COMPRESSOR_POWER.createConstraint().setUnit("%").setDesignValue(100.0) // 100%
         .setMaxValue(110.0) // 110% overload
         .setWarningThreshold(0.9).setValueSupplier(() -> {
           if (getThermoSystem() == null) {
@@ -5835,15 +5917,35 @@ public class Compressor extends TwoPortEquipment
   }
 
   /**
-   * Updates the power constraint design value based on driver rating.
+   * Updates the driver and fallback mechanical power rating used by the normalized power constraint.
    *
-   * @param driverPowerRating the driver power rating in kW
+   * <p>
+   * The input is a physical rating in kW. The native constraint remains a percentage of available power, with a design
+   * value of 100% and an overload limit of 110%. Its existing supplier retains driver speed dependence; enabled state,
+   * severity, provenance and other constraints are preserved.
+   * </p>
+   *
+   * @param driverPowerRating the finite positive driver power rating in kW
+   * @throws IllegalArgumentException if the rating is invalid or a custom power constraint uses incompatible units
    */
   public void updatePowerConstraint(double driverPowerRating) {
+    if (!Double.isFinite(driverPowerRating) || driverPowerRating <= 0.0 || !Double.isFinite(driverPowerRating * 1.1)) {
+      throw new IllegalArgumentException("Driver power rating must be finite and positive in kW");
+    }
+    ensureCapacityConstraintsInitialized();
     CapacityConstraint powerConstraint = capacityConstraints.get("power");
+    if (powerConstraint != null && !"%".equals(powerConstraint.getUnit())) {
+      throw new IllegalArgumentException("Native compressor power constraint must use % units");
+    }
+    if (getMechanicalDesign() == null) {
+      initMechanicalDesign();
+    }
+    getMechanicalDesign().setMaxDesignPower(driverPowerRating);
+    if (driver != null) {
+      driver.setRatedPower(driverPowerRating);
+    }
     if (powerConstraint != null) {
-      powerConstraint.setDesignValue(driverPowerRating);
-      powerConstraint.setMaxValue(driverPowerRating * 1.1); // 10% overload margin
+      powerConstraint.setDesignValue(100.0).setMaxValue(110.0);
     }
   }
 
@@ -6457,7 +6559,7 @@ public class Compressor extends TwoPortEquipment
       compressor.setMinimumSpeed(minSpeed);
 
       if (useOutTemperature && outTemperature > 0) {
-        compressor.setOutTemperature(outTemperature);
+        compressor.setOutletTemperature(outTemperature);
       }
 
       if (maxOutletPressure > 0) {

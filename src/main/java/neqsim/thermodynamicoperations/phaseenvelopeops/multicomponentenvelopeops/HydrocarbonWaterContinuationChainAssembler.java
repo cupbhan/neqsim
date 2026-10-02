@@ -74,8 +74,8 @@ public final class HydrocarbonWaterContinuationChainAssembler {
       for (int secondIndex = firstIndex + 1; secondIndex < chains.size(); secondIndex++) {
         MutableChain first = chains.get(firstIndex);
         MutableChain second = chains.get(secondIndex);
-        for (boolean reverseFirst : new boolean[] { false, true }) {
-          for (boolean reverseSecond : new boolean[] { false, true }) {
+        for (boolean reverseFirst : new boolean[] {false, true}) {
+          for (boolean reverseSecond : new boolean[] {false, true}) {
             List<State> orientedFirst = oriented(first.states, reverseFirst);
             List<State> orientedSecond = oriented(second.states, reverseSecond);
             Overlap overlap = overlap(orientedFirst, orientedSecond);

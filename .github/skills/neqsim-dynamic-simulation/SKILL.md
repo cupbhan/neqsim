@@ -1,7 +1,7 @@
 ---
 name: neqsim-dynamic-simulation
 description: "Dynamic simulation guidance for NeqSim. USE WHEN: running transient simulations, modeling startup/shutdown, tuning PID controllers, analyzing pressure/level dynamics, performing blowdown/depressurization, or setting up measurement devices and control loops. Covers runTransient, DynamicProcessHelper, controller tuning, and dynamic equipment configuration."
-last_verified: "2026-08-03"
+last_verified: "2026-09-07"
 ---
 
 # Dynamic Simulation Guidance
@@ -43,7 +43,7 @@ Each timestep:
    Steady-state algebraic equipment still evaluates on every requested pass,
    but its local clock advances once per non-null timestep calculation identifier.
    Reusing an identifier may refine a recycle without advancing physical time;
-   use a new identifier for the next timestep.
+   use a new identifier for the next physical timestep.
 4. Standalone controllers run; controllers actually executed inside equipment
    retain their equipment-specific timing for compatibility. Execution is
    coalesced by object identity and the timestep calculation identifier. Merely
@@ -54,6 +54,21 @@ Each timestep:
    integrated by equipment must implement the same identifier contract through
    `hasRunTransient(UUID)`.
 5. Measurement devices are sampled, alarms are evaluated, and history is stored.
+
+A non-null UUID therefore identifies **one physical timestep**, not an entire
+outer time-marching simulation. Refinements of that physical step reuse the
+same physical-step UUID; the next accepted physical step must use a different
+UUID. For ordinary loops `runTransient()` is safe because it creates a fresh
+UUID each call. Deterministic safety/OTS workflows can use
+`TransientStepIdentifier.deterministicPhysicalStep(scope, stepIndex)`.
+
+`ProcessSystem.runTransientAdaptive(...)` is **not yet a transactional adaptive
+integrator**. The current implementation validates the request, advances trial
+state directly, estimates a temperature-change heuristic, and chooses a
+subsequent timestep. It does not yet provide rejected-step process/event/control
+rollback or a full-step versus two-half-step error estimate. Do not use it as
+evidence of qualified stiff/adaptive professional dynamics until the #2911
+transactional-step work is complete.
 
 ## Basic Dynamic Setup
 
@@ -216,10 +231,11 @@ LC100.setReverseActing(false);                 // liquid-outlet level valve = di
 LC100.setControllerParameters(1.0, 300.0, 0.0); // averaging level: loose Kp, long Ti, no Td
 liqValve.addController("LC-100", LC100);
 
-// 5. Advance the transient with a fixed time step.
-java.util.UUID id = java.util.UUID.randomUUID();
-for (int i = 0; i < 600; i++) {
-  process.runTransient(1.0, id);   // dt = 1 s
+// 5. Advance the transient with a fresh physical-step identity each step.
+for (long step = 0; step < 600; step++) {
+  java.util.UUID physicalStepId =
+      neqsim.process.dynamics.TransientStepIdentifier.deterministicPhysicalStep("level-loop", step);
+  process.runTransient(1.0, physicalStepId);   // dt = 1 s
 }
 ```
 
@@ -232,6 +248,9 @@ for (int i = 0; i < 600; i++) {
   reduces the measured value (e.g. a controller manipulating an inlet/feed valve).
 - **Set `setLiquidLevel` after `run()`** — a steady-state solve resets the level,
   so set the starting level and geometry after the first `run()`.
+- **One UUID per physical step** — do not create one UUID before the outer time
+  loop and reuse it. Built-in controllers/equipment intentionally treat repeated
+  calls with one UUID as refinements of the same physical timestep.
 - For an averaging level loop, use a loose `Kp` and long `Ti` (see the tuning
   table) and consider an SP-PV deadband only with care (see the limit-cycle note
   above).
@@ -281,6 +300,32 @@ ControllerPerformanceMetrics kpi3 =
   against each other (tighter control costs more valve movement).
 - `resetEventLog()` on the controller before the disturbance so the KPIs cover
   only the window of interest.
+
+### Canonical controls qualification suite
+
+Use `ControlsBenchmarkSuite` when a request needs a deterministic regression
+check across NeqSim's canonical level, pressure, cascade, split-range,
+anti-surge, and compressor speed/recycle control structures:
+
+```java
+import neqsim.process.controllerdevice.ControlsBenchmarkSuite;
+
+ControlsBenchmarkSuite.Report report = ControlsBenchmarkSuite.runCanonicalSuite();
+boolean qualified = report.isPassed();
+```
+
+Inspect `report.getCases()` for the uniform time/PV/SP/output traces,
+`ControllerPerformanceMetrics`, physical acceptance detail, and final errors.
+The report also exposes the dedicated `AgentBenchmarkSuite` verdict through
+`getAgentBenchmarkReport()`. See
+[`docs/benchmarks/controls_benchmark.md`](../../../docs/benchmarks/controls_benchmark.md)
+for equations, declared challenges, numerical gates, and current CI reference
+values.
+
+The suite qualifies deterministic control execution and KPI reporting against
+transparent surrogate plants. It is not a substitute for field tuning, vendor
+compressor data, severe-slugging qualification, a safety-instrumented function,
+or commissioning validation.
 
 ### Anti-Surge Control (dynamic)
 
@@ -378,6 +423,12 @@ requires the controlled context attribute `distributedTransientModel=approved`.
 
 ## TwoFluidPipe Phase Appearance and Disappearance
 
+Read the
+[TwoFluidPipe evidence matrix](../../../docs/process/twofluidpipe-evidence-matrix.md)
+before selecting a steady or transient configuration. It is the canonical
+distinction between implemented, numerically verified, experimentally qualified,
+failed, and unsupported behavior.
+
 When `TwoFluidPipe.setIncludeMassTransfer(true)` is enabled, flash-driven transfer is phase
 resolved. Condensation must use equilibrium hydrocarbon-liquid and aqueous-liquid **mass**
 contributions; never use the current cell water cut to identify a phase that is not yet present.
@@ -399,8 +450,87 @@ oil or water seeding. Check gas, oil, water, liquid, and total closure with
 `TwoFluidMassBalanceReport`; sweep nearby temperatures, refine time step and mesh, repeat the run,
 and compare rigorous flash with `FlashTable`. The flash table must retain the oil/aqueous liquid mass
 split. Record EOS, mixing rule, composition, absolute pressure, temperature, mass-transfer
-relaxation time, and units. The current hydrodynamic state transports bulk phase inventories, not a
-full component-composition vector per cell, and does not establish OLGA or LedaFlow equivalence.
+relaxation time, and units. With named-component transport, freeze component source compositions
+and their partial-enthalpy latent source from the same RHS-stage equilibrium state as the
+hydrodynamic phase source. A disappearing phase uses its conserved donor composition for the
+property state; a receiving phase still uses only the equilibrium flash composition. Require
+phase, total, named-component, interphase, bounded-fraction, and latent-inclusive energy closure.
+
+The conservative Lagrangian slug/film + named-component + phase-transfer + thermal combination is
+currently verified only with single-stage Euler. Reject a multi-stage selection before mutation
+until intermediate phase appearance owns stage-local component inventories. Also reject signed
+outlet backflow with named-component transport unless a physical external outlet composition is
+configured; the last interior composition is not a valid inflow boundary. None of these numerical
+contracts establishes equivalence with a commercial transient multiphase simulator.
+
+## TwoFluidPipe Regime-Transition Continuation
+
+Transient wall-friction, interfacial-friction, interfacial-area, and entrainment sources must
+consume the dimensionless normalized weights from `FlowRegimeDetector.classify(...)`. Do not
+reintroduce `detectFlowRegime(...)` as a hard source switch: the steady hold-up and transient
+momentum paths would then see different closures at the same state. Keep stratified geometry active
+whenever a stratified weight is non-zero. Pure-regime endpoints must reproduce the original closure
+exactly.
+
+Blend interfacial forces directly as the weighted sum of each regime's shear times area;
+separately averaging the two factors introduces spurious cross terms. Verify the actual
+momentum source and equal/opposite phase reactions in transition tests.
+
+This continuation does not authorize changes to regime criteria, transition-band widths, hold-up
+correlations, or regime-specific friction models. It remains experimental until the public
+Tengesdal envelope, the liquid-rich 1,800 s inventory criterion, conservation, nonlinear
+convergence, nearby operating points, refinement, and runtime gates all pass. Continue to reject a
+completed time loop whose sticky coupled-solver diagnostics fire.
+
+## TwoFluidPipe Coupled Pressure-Momentum Gate
+
+For a liquid-rich pressure outlet that physically permits phase fallback, the coupled path requires
+all four options. Keep the nonlinear controls explicit in reproducible studies:
+
+```java
+pipe.setEnableInterfacialPressure(true);
+pipe.setImplicitInterfacialPressureCoupling(true);
+pipe.setEnableCoupledPressureMomentum(true);
+pipe.setAllowOutletPhaseBackflow(true);
+pipe.setCoupledPressureMomentumMaximumIterations(24); // default
+pipe.setCoupledPressureMomentumRelativeVolumeTolerance(1.0e-7); // default
+```
+
+The previous budget of 12 stopped the public Tengesdal progress case near a `6e-7` relative
+cell-volume residual, above the `1e-7` gate. The current 16-section Test 3 probe completes 50/50
+calls of 0.1 s and a 24-section refinement completes 100/100 calls of 0.05 s. Neither rejects a
+nonlinear substep, and phase and total discrete mass residuals remain below `1e-9`.
+
+A coupled call that exhausts its adaptive retries throws with accepted/requested elapsed time,
+residual/tolerance, iterations/cap, and limiter state. Do not catch that exception and advance the
+flowsheet clock. Successful completion still requires the sticky diagnostics to be inspected after
+the full window:
+
+```java
+if (pipe.isTransientOutletBackflowClamped()
+    || pipe.isTransientCoupledPressureMomentumFailureDetected()
+    || pipe.isTransientCoupledPressureMomentumCorrectionLimited()
+    || pipe.getTransientCoupledPressureMomentumRejectedSubsteps() > 0) {
+  throw new IllegalStateException("TwoFluidPipe transient is not qualified");
+}
+```
+
+These flags reset on the next steady `run()`. A pressure-limiter event is not itself a rejected
+substep because the volume residual can converge while the bounded correction is active, but it is
+mandatory qualification evidence. Use
+`isCoupledPressureMomentumPressureCorrectionLimited()` only for the latest correction; use the
+`isTransient...` form for the complete window. The current Tengesdal progress run still activates that flag and
+spans -18.55 to 6.88 kg/s liquid outlet versus the stored 0.375 to 4.03 kg/s comparison. It is
+therefore numerical-progress evidence only, not sustained-severe-slugging or commercial-parity
+evidence. Never tune a public closure to the commercial trace; validate the next boundary-coupling
+increment against the public Tengesdal experiment, conservation, nearby points, and mesh/time-step
+refinement.
+
+Make every cycle-count assertion feasible for its sampled window. A detector that reports `N`
+completed intervals needs `N + 1` events, so the settled window must span at least `N` times the
+largest admissible cycle period, plus phase and boundary margin. Keep shorter runs as numerical
+characterization when they cannot contain the qualification cycle count; enforce the complete
+cycle gate in the long-duration qualification run.
 
 ## Running Dynamic Simulation
 
@@ -435,13 +565,18 @@ with `process.setTransientThreadPoolSize(n)`. The per-process worker pool is
 created lazily and reused across timesteps; changing the worker count or
 disabling the option retires it. Execution follows cached process-graph levels,
 so upstream groups complete before downstream equipment is submitted while
-independent groups within a level remain parallel. If the caller is interrupted
+independent groups within a level remain parallel. A worker exception propagates to the caller with its runtime type and message,
+cancels later queued groups, prevents downstream dependency levels from being
+submitted, and skips controller, measurement/alarm/history, timestep-counter,
+and calculation-identifier commit phases. The process clock, due-event effects,
+and equipment state already mutated by a same-level sibling or earlier unit are
+not rolled back; treat that timestep as incomplete. If the caller is interrupted
 while waiting, NeqSim restores the interrupt status, cancels queued work without
 interrupting equipment already updating state, does not submit downstream
-levels, and aborts the remaining timestep phases. Treat that timestep as
-incomplete. Graph ordering does not define transient recycle convergence or
-rollback, so keep parallel execution off for recycle loops and other implicit
-couplings until their transient contract is explicitly supported.
+levels, and likewise aborts the remaining timestep phases. Graph ordering does
+not define transient recycle convergence or transactional rollback, so keep
+parallel execution off for recycle loops and other implicit couplings until
+their transient contract is explicitly supported.
 
 ## Python Dynamic Simulation
 
@@ -525,31 +660,55 @@ TransferFunctionBlock leadLag = new TransferFunctionBlock();
 
 ## Common Pitfalls
 
+Before relying on a mixed transient flowsheet, inspect its state-ownership inventory separately from runtime activation
+and physics qualification:
+
+```java
+neqsim.process.dynamics.DynamicCapabilityReport report =
+    neqsim.process.dynamics.DynamicCapabilityReport.from(process);
+if (!report.isFullyAudited()) {
+  throw new IllegalStateException(report.getReviewItems().toString());
+}
+report.assertStrictTransientReady();
+```
+
+All built-in process-element declarations of `runTransient(double, UUID)` are mapped, and CI rejects a new built-in
+override unless it is classified or cites an explicit repository ADR. Custom/downstream overrides remain
+`UNCLASSIFIED_DYNAMIC` until reviewed. `isFullyAudited()` is an inventory signal only: it does not certify numerical
+stability, conservation, benchmark parity, controls performance, or safety suitability. In particular,
+`PipeBeggsAndBrills` has distributed profile state but no conservative line-pack/storage term; do not use its capability
+label to claim severe-slugging or liquid-rich transient validity. Use `TwoFluidPipe` only when the requested
+configuration fits a numerically verified or experimentally qualified evidence-matrix row. Route failed or unsupported
+severe-slugging, slug-statistics, and boundary-composition cases to a separately qualified model or controlled
+experimental study.
+
 1. **Always run steady state first**: Call `process.run()` before `runTransient()`
 2. **Timestep size**: Start with 1.0 s, reduce if oscillating (0.1-0.5 s)
-3. **Reverse acting**: Level controllers are usually reverse-acting (level up = open valve)
+3. **Liquid-outlet level-controller direction**: use `setReverseActing(false)` so level up drives the outlet valve further open. Reverse acting on this configuration drives the loop the wrong way.
 4. **Controller windup**: Large setpoint changes can cause integral windup
 5. **Separator dimensions**: Must set `setInternalDiameter()` and `setSeparatorLength()` for meaningful level dynamics. For dynamic simulation, set directly on the separator; for design purposes, configure via `SeparatorMechanicalDesign` (see neqsim-api-patterns skill)
 6. **Measurement range**: Set min/max on transmitters to match process range
 7. **Enable dynamic (inventory) mode for level loops**: after `process.run()` (steady), call `setCalculateSteadyState(false)` on the separator AND every valve, then `separator.setLiquidLevel(startFraction)`, before `runTransient`. If steady-state mode is left on, the separator liquid level stays pinned at its default (0.5) and the level controller never acts. The valve `Cv` is auto-derived from the steady solve. A **liquid-outlet** level valve is `setReverseActing(false)` (level up -> valve opens); put a pressure controller on the gas-outlet valve so the vessel pressure is held and the level loop is isolated.
-
+8. **Physical-step UUIDs**: never reuse one non-null UUID across multiple outer timesteps. Reuse is reserved for refinement/evaluation of one physical step.
 
 ## Pluggable Integrator Strategies
 
-Beyond the default fixed-step explicit-Euler loop, `ProcessSystem` accepts a
-pluggable `IntegratorStrategy`. Implementations live in `neqsim.process.dynamics`:
+`ProcessSystem` accepts a pluggable `IntegratorStrategy`, but this hook does not
+by itself make the complete flowsheet a stiff vector ODE/DAE system. Implementations
+live in `neqsim.process.dynamics`:
 
 | Strategy | Class | Notes |
 |----------|-------|-------|
 | Explicit Euler | `ExplicitEulerIntegrator` | Default; fast, conditionally stable |
-| BDF-1 (Implicit Euler) | `BDFIntegrator` | Newton + FD Jacobian (tol 1e-8, maxIter 25). Falls back to explicit Euler if Newton diverges; check `lastStepFellBack()` |
+| BDF-1 (Implicit Euler) | `BDFIntegrator` | Experimental local strategy. Newton + FD Jacobian; can fall back to explicit Euler when Newton diverges. Inspect `lastStepFellBack()` and do not treat fallback runs as qualified stiff/DAE evidence. |
 
 ```java
 import neqsim.process.dynamics.BDFIntegrator;
 import neqsim.process.dynamics.ExplicitEulerIntegrator;
 import neqsim.process.dynamics.IntegratorStrategy;
 
-process.setIntegratorStrategy(new BDFIntegrator());   // stiff dynamics
+BDFIntegrator bdf = new BDFIntegrator();
+process.setIntegratorStrategy(bdf);
 // process.setIntegratorStrategy(new ExplicitEulerIntegrator()); // explicit default
 // process.setIntegratorStrategy(null);  // reset to default ExplicitEulerIntegrator
 IntegratorStrategy current = process.getIntegratorStrategy();
@@ -558,12 +717,15 @@ IntegratorStrategy current = process.getIntegratorStrategy();
 For multi-area plants the strategy is propagated to every child area:
 `plant.setIntegratorStrategy(new BDFIntegrator())`.
 
+A professional stiff-solver acceptance path must fail loudly or expose explicit
+fallback diagnostics; silent fallback is not an acceptable qualification result.
+
 ## Event Scheduling (ESD, IOA, setpoint changes)
 
 Time-stamped events (ESD trips, valve closures, setpoint ramps) are managed by
-`EventScheduler` in `neqsim.process.dynamics`. Every call to
-`runTransient(dt, id)` fires events with `time <= currentTime` at the top of
-the step, before equipment runs.
+`EventScheduler` in `neqsim.process.dynamics`. `ProcessSystem.runTransient(dt, id)`
+advances the process clock, then fires events with `time <= currentTime` before
+equipment runs.
 
 ```java
 import neqsim.process.dynamics.EventScheduler;
@@ -578,12 +740,30 @@ events.scheduleEvent(300.0, "Setpoint ramp", new Runnable() {
 process.setEventScheduler(events);
 
 for (int i = 0; i < nSteps; i++) {
-  process.runTransient(dt);   // due events fire automatically
+  process.runTransient(dt);   // fresh physical-step ID; due events fire automatically
 }
 
 int fired = events.getFiredEvents().size();
 int pending = events.getPendingEvents().size();
 ```
+
+For event-aware/adaptive work, inspect event state without mutating it and
+checkpoint scheduler bookkeeping explicitly:
+
+```java
+EventScheduler.Snapshot eventState = events.snapshot();
+double nextEventTime = events.getNextEventTime();
+java.util.List<EventScheduler.ScheduledEvent> due = events.getDueEvents(process.getTime());
+
+// If a trial is rejected, restore pending/fired membership.
+events.restore(eventState);
+```
+
+`restore(...)` restores only scheduler pending/fired membership. It cannot undo
+an already executed `Runnable` side effect. A rejected trial must defer external
+actions until acceptance or restore every object those actions mutate as part of
+the same transaction. This is required before safety/OTS event replay can be
+called transactional.
 
 For multi-area plants install the scheduler once on the `ProcessModel`; it is
 propagated to every child area, and `plant.runTransient(dt, id)` advances all
@@ -597,6 +777,8 @@ plant.runTransient(dt, java.util.UUID.randomUUID());
 **Note**: `EventScheduler` is declared `transient` on `ProcessSystem` because
 event `Runnable` payloads (lambdas, anonymous classes) are usually not
 serializable. Re-install the scheduler after deserialising a saved process.
+`EventScheduler.Snapshot` itself can be serialized when its event actions are
+serializable, which is useful for explicit checkpoint/restart coordination.
 
 ## New Measurement Devices (v3.11)
 

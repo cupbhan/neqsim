@@ -1,7 +1,7 @@
 ---
 name: neqsim-process-modeling
-description: "Process modeling and flowsheet construction patterns for NeqSim. USE WHEN: building executable NeqSim process simulations, ProcessSystem flowsheets, or runnable process models with streams, separators, compressors, heat exchangers, valves, pumps, distillation columns, recycles, adjusters, topology checks, result extraction, and engineering validation."
-last_verified: "2026-07-18"
+description: "Process modeling and flowsheet construction patterns for NeqSim. USE WHEN: building executable NeqSim process simulations, ProcessSystem flowsheets, or runnable process models with streams, separators, compressors, heat exchangers, valves, pumps, distillation columns, recycles, adjusters, topology checks, result extraction, and engineering validation - for example a multi-stage gas compression train with intercooling, an HP/LP separation train, or a gas treatment unit."
+last_verified: "2026-08-29"
 ---
 
 # NeqSim Process Modeling Skill
@@ -92,6 +92,14 @@ index; maps from vendor curve sheets; limits from datasheets + piping class. For
 the governed enterprise checklist and readiness gates use
 `enterprise-process-model-build-verify` (`target_fidelity="optimization_ready"`).
 
+For MCP `runProcess` compressor protection, keep embedded compressor
+`antiSurge` as screening control only. Use root-level `antiSurgeSystems` when
+the model must bind `CompressorAntiSurgeApplication` to explicit named hot/cold
+recycle valves, cooler, suction mixer, and recycle blocks. Multi-area systems
+must include `area`. Follow `neqsim-compressor-antisurge-recycle` for the JSON
+contract, screening-map provenance, commissioning evidence, and the mandatory
+`NOT_CERTIFIED_FOR_PROTECTION` boundary.
+
 ## Per-Area Three-Phase Flash Control (Speed-Up)
 
 Switch the multiphase (three-phase) flash off on areas that are known to be
@@ -151,11 +159,50 @@ Both switches are re-applied by `run(UUID)`, `run_step(UUID)`,
 `runSequential(UUID)`, `runParallel(UUID)`, `runHybrid(UUID)`,
 `runDataflow(UUID)` and `runTransient(double, UUID)`.
 
+## Closing Feedback Loops Automatically (`makeRecycles`)
+
+Do **not** hand-write a tear stream (`Stream` clone + `Recycle`) per feedback
+stream any more. A loop wired straight back into an upstream mixer, with no
+`Recycle` in it, is an *implicit tear*: it converges only through the surrounding
+sweep, so it has no tolerance, no acceleration and no convergence report. Across
+`ProcessModel` areas it is worse — a stream produced by an area that runs after its
+consumer is closed only by the outer Gauss-Seidel pass, which has no relaxation
+setting, so the plant residual sits on a floor no tolerance can reach.
+
+```python
+created = process.makeRecycles()        # ProcessSystem — SCCs of one flowsheet
+created = plant.makeRecycles()          # ProcessModel — cross-area streams, then each area
+plant.setAutoRecycles(True)             # or let run()/runUntilConverged() do it
+```
+
+- Tear point = inlet with the smallest **recycle ratio** (tear flow / total inlet
+  flow of the consuming unit), which sets the contraction rate of the tear. One edge
+  torn per round, structure recomputed after — nested cycles get the minimum number
+  of tears.
+- Generated recycles start on direct substitution with `setAdaptiveAcceleration(true)`
+  (never pin `setAccelerationMethod(...)` — that sets `accelerationMethodExplicit` and
+  disables the self-upgrade) plus an absolute flow tolerance at 1e-6 of the area's
+  largest flow, so a near-zero leg converges on absolute change.
+- Self-seeding (runs once when streams have no fluid) and idempotent — call order is
+  not your problem, repeat calls insert nothing.
+- Only `Mixer` and `Manifold` inlets are tearable (`replaceStream(int, StreamInterface)`).
+  Loops closing on other equipment are logged and left alone; route them through a mixer.
+- `setAutoRecycles` defaults to **false**: inserting a tear changes how an existing
+  flowsheet iterates, so it must be opted into.
+
 ## Required Checks
 
 - Temperatures and pressures use explicit units in setters.
 - Fluids have a mixing rule before simulation.
 - Branching streams use cloned fluids or well-defined equipment outlet streams.
+- Phase-separating equipment exposes conventional gas/liquid product accessors;
+  domain aliases return those same objects rather than separate streams.
+- `getInletStreams()` and `getOutletStreams()` contain every externally connected,
+  live stream. Their entries remain object-identical across reruns so downstream
+  equipment never retains a stale product reference.
+- After solving a phase separator or column, verify the gas outlet contains a gas
+  phase, the liquid outlet contains an oil/liquid/aqueous phase, and total plus
+  per-component balances close. Getter existence alone is not product validation.
 - Every equipment item has a unique name inside the process.
 - Recycles and adjusters are added after their connected equipment.
 - **Pick the separator class by orientation, or set it explicitly.** Gas-capacity
@@ -194,12 +241,66 @@ Both switches are re-applied by `run(UUID)`, `run_step(UUID)`,
 - Use `Dexpi20XmlWriter` for native Plant/P&ID exchange and `Dexpi20ProcessModelWriter` for native Process/PFD/BFD
   exchange. A Proteus document with a changed header is not native DEXPI 2.0. Preserve the conformance report and still
   require a named-CAE round-trip before project qualification.
+- Keep an explicitly registered terminal product as `new Stream(productName, upstreamOutlet)` when the product must
+  remain a named topology node. NeqSim reports the wrapped outlet as that stream's inlet and the DEXPI Process exporter
+  maps the node to a sink. Zero-flow and isolated empty streams must not be deleted merely to avoid invalid empty port
+  collections.
+- An isolated `new Stream(name)` with no fluid runs as an inactive topology placeholder. Do not connect downstream
+  thermodynamic equipment to that placeholder until a real fluid state is assigned.
 - Use `Cfihos20HandoverExporter` only with an exact project-controlled CFIHOS 2.0 Core or Extended RDL delivery.
   Verify its digest from controlled bytes, map canonical nodes/properties/documents to exact RDL identifiers, record
   mapping approval, and close the generated gap register. Its CSVs are staging data; Principal transformation,
   target-system validation, contractual completeness, and information acceptance remain external decisions.
 - Compressor, pump, heat exchanger, separator, and pipeline cases identify applicable
   standards through `neqsim-standards-lookup`.
+
+## Process Safety Is Part of a Capacity or Tie-in Study
+
+A capacity, debottlenecking or tie-in study that reports only throughput is
+incomplete, and in an oil-and-gas setting it will not pass review. **More flow
+through a plant changes its relief demand, its blowdown inventory and its
+overpressure exposure.** Run these checks in the same study, not as a follow-on:
+
+1. **Overpressure protection per vessel.** For every vessel whose duty changes,
+   tabulate design pressure, PSV set pressure and the measured operating
+   pressure. Flag a set point above design (accumulation beyond the ASME VIII
+   110 % single-device allowance) and a set point far below design (it probably
+   protects a lower-rated downstream section — confirm which). Allow a rounding
+   tolerance of about 1 % before calling a set point above design a
+   non-conformance: design pressure and set pressure usually come from different
+   documents.
+2. **Relief adequacy against the governing case.** Size the relief with
+   `neqsim-relief-flare-network` (API 520 Part I critical gas flow) and compare
+   with the installed orifice. A PSV sized at a few percent of normal flow is
+   normal for a thermal or blocked-outlet case — it means the protection against
+   sustained gas blowby rests on the **shutdown system**, not the valve. Say so
+   explicitly rather than implying the PSV covers full flow.
+3. **Inflow bounding.** The maximum flow into each pressure step is set by the
+   upstream chokes and control valves. Without a choke `Cv` the blowby and
+   overpressure cases cannot be closed from first principles — record that as a
+   gap rather than assuming a number.
+4. **Blowdown.** Restriction-orifice sizes give the depressurisation time
+   (`neqsim-depressurization-mdmt`); without them, state that time-to-blowdown is
+   unknown.
+5. **The safety meaning of an over-capacity vessel.** A separator or scrubber
+   above its Souders-Brown gas-load limit carries liquid over into downstream
+   equipment. That is a **safety** finding, not only a production one: liquid to
+   a compressor, liquid to a dehydration bed, liquid to the flare KO drum. If a
+   capacity calculation shows an exceedance, follow the carry-over path and say
+   what it reaches.
+
+**Ordering rule.** Establish the capacity answer first, then the safety
+consequence of it — the safety question depends on which unit is loaded and by
+how much. Reporting capacity without step 5 is the most common way a
+throughput-increase study is quietly wrong.
+
+**Data-retrieval expectations** (verified on an NCS platform): design pressure
+and relief-device orifice/rated capacity are typically **not** tag attributes in
+an engineering register — they live in the mechanical and relief data sheets and
+often need OCR. Budget for that. Vessel *geometry* on a tag record may be an
+L×W×H envelope rather than an internal diameter; **where a data sheet exists it
+governs the tag field**, and the difference can move a utilisation result by tens
+of percent.
 
 ## Related Skills
 
@@ -208,3 +309,7 @@ Both switches are re-applied by `run(UUID)`, `run_step(UUID)`,
 - `neqsim-troubleshooting` — flash and process convergence recovery.
 - `neqsim-process-extraction` — JSON builder and route extraction from documents.
 - `neqsim-notebook-patterns` — executable notebook structure and devtools setup.
+- `neqsim-process-safety` — barrier, HAZOP, LOPA and SIL framing for the safety
+  step above.
+- `neqsim-relief-flare-network` — PSV sizing per API 520/521 and flare loads.
+- `neqsim-depressurization-mdmt` — blowdown time and low-temperature screening.

@@ -12,6 +12,8 @@ Requirements:
     pip install nbconvert nbformat
 """
 
+import base64
+import binascii
 import os
 import sys
 import json
@@ -21,6 +23,20 @@ from datetime import datetime
 from urllib.parse import quote
 
 NOTEBOOK_DOCUMENTATION_OVERRIDES = {
+    "ESP_Pump_Tutorial": {
+        "title": "ESP Pump Tutorial",
+    },
+    "MercuryRemoval_LNG_Pretreatment": {
+        "title": "Mercury Removal in LNG Pre-Treatment",
+        "description": (
+            "Executable NeqSim mercury-removal screening with transient "
+            "loading, preliminary design and cost boundaries, and internal "
+            "verification"
+        ),
+        "show_generated_title": False,
+        "strip_notebook_title": True,
+        "colab_link_text": "open it in Google Colab",
+    },
     "process equipmentutl": {
         "title": (
             "Reservoir-to-Market Optimisation with NeqSim Process Equipment"
@@ -45,6 +61,42 @@ def get_notebook_documentation_metadata(notebook, notebook_name):
     if isinstance(notebook_metadata, dict):
         documentation_metadata.update(notebook_metadata)
     return documentation_metadata
+
+
+def get_first_markdown_h1(notebook):
+    """Return the first notebook-owned level-one heading, if present."""
+
+    for cell in notebook.get("cells", []):
+        if cell.get("cell_type") != "markdown":
+            continue
+        source = "".join(cell.get("source", []))
+        match = re.search(r"(?m)^#\s+(.+?)\s*$", source)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def resolve_notebook_documentation(notebook, notebook_name):
+    """Resolve shared page and catalog metadata for one notebook."""
+
+    documentation_metadata = get_notebook_documentation_metadata(
+        notebook,
+        notebook_name,
+    )
+    default_title = (
+        get_first_markdown_h1(notebook)
+        or notebook_name.replace("_", " ").replace("-", " ")
+    )
+    title = documentation_metadata.get("title", default_title)
+    description = documentation_metadata.get(
+        "description",
+        (
+            f"Notebook for {title}, including NeqSim Python examples "
+            "and workflow context."
+        ),
+    )
+    return documentation_metadata, title, description
+
 
 # Ensure Unicode output works on Windows consoles (cp1252 by default).
 for _stream in (sys.stdout, sys.stderr):
@@ -78,9 +130,101 @@ def escape_liquid_tags(content):
     return content
 
 
+def markdown_heading_anchor(heading):
+    """Return the GitHub/Jekyll fragment generated for one Markdown heading."""
+
+    heading = re.sub(r"<[^>]+>", "", heading)
+    heading = re.sub(r"[\x60*_~]", "", heading)
+    heading = re.sub(r"[^\w\- ]", "", heading.lower())
+    return re.sub(r"\s+", "-", heading.strip())
+
+
+def anchor_comparison_key(anchor):
+    """Return punctuation-insensitive text for matching a legacy fragment."""
+
+    return "".join(
+        character for character in anchor.lower() if character.isalnum()
+    )
+
+
+def repair_local_heading_links(content):
+    """Repair unambiguous local heading links without touching code fences."""
+
+    lines = content.splitlines(keepends=True)
+    headings = []
+    occurrences = {}
+    fence_marker = None
+
+    for line in lines:
+        fence = re.match(r"^\s*(?P<fence>[\x60~]{3,})", line)
+        if fence:
+            marker = fence.group("fence")[0]
+            if fence_marker is None:
+                fence_marker = marker
+            elif marker == fence_marker:
+                fence_marker = None
+            continue
+        if fence_marker is not None:
+            continue
+
+        heading = re.match(r"^#{1,6}\s+(.+?)\s*$", line)
+        if not heading:
+            continue
+        anchor = markdown_heading_anchor(heading.group(1))
+        duplicate = occurrences.get(anchor, 0)
+        occurrences[anchor] = duplicate + 1
+        headings.append(anchor if duplicate == 0 else f"{anchor}-{duplicate}")
+
+    heading_set = set(headings)
+    local_link = re.compile(
+        r"(?P<prefix>\[[^\]\n]+\]\(#)(?P<target>[^)\s]+)(?P<suffix>\))"
+    )
+    repaired = []
+    fence_marker = None
+
+    def replace_link(match):
+        target = match.group("target")
+        if target.lower() in heading_set:
+            return match.group(0)
+
+        target_key = anchor_comparison_key(target)
+        candidates = [
+            heading
+            for heading in headings
+            if anchor_comparison_key(heading).startswith(target_key)
+        ]
+        if not target_key or len(candidates) != 1:
+            return match.group(0)
+        return (
+            match.group("prefix")
+            + candidates[0]
+            + match.group("suffix")
+        )
+
+    for line in lines:
+        fence = re.match(r"^\s*(?P<fence>[\x60~]{3,})", line)
+        if fence:
+            marker = fence.group("fence")[0]
+            if fence_marker is None:
+                fence_marker = marker
+            elif marker == fence_marker:
+                fence_marker = None
+            repaired.append(line)
+            continue
+        if fence_marker is not None:
+            repaired.append(line)
+        else:
+            repaired.append(local_link.sub(replace_link, line))
+
+    return "".join(repaired)
+
+
 def notebook_to_markdown(notebook_path):
     """
-    Convert a Jupyter notebook to Markdown format suitable for Jekyll.
+    Convert a notebook to Jekyll Markdown and extract stored PNG outputs.
+
+    PNG results are written beside the notebook in ``figures/`` with stable,
+    notebook-specific names. Repeated conversion replaces the same image files.
 
     Args:
         notebook_path: Path to the .ipynb file
@@ -92,22 +236,24 @@ def notebook_to_markdown(notebook_path):
         nb = json.load(f)
 
     notebook_name = Path(notebook_path).stem
-    documentation_metadata = get_notebook_documentation_metadata(
-        nb,
-        notebook_name,
-    )
-    title = documentation_metadata.get(
-        'title',
-        notebook_name.replace('_', ' ').replace('-', ' '),
-    )
-    description = documentation_metadata.get(
-        'description',
-        'Jupyter notebook tutorial for NeqSim',
+    documentation_metadata, title, description = (
+        resolve_notebook_documentation(
+            nb,
+            notebook_name,
+        )
     )
     generated_title = (
         f"# {title}\n\n"
-        if documentation_metadata.get('show_generated_title', True)
+        if documentation_metadata.get('show_generated_title', False)
         else ''
+    )
+    colab_link_text = documentation_metadata.get(
+        'colab_link_text',
+        'open in Google Colab',
+    )
+    strip_first_h1 = documentation_metadata.get(
+        'strip_first_h1',
+        documentation_metadata.get('strip_notebook_title', True),
     )
     title_yaml = json.dumps(str(title), ensure_ascii=False)
     description_yaml = json.dumps(str(description), ensure_ascii=False)
@@ -128,19 +274,30 @@ nav_order: 1
 {generated_title}> **Note:** This is an auto-generated Markdown version of the Jupyter notebook
 > [`{notebook_name}.ipynb`](https://github.com/equinor/neqsim/blob/master/docs/examples/{encoded_notebook_filename}).
 > You can also [view it on nbviewer](https://nbviewer.org/github/equinor/neqsim/blob/master/docs/examples/{encoded_notebook_filename})
-> or [open in Google Colab](https://colab.research.google.com/github/equinor/neqsim/blob/master/docs/examples/{encoded_notebook_filename}).
+> or [{colab_link_text}](https://colab.research.google.com/github/equinor/neqsim/blob/master/docs/examples/{encoded_notebook_filename}).
 
 ---
 
 """
 
     markdown_content = []
+    first_h1_stripped = False
 
-    for cell in nb.get('cells', []):
+    for cell_index, cell in enumerate(nb.get('cells', [])):
         cell_type = cell.get('cell_type', '')
         source = ''.join(cell.get('source', []))
 
         if cell_type == 'markdown':
+            if strip_first_h1 and not first_h1_stripped:
+                # The Jekyll page title is supplied by front matter. Keep the
+                # notebook's H1 for Colab while avoiding a duplicate page H1.
+                source, replacements = re.subn(
+                    r'(?m)^# [^\r\n]*(?:\r?\n){0,2}',
+                    '',
+                    source,
+                    count=1,
+                )
+                first_h1_stripped = replacements == 1
             # Add markdown content directly
             markdown_content.append(source)
             markdown_content.append('\n\n')
@@ -161,9 +318,38 @@ nav_order: 1
             if outputs:
                 has_output = False
                 output_text = []
+                image_links = []
 
-                for output in outputs:
+                for output_index, output in enumerate(outputs):
                     output_type = output.get('output_type', '')
+
+                    if output_type in ('display_data', 'execute_result'):
+                        image_data = output.get('data', {}).get('image/png')
+                        if image_data is not None:
+                            encoded = ''.join(image_data) if isinstance(image_data, list) else image_data
+                            try:
+                                image_bytes = base64.b64decode(''.join(encoded.split()), validate=True)
+                            except (binascii.Error, ValueError, TypeError) as error:
+                                raise ValueError(
+                                    f"Invalid PNG output in {notebook_name}, cell {cell_index + 1}"
+                                ) from error
+                            if not image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+                                raise ValueError(
+                                    f"Output is not PNG in {notebook_name}, cell {cell_index + 1}"
+                                )
+                            image_name = (
+                                f"{notebook_name}_cell_{cell_index + 1}_output_{output_index + 1}.png"
+                            )
+                            image_path = Path(notebook_path).parent / 'figures' / image_name
+                            image_path.parent.mkdir(parents=True, exist_ok=True)
+                            image_path.write_bytes(image_bytes)
+                            image_links.append(
+                                f"![Result figure from cell {cell_index + 1}]"
+                                f"(figures/{quote(image_name, safe='-_.')})\n\n"
+                            )
+                            # The PNG is the useful representation, not Matplotlib's
+                            # accompanying '<Figure size ...>' text/plain fallback.
+                            continue
 
                     if output_type == 'stream':
                         text = ''.join(output.get('text', []))
@@ -198,12 +384,15 @@ nav_order: 1
                     markdown_content.append('```\n\n')
                     markdown_content.append('</details>\n\n')
 
+                markdown_content.extend(image_links)
+
     full_content = front_matter + ''.join(markdown_content)
+    full_content = repair_local_heading_links(full_content)
 
     # Escape Liquid tags
     full_content = escape_liquid_tags(full_content)
 
-    return full_content
+    return full_content.rstrip() + "\n"
 
 
 def convert_all_notebooks(examples_dir):
@@ -338,6 +527,31 @@ CURATED_NOTEBOOKS = (
     },
 )
 
+JAVA_EXAMPLE_DESCRIPTIONS = {
+    'EclipseE300ExportImportExample': 'Eclipse E300 fluid export and import workflow',
+    'FlowRegimeDebug': 'Flow-regime diagnostic calculations',
+    'FlowRegimeDetectionExample': 'Flow-regime detection across operating cases',
+    'MultiScenarioVFPExample': 'Multi-scenario vertical-flow-performance comparison',
+    'MultiphaseModelPressureDropComparison': (
+        'Multiphase pressure-drop model comparison'
+    ),
+    'OffshoreEmissionReportingExample': 'Offshore emissions accounting workflow',
+    'RealTimeIntegrationExample': 'Real-time process-data integration pattern',
+    'SlugTrackingComparisonExample': 'Slug-tracking model comparison',
+    'TransientPipelineLiquidAccumulationExample': (
+        'Transient pipeline liquid-accumulation study'
+    ),
+    'TwoFluidPipeExample': 'Two-fluid pipe setup and reporting',
+    'TwoFluidPipeSlugTrackingExample': 'Two-fluid slug-tracking workflow',
+    'TwoFluidPipelineLiquidAccumulationExample': (
+        'Two-fluid pipeline accumulation study'
+    ),
+    'TwoFluidVsDriftFluxComparisonExample': (
+        'Two-fluid and drift-flux comparison'
+    ),
+    'WellToOilStabilizationExample': 'Well-to-oil-stabilization process workflow',
+}
+
 
 def markdown_table_cell(value):
     """Return one normalized, escaped Markdown table cell."""
@@ -367,6 +581,34 @@ def notebook_view_links(repository_path, markdown_path=None, guide=None):
     return r" \| ".join(links)
 
 
+def notebook_stored_status(notebook):
+    """Describe the execution evidence stored in one notebook."""
+
+    code_cells = [
+        cell
+        for cell in notebook.get('cells', [])
+        if cell.get('cell_type') == 'code'
+    ]
+    execution_counts = [cell.get('execution_count') for cell in code_cells]
+    outputs = [
+        output
+        for cell in code_cells
+        for output in cell.get('outputs', [])
+    ]
+
+    has_error = any(output.get('output_type') == 'error' for output in outputs)
+    has_stderr = any(output.get('name') == 'stderr' for output in outputs)
+    if has_error or has_stderr:
+        raise ValueError('Notebook retains an exception or stderr output')
+
+    executed_count = sum(count is not None for count in execution_counts)
+    if executed_count == len(code_cells):
+        return 'Executed'
+    if executed_count:
+        return 'Partial'
+    return 'Source only'
+
+
 def create_examples_index(examples_dir):
     """
     Create an index.md file listing all notebooks.
@@ -391,9 +633,11 @@ has_children: true
 
 This section contains tutorials, code examples, and Jupyter notebooks demonstrating NeqSim capabilities.
 
-## Jupyter Notebook Tutorials
+## Maintained workflow notebooks
 
-Interactive Python notebooks using NeqSim through [neqsim-python](https://github.com/equinor/neqsim-python):
+These repository workflows live under `examples/notebooks/` and are maintained
+with their engineering guides. Their rows describe the validation evidence stored
+with each notebook; follow the linked guide for exact scope and limitations.
 
 | Notebook | Description | View Options |
 |----------|-------------|--------------|
@@ -406,49 +650,67 @@ Interactive Python notebooks using NeqSim through [neqsim-python](https://github
             f"{notebook_view_links(entry['path'], guide=entry.get('guide'))} |\n"
         )
 
+    content += """
+## Local notebook catalog
+
+Stored status describes the committed notebook only; it is not a rerun against the
+current `master` branch:
+
+- **Executed** — every code cell has a stored execution count and there is no stored
+  exception or standard-error stream.
+- **Partial** — some, but not all, code cells have stored execution counts.
+- **Source only** — no code cell has a stored execution count.
+
+For engineering use, rerun from a clean environment, inspect all outputs, and validate
+the model, units, assumptions, and operating range. A rendered Markdown page is a
+reading aid, not execution evidence.
+
+| Stored status | Notebook | Description | View options |
+|---------------|----------|-------------|--------------|
+"""
+
     for nb in notebooks:
         name = nb.stem
         with open(nb, 'r', encoding='utf-8') as notebook_file:
             notebook = json.load(notebook_file)
-        documentation_metadata = get_notebook_documentation_metadata(
+        _, title, description = resolve_notebook_documentation(
             notebook,
             name,
-        )
-        title = documentation_metadata.get(
-            'title',
-            name.replace('_', ' ').replace('-', ' '),
-        )
-        description = documentation_metadata.get(
-            'description',
-            'See notebook for details',
         )
         links = notebook_view_links(
             f"docs/examples/{name}.ipynb",
             f"{name}.md",
         )
+        stored_status = notebook_stored_status(notebook)
         content += (
-            f"| **{markdown_table_cell(title)}** | "
+            f"| **{stored_status}** | "
+            f"**{markdown_table_cell(title)}** | "
             f"{markdown_table_cell(description)} | {links} |\n"
         )
 
     if java_files:
         content += """
-## Java Examples
+## Standalone Java source examples
 
-Example Java code demonstrating NeqSim APIs:
+These files are outside Maven's compiled source tree. The
+`StandaloneJavaDocumentationCompilationTest` compiles the exact catalog against the
+current NeqSim API. This is build verification only, not runtime or engineering-result
+validation. The files retain legacy console output; inspect assumptions and execute the
+required workflow before engineering reuse. For a supported starting point, use the
+[Java getting-started guide](../java-getting-started.md).
 
-| Example | Description |
-|---------|-------------|
+| Example | Build status | Capability |
+|---------|---------------|------------|
 """
         for java_file in java_files:
             name = java_file.stem
             title = name.replace('_', ' ')
-            encoded_name = quote(java_file.name, safe="")
-            github_link = (
-                "https://github.com/equinor/neqsim/blob/master/"
-                f"docs/examples/{encoded_name}"
+            encoded_name = quote(java_file.name, safe='')
+            description = JAVA_EXAMPLE_DESCRIPTIONS.get(name, 'Java example')
+            content += (
+                f"| [{title}]({encoded_name}) | **Build-verified source** | "
+                f"{description} |\n"
             )
-            content += f"| [{title}]({github_link}) | Java example |\n"
 
     if md_files:
         content += """
@@ -474,7 +736,7 @@ Additional documentation and guides:
    pip install neqsim
    ```
 
-2. Or use Google Colab (click the Colab links above) - no installation needed!
+2. Or open a Google Colab link above. Run and inspect the notebook's setup cell first; dependency installation and stored execution status vary by notebook.
 
 ### Local Jupyter Setup
 

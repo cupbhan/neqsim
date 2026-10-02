@@ -325,17 +325,16 @@ class ConsistencyChecker:
 
     def _check_gudrun_vs_calculations(self):
         """Specifically check Gudrun study values against notebook calculations."""
-        print("Checking Gudrun study vs notebook calculations...")
-
         if not hasattr(self, 'results'):
             return
 
         gudrun = self.results.get('gudrun_field_validation', {})
         gca = self.results.get('gas_composition_analysis', {})
 
+        # Only one legacy study carries these keys; stay silent for every other task.
         if not gudrun or not gca:
-            print("  No Gudrun or gas composition data to compare")
             return
+        print("Checking Gudrun study vs notebook calculations...")
 
         # Key comparisons to make
         comparisons = []
@@ -458,6 +457,11 @@ class ConsistencyChecker:
         print("Checking numerical consistency...")
 
         for concept, values in self.extracted_values.items():
+            # The fallback bucket can contain unrelated engineering quantities
+            # whose surrounding text did not match a known concept alias.
+            if concept == "other":
+                continue
+
             if len(values) < 2:
                 continue
 
@@ -521,9 +525,12 @@ class ConsistencyChecker:
     def _normalize_concept(self, key: str) -> str:
         """Normalize a key name to a concept."""
         key_lower = key.lower().replace('_', ' ')
+        generic_aliases = {'deviation', 'difference', 'discrepancy', 'factor'}
 
         for concept, aliases in self.CONCEPT_ALIASES.items():
             for alias in aliases:
+                if alias in generic_aliases and key_lower.strip() != alias:
+                    continue
                 if alias in key_lower:
                     return concept
 

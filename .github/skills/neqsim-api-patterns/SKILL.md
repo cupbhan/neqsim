@@ -1,12 +1,92 @@
 ---
 name: neqsim-api-patterns
 description: "NeqSim API patterns and code recipes. USE WHEN: writing Java or Python code that uses NeqSim for thermodynamic calculations, process simulation, or property retrieval. Covers EOS selection, fluid creation, flash calculations, property access, equipment patterns, and unit conventions."
-last_verified: "2026-07-10"
+last_verified: "2026-09-20"
 ---
 
 # NeqSim API Patterns
 
 Copy-paste reference for common NeqSim operations. All Java code must be Java 8 compatible.
+
+## MCP server vs. Python/Java API — which to use
+
+**Default policy: MCP first.** For any single calculation, always check whether
+a NeqSim MCP tool (`mcp_neqsim_*`) already covers it before writing Python or
+Java. Only drop to code when MCP genuinely cannot do the job. Concretely:
+
+1. **Curated tool exists** (`runFlash`, `runProcess`, `runPVT`, `getPhaseEnvelope`,
+   `sizeEquipment`, `calculateStandard`, `runFlowAssurance`, `runBatch`, ...) →
+   use it directly. Confirm field names with `getSchema`/`validateInput` first.
+2. **No curated tool, but it might still be reachable** → use `runCapability`
+   (`search` → `inspectApi` → invoke) before writing any code.
+3. **`runCapability` reports `inspect-only`, or the task needs loops/plotting/
+   state/notebooks/reports** → fall back to the Python API (`import neqsim`)
+   or Java in a checkout. This is the *only* reason to write code for a
+   calculation MCP already exposes.
+4. **NeqSim itself lacks the capability** (not a packaging gap, an engine gap)
+   → implement it in Java with tests (`spotless:apply`) rather than working
+   around it with ad-hoc Python; see `neqsim-troubleshooting` and the
+   continuous-improvement rule in `AGENTS.md`.
+
+Both the MCP tools and the Python/Java API call the same NeqSim engine — the
+difference is packaging, not physics — but MCP additionally gives a stable
+JSON contract, schema validation, and provenance/quality-gate info (EOS,
+convergence, benchmark trust, standards) for free.
+
+| Use the **MCP server** (`mcp_neqsim_*` tools) when... | Use the **Python/Java API** (`import neqsim`, or Java in a checkout) when... |
+|---|---|
+| No dev environment is available (chat-only client, no terminal/Python/JVM) | Building a task notebook, multi-unit flowsheet, or anything with loops, custom logic, plotting, or state you inspect between steps |
+| The need is one bounded calculation a curated tool already covers (`runFlash`, `runProcess`, `getPhaseEnvelope`, `sizeEquipment`, `calculateStandard`, ...) | The calculation is not covered by a curated tool and `runCapability` routes it `inspect-only` (no safe generic invocation exists) |
+| You want the built-in provenance/quality-gate envelope (EOS, convergence, benchmark trust, standards) with no extra code | The run is long or iterative (Monte Carlo, sweeps, optimizer loops) — `runCapability`'s cooperative timeout is for short calls; a script has none |
+| A different agent/tool needs the result over a stable JSON contract (`composeWorkflow`, `composeMultiServerWorkflow`, cross-client interoperability) | You are inside the `/solve-task` workflow — task folders, validators, report generation, and the NeqSim Runner are Python-only, not exposed over MCP |
+| Doing bounded discovery of a capability before writing code (`runCapability` search, `inspectApi`) | You need direct object access (intermediate phase properties, custom equipment subclassing, mechanical design classes) beyond what any tool exposes |
+
+In a session with both available (e.g. this workspace), default to a curated MCP
+tool for a single quick calculation or lookup; switch to writing code as soon as
+the task needs more than one call, custom logic, or a deliverable (notebook,
+report, task folder). See `neqsim-task-workflow` skill §0.6 for the matrix by
+*environment* (workspace checkout / pip toolkit / chat-only) rather than by task.
+
+## MCP Runtime Capability Routing
+
+When a calculation is not exposed by a curated MCP domain tool, use the generic runtime index
+before proposing a new tool:
+
+1. Search with `runCapability({"action":"search","query":"<domain method>"})`.
+2. Inspect the selected class with `inspectApi` to pin the deployed signature.
+3. Follow the returned route:
+     - `static-json`: invoke through `runCapability` with exact `className`, `methodName`,
+         `parameterTypes`, and ordered JSON `arguments`.
+     - `process-json`: build the stateful equipment through `runProcess`.
+     - `inspect-only`: use a curated tool or add an explicit, reviewed adapter.
+
+Discovery is broader than execution by design. `runCapability` only invokes public static methods
+in approved domain packages with scalar, enum, or bounded-array JSON types; MCP runners, raw generic
+containers, oversized payloads, arbitrary objects, and instance methods are excluded. Its timeout
+uses cooperative Java interruption, so route long-running calculations through a curated runner or
+`runProcess`. Treat runtime presence as capability evidence, then check tests, benchmark trust, and
+standards before using the result for engineering decisions.
+
+### MCP tool inputs: schema first, validate, then run
+
+Every calculation tool (`run*`, `sizeEquipment`, `designUtilities`, `calculateStandard`) has a
+tool-specific input schema whose field names and units mirror the runner exactly. Do not guess
+field names such as `flowRate_kg_hr` or `setPressure_barg`:
+
+1. `getSchema("run_relief", "input")` — snake_case or camelCase (`runRelief`) both resolve.
+   `required` / `allOf` (mode-dependent, e.g. `case: gas`) / `oneOf` tell you what to send.
+2. `validateInput({"tool": "runRelief", "input": {...}})` — any tool; returns
+   `SCHEMA_VIOLATION` issues naming the missing or mistyped field. Flash and process JSON may
+   also be passed bare (auto-detected).
+3. Run, then read `status`, `qualityGate`, `provenance.converged` and `warnings`.
+
+Process JSON pre-flight is strict: `UNRESOLVED_INLET` (an `inlet` naming no unit — feeds are
+units of `"type": "Stream"`), `MISPLACED_UNIT_PARAMETERS` (keys beside `properties`, e.g.
+`outletPressure_bara`; they are otherwise ignored and the unit runs on defaults) and
+`UNRECOGNIZED_INPUT_SHAPE` (no `process`/`areas`/`components`) are errors, and `runProcess`
+refuses to report success for a disconnected flowsheet. `runFlowAssurance` `hydrateRiskMap`
+requires `water` in the composition; an unavailable hydrate temperature is returned as
+`RESULT_NOT_AVAILABLE`, never as `LOW` risk (`RiskLevel.UNKNOWN` in Java).
 
 ## EOS Selection Guide
 
@@ -144,6 +224,49 @@ ops.hydrateFormationTemperature();       // Hydrate T at given P
 ops.calcPTphaseEnvelope();              // Phase envelope
 ```
 
+> **Saturation flashes can fail without throwing.** A failed continuation in
+> `dewPointPressureFlash()` / `bubblePointPressureFlash()` can leave a
+> non-physical pressure on the system and return normally. In a single run someone
+> notices; inside a Monte Carlo loop it silently poisons a percentile. Validate the
+> result on physical grounds instead of trusting the absence of an exception:
+> ```python
+> ops.dewPointPressureFlash()
+> p_dew = fluid.getPressure()
+> if not (10.0 < p_dew < 3.0 * p_reservoir):
+>     p_dew = float("nan")     # reject, do not propagate
+> ```
+
+### Re-flashing a characterised fluid many times (CRITICAL for loops)
+
+To take a phase's composition and flash it somewhere else — produced gas at each
+depletion step, a recycle stream, a Monte Carlo realization — **clone the already
+characterised fluid and overwrite its composition**. Do NOT rebuild it with
+`addTBPfraction`: that re-runs the TBP characterisation on every call.
+
+```python
+probe = fluid.clone()
+probe.setTemperature(T_res + 273.15)
+probe.setPressure(p)
+ns.ThermodynamicOperations(probe).TPflash()
+probe.initProperties()
+
+gas_phase = probe.getPhase("gas")
+produced = fluid.clone()                        # keeps the characterisation
+produced.setMolarComposition(
+    [gas_phase.getComponent(i).getx()
+     for i in range(probe.getNumberOfComponents())])
+produced.setTemperature(288.15)
+produced.setPressure(1.01325)
+ns.ThermodynamicOperations(produced).TPflash()  # -> CGR, gas gravity, etc.
+```
+
+Measured on a 26-component P/A gas condensate with nine pressure nodes: the
+`addTBPfraction` rebuild cost **4.96 s** per realization against **0.97 s** for
+the clone-and-overwrite route, for bit-identical results. Over a 4000-member
+ensemble that is the difference between three hours and four minutes — i.e.
+between propagating uncertainty through the model and deciding not to.
+
+
 ## Unit Conventions
 
 | Quantity | Constructor default | Setter pattern |
@@ -153,7 +276,82 @@ ops.calcPTphaseEnvelope();              // Phase envelope
 | Flow rate | — | `setFlowRate(50000.0, "kg/hr")` |
 | Getting temp | Returns **Kelvin** | `getTemperature() - 273.15` for °C |
 
+### Non-obvious return units
+
+| Call | Returns | Trap |
+|------|---------|------|
+| `Standard_ISO6976(sys, 15, 15, "volume").getValue("GCV")` | **kJ/Sm³** (~40 000) | Dividing by 1e6 gives a nonsense 0.04 MJ/Sm³ — divide by **1e3** |
+| `Standard_ISO6976(...).getValue("WI")` | **kJ/Sm³** | Same |
+| `SURFCostEstimator.setContingencyPct(x)` | — | Takes a **fraction** (0.35), not a percent, despite the name. Same for `WellCostEstimator` |
+| `Cooler.getDuty()` | **W** | Divide by 1e3 for kW |
+
+### Dense-phase CO₂ needs GERG-2008, not a cubic
+
+Benchmarked against CoolProp (Span-Wagner) — density deviation at 40 °C / 100 bara and
+100 °C / 200 bara:
+
+| System class | Deviation |
+|---|---|
+| `SystemSrkEos` | −14.1 % / −7.3 % |
+| `SystemPrEos`, `SystemPrEos1978`, `SystemUMRPRUMCEos` | −12.4 % / −6.1 % |
+| `SystemSrkCPAstatoil` | −17.5 % / −10.3 % |
+| **`SystemGERG2008Eos`** | **+0.01 % / +0.02 %** |
+
+Use `SystemGERG2008Eos` for any CO₂ compression, injection or transport duty. Cubics are
+acceptable for the gas-phase part of the train but not near or above the critical density.
+
+### CPA liquid-water caloric accuracy
+
+Default `SystemSrkCPAstatoil` water Cp can be 8–17% low at 5–60 °C even when
+density is accurate. For qualified pure-water duty calculations, explicitly
+select `setUseCaloricWaterAlpha(true)`, then TP flash and initialize properties.
+The calibration changes the EOS alpha and its derivatives consistently; never
+patch Cp alone or fit water ideal-gas Cp to compensate for a liquid error.
+Caloric checks cover 5–150 °C and 1–100 bara (stable liquid); density qualification
+is 5–60 °C. Mixtures, electrolytes, hydrates and near-critical states need separate
+validation. See [CPA water caloric guidance](../../../docs/thermo/cpa_water_caloric.md)
+for results, provenance and limitations. Legacy behavior remains the default.
+
 ## Process Equipment Patterns
+
+### Standard outlet-stream contract
+
+Equipment that produces phase-separated gas and liquid products must expose the
+conventional `getGasOutStream()` and `getLiquidOutStream()` methods. A
+three-phase unit should also expose its conventional water outlet. Domain names
+such as `getOverheadGasStream()`, `getLeanLiquidStream()`, or
+`getBottomsStream()` are useful aliases, but they supplement rather than replace
+the conventional accessors and must return the same stream objects.
+
+Every equipment class must also report all connected streams through
+`getInletStreams()` and `getOutletStreams()`. These topology lists must contain
+the live public stream objects, not clones or solver-internal tray streams. Once
+an outlet has been handed to downstream equipment, preserve its object identity
+across `run(...)` calls by updating its thermodynamic system in place or using
+the established identity-preserving adoption helper.
+
+When publishing an equilibrium outlet, apply `SystemInterface.setTotalFlowRate(...)`
+before the final TP flash: the rate setter calls `init(0)` and resets the phase state.
+Initialize thermodynamic and transport properties with `initProperties()` after the
+flash, then publish without further rate mutations. Check raw outlet Cp, phase identity
+and component closure before any caller-side reflash; a sequential heat-transfer test
+can expose stale properties that a mass-balance test misses. See
+`TwoFluidPipeOutletThermodynamicsTest` and issue #3685. Handle zero inventory separately
+because its intensive properties are undefined.
+
+For phase-separated equipment, add a focused contract test after a successful
+solve that verifies:
+
+- `assertSame` between conventional accessors, domain aliases, and the matching
+    entries in `getOutletStreams()`;
+- the gas product contains a `gas` phase and the liquid product contains an
+    `oil`, `liquid`, or `aqueous` phase;
+- expected product flows are positive and total/per-component balances close;
+- outlet identity remains unchanged after a warm rerun or changed feed.
+
+Do not add a new equipment-wide interface solely for gas/liquid naming. The
+generic topology contract belongs to `ProcessEquipmentInterface`; conventional
+phase-product methods belong on the phase-separating equipment abstraction.
 
 ### Stream
 
@@ -1055,6 +1253,27 @@ pipe.setFormationTemperatureGradient(4.0, -0.03, "C"); // 4°C top, -30°C/km (i
 pipe.run();
 ```
 
+#### CRITICAL: set the overall heat-transfer coefficient explicitly
+
+Without `setUseOverallHeatTransferCoefficient(true)` the pipe behaves as if `U` were
+infinite: the outlet equilibrates to the ambient / formation temperature regardless of
+length, rate or insulation. On a 1040 m gas tubing string this puts the **wellhead at
+seabed temperature** (5 °C instead of ~51 °C), which silently destroys any hydrate,
+cooldown or arrival-temperature screening built on top of it.
+
+```java
+pipe.setUseOverallHeatTransferCoefficient(true);
+pipe.setHeatTransferCoefficient(15.0);   // W/m2K
+```
+
+Screening values: cased and cemented well in formation ~15 W/m²K; uninsulated subsea
+carbon-steel flowline ~20 W/m²K; wet-insulated flowline ~5 W/m²K. Measured effect on a
+10 km, 0.30 m line with a 40 °C inlet and 6 °C seabed at 4 MSm³/d: default 5.7 °C outlet,
+`U = 20` gives 7.6 °C, `U = 5` gives 21.7 °C.
+
+`setAdiabatic(true)` is **not** a substitute — it currently has no effect on the outlet
+temperature.
+
 ### CO2FlowCorrections (Static Utility)
 
 ```java
@@ -1145,6 +1364,27 @@ double[] cricondenBar = envelope.getCricondenBar();    // [T_K, P_bara, 0]
 double[] cricondenTherm = envelope.getCricondenTherm(); // [T_K, P_bara, 0]
 double critT = envelope.getCriticalTemperature();       // Kelvin
 double critP = envelope.getCriticalPressure();          // bara
+```
+
+### CRITICAL: `dewPointPressureFlash()` finds the wrong branch for a gas condensate
+
+For a lean gas condensate `ops.dewPointPressureFlash()` converges on the **lower**
+(normal) dew point — often a fraction of a bar — not the retrograde upper dew point that
+matters for reservoir and flowline work. To get the retrograde branch, walk the pressure
+down from above the cricondenbar until a second phase appears, then bisect:
+
+```java
+// pseudo: n_phases(p) = TPflash at (t, p) then getNumberOfPhases()
+double pHi = 900.0, pLo = Double.NaN;
+for (double p = 900.0; p > 50.0; p -= 10.0) {
+  if (nPhases(fluid, tC, p) > 1) { pLo = p; break; }
+  pHi = p;
+}
+while (pHi - pLo > 0.05) {                      // bisect
+  double mid = 0.5 * (pHi + pLo);
+  if (nPhases(fluid, tC, mid) > 1) { pLo = mid; } else { pHi = mid; }
+}
+double retrogradeDewPointBara = 0.5 * (pHi + pLo);
 ```
 
 ### CRITICAL: Branch Classification Bug with bubblePointFirst=true

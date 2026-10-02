@@ -26,7 +26,10 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import neqsim.process.dynamics.EventScheduler;
 import neqsim.process.dynamics.IntegratorStrategy;
+import neqsim.process.dynamics.TransientStepTransaction;
+import neqsim.process.dynamics.TransientTransactionCoverage;
 import neqsim.process.equipment.ProcessEquipmentInterface;
+import neqsim.process.equipment.capacity.EquipmentDesignData;
 import neqsim.process.equipment.heatexchanger.HeatExchanger;
 import neqsim.process.equipment.stream.StreamInterface;
 import neqsim.process.equipment.util.AccelerationMethod;
@@ -52,6 +55,13 @@ public class ProcessModel implements Runnable, Serializable {
   /** Logger object for class. */
   static Logger logger = LogManager.getLogger(ProcessModel.class);
   private Map<String, ProcessSystem> processes = new LinkedHashMap<>();
+  /** Whether run() closes implicit feedback loops with generated recycles. */
+  private boolean autoRecycles = false;
+  /** Re-entrancy guard so the seeding run inside makeRecycles() does not trigger insertion again. */
+  private transient boolean autoRecycleInProgress = false;
+
+  /** Active multi-area transient transaction, or {@code null} outside a trial step. */
+  private transient ProcessModelStepTransaction activeTransientStepTransaction = null;
 
   /** Absolute tolerance used when checking that transient process-area clocks are aligned. */
   private static final double TRANSIENT_AREA_TIME_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-9;
@@ -109,6 +119,12 @@ public class ProcessModel implements Runnable, Serializable {
     /** Producing {@code "area::unit"} label for each stream, keyed by stream identity. */
     private final Map<Object, String> streamProducers;
 
+    /** Streams entering the model from outside its cached topology, keyed by identity. */
+    private final java.util.Set<StreamInterface> feedStreams;
+
+    /** Top-level areas containing modules whose internal recycle units require recursive inspection. */
+    private final java.util.Set<ProcessSystem> areasWithModules;
+
     /** Structure versions observed when this plan was built. */
     private final Map<ProcessSystem, Long> structureVersions;
 
@@ -120,17 +136,22 @@ public class ProcessModel implements Runnable, Serializable {
      * @param boundaryStreams streams crossing process-area boundaries
      * @param boundaryConsumers consumer areas for each boundary stream
      * @param streamProducers producing {@code "area::unit"} label per stream identity
+     * @param feedStreams streams entering the model from outside its topology
+     * @param areasWithModules top-level areas containing module equipment
      * @param structureVersions process structure versions observed while building the plan
      */
     private AreaExecutionPlan(List<List<ProcessSystem>> levels,
         Map<ProcessSystem, java.util.Set<ProcessSystem>> successors, java.util.Set<Object> boundaryStreams,
         Map<Object, java.util.Set<ProcessSystem>> boundaryConsumers, Map<Object, String> streamProducers,
+        java.util.Set<StreamInterface> feedStreams, java.util.Set<ProcessSystem> areasWithModules,
         Map<ProcessSystem, Long> structureVersions) {
       this.levels = levels;
       this.successors = successors;
       this.boundaryStreams = boundaryStreams;
       this.boundaryConsumers = boundaryConsumers;
       this.streamProducers = streamProducers;
+      this.feedStreams = feedStreams;
+      this.areasWithModules = areasWithModules;
       this.structureVersions = structureVersions;
     }
   }
@@ -436,6 +457,8 @@ public class ProcessModel implements Runnable, Serializable {
   private int lastBoundaryStreamCount = 0;
   /** Per-boundary-stream convergence errors recorded on the last outer iteration. */
   private List<BoundaryStreamError> lastBoundaryStreamErrors = new ArrayList<>();
+  /** Identity cache for immutable boundary diagnostics reused across unchanged observations. */
+  private transient Map<Object, BoundaryStreamError> boundaryStreamErrorCache = new IdentityHashMap<>();
 
   /**
    * Per-stream convergence diagnostics for a single boundary stream.
@@ -1150,6 +1173,89 @@ public class ProcessModel implements Runnable, Serializable {
   }
 
   /**
+   * Closes every feedback loop that has no {@link neqsim.process.equipment.util.Recycle} with an automatically inserted
+   * one.
+   *
+   * <p>
+   * Both loop kinds are covered: a stream produced by an area that runs after its consumer, and a loop entirely inside
+   * one area. A cross-area feedback stream left implicit is only closed by the outer sweep, with no tolerance and no
+   * acceleration of its own, which floors the plant residual; rewiring it through a tear stream and a {@code Recycle}
+   * gives it both. The model is run once first when its streams have no fluid yet, so the tear streams start from a
+   * physical state; calling this again is a no-op for loops that are already closed.
+   * </p>
+   *
+   * @return the recycles created
+   */
+  public java.util.List<neqsim.process.equipment.util.Recycle> makeRecycles() {
+    return makeRecycles(AutoRecycleBuilder.DEFAULT_TOLERANCE);
+  }
+
+  /**
+   * Closes every feedback loop that has no {@link neqsim.process.equipment.util.Recycle} with an automatically inserted
+   * one.
+   *
+   * @param tolerance relative tear tolerance for the created recycles, must be positive
+   * @return the recycles created
+   */
+  public java.util.List<neqsim.process.equipment.util.Recycle> makeRecycles(double tolerance) {
+    if (autoRecycleInProgress) {
+      return new ArrayList<neqsim.process.equipment.util.Recycle>();
+    }
+    autoRecycleInProgress = true;
+    try {
+      if (needsSeedRun()) {
+        run();
+      }
+      return AutoRecycleBuilder.insertRecycles(this, tolerance);
+    } finally {
+      autoRecycleInProgress = false;
+    }
+  }
+
+  /**
+   * Whether {@link #run()} closes implicit feedback loops with generated recycles before iterating.
+   *
+   * @return true when automatic recycle insertion is enabled
+   */
+  public boolean isAutoRecycles() {
+    return autoRecycles;
+  }
+
+  /**
+   * Enables automatic recycle insertion on {@link #run()} and therefore on {@link #runUntilConverged(int)}.
+   *
+   * <p>
+   * With this enabled the caller no longer has to run the plant, call {@link #makeRecycles()} and run again: the first
+   * run seeds and closes every implicit loop, including the cross-area feedback streams that otherwise have no
+   * convergence criterion of their own. Disabled by default, because inserting a tear changes how an existing model
+   * iterates.
+   * </p>
+   *
+   * @param autoRecycles true to close implicit loops automatically
+   */
+  public void setAutoRecycles(boolean autoRecycles) {
+    this.autoRecycles = autoRecycles;
+  }
+
+  /**
+   * Checks whether the model still has streams without a fluid, which a tear stream cannot be seeded from.
+   *
+   * @return true when at least one outlet stream in any area has no fluid yet
+   */
+  private boolean needsSeedRun() {
+    for (ProcessSystem area : processes.values()) {
+      for (neqsim.process.equipment.ProcessEquipmentInterface unit : area.getUnitOperations()) {
+        for (StreamInterface outlet : unit.getOutletStreams()) {
+          if (outlet != null && outlet.getFluid() == null) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
    * Retrieves a process by its name.
    *
    * @param name a {@link java.lang.String} object
@@ -1686,6 +1792,297 @@ public class ProcessModel implements Runnable, Serializable {
   }
 
   /**
+   * Audits aggregate identity-preserving transient transaction coverage across all process areas.
+   *
+   * <p>
+   * Counts are summed over area-local unique process elements. Blocking diagnostics are qualified by area name so
+   * duplicate equipment names in different areas remain distinguishable.
+   * </p>
+   *
+   * @return immutable aggregate coverage report
+   */
+  public TransientTransactionCoverage getTransientTransactionCoverage() {
+    int elementCount = 0;
+    int participantCount = 0;
+    List<String> blockingIssues = new ArrayList<String>();
+    Set<String> modelEventStateIdentities = new java.util.LinkedHashSet<String>();
+    for (ProcessSystem processSystem : processes.values()) {
+      modelEventStateIdentities.addAll(processSystem.getCompleteTransientStateIdentities());
+    }
+    for (Map.Entry<String, ProcessSystem> entry : processes.entrySet()) {
+      TransientTransactionCoverage areaCoverage = entry.getValue()
+          .getTransientTransactionCoverage(modelEventStateIdentities);
+      elementCount += areaCoverage.getProcessElementCount();
+      participantCount += areaCoverage.getParticipantCount();
+      for (String issue : areaCoverage.getBlockingIssues()) {
+        blockingIssues.add("process area '" + entry.getKey() + "': " + issue);
+      }
+    }
+    return new TransientTransactionCoverage(elementCount, participantCount, blockingIssues);
+  }
+
+  /**
+   * Captures one coordinated rollback point across all process areas.
+   *
+   * <p>
+   * Area clocks and complete coverage are validated before the first area transaction is opened. Area transactions are
+   * captured in insertion order and rolled back in reverse order, preserving shared boundary-object identities and
+   * deterministic replay order.
+   * </p>
+   *
+   * @return open multi-area transaction
+   * @throws IllegalStateException if area clocks are misaligned, coverage is incomplete, or another model transaction
+   * is open
+   */
+  public synchronized TransientStepTransaction beginTransientStepTransaction() {
+    if (activeTransientStepTransaction != null && activeTransientStepTransaction.isOpen()) {
+      throw new IllegalStateException("A transient step transaction is already open for this ProcessModel");
+    }
+    validateTransientAreaTimes();
+    getTransientTransactionCoverage().assertComplete();
+    Set<String> modelEventStateIdentities = new java.util.LinkedHashSet<String>();
+    for (ProcessSystem processSystem : processes.values()) {
+      modelEventStateIdentities.addAll(processSystem.getCompleteTransientStateIdentities());
+    }
+
+    List<AreaTransientCheckpoint> areaCheckpoints = new ArrayList<AreaTransientCheckpoint>();
+    try {
+      for (Map.Entry<String, ProcessSystem> entry : processes.entrySet()) {
+        areaCheckpoints.add(new AreaTransientCheckpoint(entry.getKey(), entry.getValue(),
+            entry.getValue().beginTransientStepTransaction(modelEventStateIdentities)));
+      }
+    } catch (RuntimeException ex) {
+      rollbackOpenAreaTransactions(areaCheckpoints, ex);
+      throw ex;
+    }
+
+    ProcessModelStepTransaction transaction = new ProcessModelStepTransaction(areaCheckpoints);
+    activeTransientStepTransaction = transaction;
+    return transaction;
+  }
+
+  /**
+   * Advances every process area and accepts the common physical step only if all areas succeed.
+   *
+   * <p>
+   * A failure in any later area restores already-advanced earlier areas in place. The shared event scheduler
+   * bookkeeping is restored with the same object identity by the area transactions.
+   * </p>
+   *
+   * @param dt finite timestep in seconds
+   * @param id common physical-step calculation identifier
+   * @throws IllegalStateException if transaction coverage is incomplete
+   */
+  public void runTransientTransactional(double dt, UUID id) {
+    try (TransientStepTransaction transaction = beginTransientStepTransaction()) {
+      runTransient(dt, id);
+      transaction.commit();
+    }
+  }
+
+  /**
+   * Rolls back open child transactions in reverse area order.
+   *
+   * @param areaCheckpoints child transactions captured so far
+   * @param primary primary failure receiving suppressed rollback failures
+   */
+  private static void rollbackOpenAreaTransactions(List<AreaTransientCheckpoint> areaCheckpoints,
+      RuntimeException primary) {
+    for (int i = areaCheckpoints.size() - 1; i >= 0; i--) {
+      TransientStepTransaction transaction = areaCheckpoints.get(i).transaction;
+      if (transaction.isOpen()) {
+        try {
+          transaction.rollback();
+        } catch (RuntimeException rollbackFailure) {
+          primary.addSuppressed(rollbackFailure);
+        }
+      }
+    }
+  }
+
+  /** Captured child-area transaction and identity. */
+  private static final class AreaTransientCheckpoint {
+    private final String areaName;
+    private final ProcessSystem processSystem;
+    private final TransientStepTransaction transaction;
+
+    private AreaTransientCheckpoint(String areaName, ProcessSystem processSystem,
+        TransientStepTransaction transaction) {
+      this.areaName = areaName;
+      this.processSystem = processSystem;
+      this.transaction = transaction;
+    }
+  }
+
+  /** Coordinated multi-area transaction implementation. */
+  private final class ProcessModelStepTransaction implements TransientStepTransaction {
+    private final List<AreaTransientCheckpoint> areaCheckpoints;
+    private Status status = Status.OPEN;
+
+    private ProcessModelStepTransaction(List<AreaTransientCheckpoint> areaCheckpoints) {
+      this.areaCheckpoints = new ArrayList<AreaTransientCheckpoint>(areaCheckpoints);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void prepareCommit() {
+      synchronized (ProcessModel.this) {
+        requireOpen("prepare commit");
+        RuntimeException failure = validateAreaIdentities();
+        if (failure == null) {
+          for (AreaTransientCheckpoint checkpoint : areaCheckpoints) {
+            try {
+              checkpoint.transaction.prepareCommit();
+            } catch (RuntimeException ex) {
+              failure = appendFailure(failure,
+                  "Failed to prepare transient transaction for process area '" + checkpoint.areaName + "'", ex);
+            }
+          }
+        }
+        if (failure != null) {
+          throw failure;
+        }
+      }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void commit() {
+      synchronized (ProcessModel.this) {
+        try {
+          prepareCommit();
+        } catch (RuntimeException validationFailure) {
+          try {
+            rollback();
+          } catch (RuntimeException rollbackFailure) {
+            validationFailure.addSuppressed(rollbackFailure);
+          }
+          throw validationFailure;
+        }
+
+        RuntimeException failure = null;
+        for (AreaTransientCheckpoint checkpoint : areaCheckpoints) {
+          try {
+            checkpoint.transaction.commit();
+          } catch (RuntimeException ex) {
+            failure = appendFailure(failure,
+                "Failed to commit transient transaction for process area '" + checkpoint.areaName + "'", ex);
+            break;
+          }
+        }
+        if (failure != null) {
+          for (int i = areaCheckpoints.size() - 1; i >= 0; i--) {
+            TransientStepTransaction child = areaCheckpoints.get(i).transaction;
+            if (child.isOpen()) {
+              try {
+                child.rollback();
+              } catch (RuntimeException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+              }
+            }
+          }
+          status = Status.ROLLED_BACK;
+          activeTransientStepTransaction = null;
+          throw failure;
+        }
+        status = Status.COMMITTED;
+        activeTransientStepTransaction = null;
+      }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void rollback() {
+      synchronized (ProcessModel.this) {
+        if (status == Status.ROLLED_BACK) {
+          return;
+        }
+        requireOpen("rollback");
+        RuntimeException failure = validateAreaIdentities();
+        for (int i = areaCheckpoints.size() - 1; i >= 0; i--) {
+          AreaTransientCheckpoint checkpoint = areaCheckpoints.get(i);
+          try {
+            checkpoint.transaction.rollback();
+          } catch (RuntimeException ex) {
+            failure = appendFailure(failure,
+                "Failed to roll back transient transaction for process area '" + checkpoint.areaName + "'", ex);
+          }
+        }
+        status = Status.ROLLED_BACK;
+        activeTransientStepTransaction = null;
+        if (failure != null) {
+          throw failure;
+        }
+      }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Status getStatus() {
+      return status;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void close() {
+      if (isOpen()) {
+        rollback();
+      }
+    }
+
+    /**
+     * Verifies area-name, insertion-order, and process-system object identities.
+     *
+     * @return failure diagnostic, or {@code null}
+     */
+    private RuntimeException validateAreaIdentities() {
+      if (processes.size() != areaCheckpoints.size()) {
+        return new IllegalStateException("ProcessModel area structure changed during transient transaction: captured "
+            + areaCheckpoints.size() + " areas but found " + processes.size());
+      }
+      int index = 0;
+      for (Map.Entry<String, ProcessSystem> entry : processes.entrySet()) {
+        AreaTransientCheckpoint checkpoint = areaCheckpoints.get(index);
+        if (!checkpoint.areaName.equals(entry.getKey()) || checkpoint.processSystem != entry.getValue()) {
+          return new IllegalStateException(
+              "ProcessModel area identity or insertion order changed during transient transaction at index " + index);
+        }
+        index++;
+      }
+      return null;
+    }
+
+    /**
+     * Enforces single-use transaction semantics.
+     *
+     * @param operation requested operation
+     */
+    private void requireOpen(String operation) {
+      if (status != Status.OPEN) {
+        throw new IllegalStateException(
+            "Cannot " + operation + " ProcessModel transient transaction in state " + status);
+      }
+    }
+  }
+
+  /**
+   * Accumulates multi-area transaction failures while allowing later rollback work to continue.
+   *
+   * @param existing first failure, or {@code null}
+   * @param message diagnostic context
+   * @param cause new failure
+   * @return first failure with later failures suppressed
+   */
+  private static RuntimeException appendFailure(RuntimeException existing, String message, RuntimeException cause) {
+    RuntimeException wrapped = new IllegalStateException(message, cause);
+    if (existing == null) {
+      return wrapped;
+    }
+    existing.addSuppressed(wrapped);
+    return existing;
+  }
+
+  /**
    * Verifies that every process area starts a model-level transient step on the same finite simulation clock.
    *
    * <p>
@@ -1779,6 +2176,9 @@ public class ProcessModel implements Runnable, Serializable {
    */
   @Override
   public void run() {
+    if (autoRecycles && !autoRecycleInProgress) {
+      makeRecycles();
+    }
     int totalAreas = processes.size();
 
     // Publish model-start event and notify listener
@@ -1807,6 +2207,7 @@ public class ProcessModel implements Runnable, Serializable {
       publishModelEvent(ProcessEvent.EventType.SIMULATION_COMPLETE, "ProcessModel step mode completed",
           ProcessEvent.Severity.INFO);
     } else {
+      boolean previouslyConverged = modelConverged;
       // Reset convergence tracking
       lastIterationCount = 0;
       modelConverged = false;
@@ -1829,6 +2230,12 @@ public class ProcessModel implements Runnable, Serializable {
       java.util.Set<ProcessSystem> dirtyAreas = null;
       resetAutoTuningRunState();
       applyAutoDefaultTolerance();
+      // A converged model already has populated internal streams, so repeated execution can
+      // safely apply automatic thresholds before the first area pass. Cold execution and
+      // observable lifecycle-hook runs retain the post-pass tuning/confirmation behaviour.
+      if (previouslyConverged && useIncrementalAreaExecution && progressListener == null && !publishEvents) {
+        applyAutoConvergenceTuning();
+      }
 
       int iterations = 0;
       while (!Thread.currentThread().isInterrupted() && iterations < maxIterations) {
@@ -2432,13 +2839,19 @@ public class ProcessModel implements Runnable, Serializable {
     java.util.Set<Object> boundaryStreams = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     Map<Object, java.util.Set<ProcessSystem>> boundaryConsumers = new IdentityHashMap<>();
     Map<Object, String> streamProducers = new IdentityHashMap<>();
+    java.util.Set<StreamInterface> producedStreams = java.util.Collections
+        .newSetFromMap(new java.util.IdentityHashMap<StreamInterface, Boolean>());
+    java.util.Set<StreamInterface> plantInletStreams = java.util.Collections
+        .newSetFromMap(new java.util.IdentityHashMap<StreamInterface, Boolean>());
+    java.util.Set<ProcessSystem> areasWithModules = java.util.Collections
+        .newSetFromMap(new java.util.IdentityHashMap<ProcessSystem, Boolean>());
     for (ProcessSystem process : allProcesses) {
       successorMap.put(process, java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()));
     }
 
     if (n == 0) {
       return new AreaExecutionPlan(new ArrayList<>(), successorMap, boundaryStreams, boundaryConsumers, streamProducers,
-          structureVersions);
+          plantInletStreams, areasWithModules, structureVersions);
     }
 
     // Index processes by their position in the insertion order for
@@ -2458,6 +2871,9 @@ public class ProcessModel implements Runnable, Serializable {
       java.util.Set<Object> outs = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
       java.util.Set<Object> mem = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
       for (Object unit : p.getUnitOperations()) {
+        if (unit instanceof ModuleInterface) {
+          areasWithModules.add(p);
+        }
         if (unit instanceof StreamInterface) {
           mem.add(unit);
         }
@@ -2468,6 +2884,11 @@ public class ProcessModel implements Runnable, Serializable {
             if (outletStreams != null) {
               outs.addAll(outletStreams);
               recordStreamProducers(streamProducers, outletStreams, p, unit);
+              for (StreamInterface outletStream : outletStreams) {
+                if (outletStream != null && outletStream != unit) {
+                  producedStreams.add(outletStream);
+                }
+              }
             }
           } catch (Exception e) {
             // Not all equipment implements getOutletStreams cleanly; ignore.
@@ -2477,6 +2898,11 @@ public class ProcessModel implements Runnable, Serializable {
                 .getInletStreams();
             if (inletStreams != null) {
               mem.addAll(inletStreams);
+              for (StreamInterface inletStream : inletStreams) {
+                if (inletStream != null && inletStream != unit) {
+                  plantInletStreams.add(inletStream);
+                }
+              }
             }
           } catch (Exception e) {
             // ignore
@@ -2486,6 +2912,7 @@ public class ProcessModel implements Runnable, Serializable {
       outputs.add(outs);
       members.add(mem);
     }
+    plantInletStreams.removeAll(producedStreams);
 
     java.util.Map<Object, Integer> occurrenceCounts = new java.util.IdentityHashMap<>();
     for (int i = 0; i < n; i++) {
@@ -2583,7 +3010,7 @@ public class ProcessModel implements Runnable, Serializable {
         fallback.add(single);
       }
       return new AreaExecutionPlan(fallback, successorMap, boundaryStreams, boundaryConsumers, streamProducers,
-          structureVersions);
+          plantInletStreams, areasWithModules, structureVersions);
     }
 
     int maxLevel = 0;
@@ -2598,7 +3025,7 @@ public class ProcessModel implements Runnable, Serializable {
       levels.get(level[i]).add(allProcesses.get(i));
     }
     return new AreaExecutionPlan(levels, successorMap, boundaryStreams, boundaryConsumers, streamProducers,
-        structureVersions);
+        plantInletStreams, areasWithModules, structureVersions);
   }
 
   /**
@@ -2681,7 +3108,7 @@ public class ProcessModel implements Runnable, Serializable {
         double flow = stream.getFlowRate("kg/hr");
         double temp = stream.getTemperature("K");
         double press = stream.getPressure("bara");
-        states.put(boundaryObject, new double[] { flow, temp, press });
+        states.put(boundaryObject, new double[] {flow, temp, press});
       } catch (Exception exception) {
         // Skip streams that cannot be read.
       }
@@ -2738,8 +3165,7 @@ public class ProcessModel implements Runnable, Serializable {
    */
   private java.util.Set<ProcessSystem> getDirtyAreasForNextIteration(AreaExecutionPlan plan,
       java.util.Set<Object> changedBoundaryStreams) {
-    if (!useIncrementalAreaExecution || progressListener != null || publishEvents || changedBoundaryStreams == null
-        || changedBoundaryStreams.isEmpty()) {
+    if (!useIncrementalAreaExecution || progressListener != null || publishEvents || changedBoundaryStreams == null) {
       return null;
     }
     java.util.Set<ProcessSystem> dirtyAreas = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
@@ -2767,7 +3193,7 @@ public class ProcessModel implements Runnable, Serializable {
         }
       }
     }
-    if (dirtyAreas.isEmpty() || dirtyAreas.size() >= processes.size()) {
+    if (dirtyAreas.size() >= processes.size()) {
       return null;
     }
     return dirtyAreas;
@@ -2807,7 +3233,12 @@ public class ProcessModel implements Runnable, Serializable {
     double maxFlowErr = 0.0;
     double maxTempErr = 0.0;
     double maxPressErr = 0.0;
-    List<BoundaryStreamError> streamErrors = new ArrayList<>();
+    int expectedStreamErrors = lastBoundaryStreamErrors == null ? 0
+        : Math.min(current.size(), lastBoundaryStreamErrors.size());
+    List<BoundaryStreamError> streamErrors = new ArrayList<>(expectedStreamErrors);
+    Map<Object, BoundaryStreamError> priorStreamErrors = boundaryStreamErrorCache;
+    Map<Object, BoundaryStreamError> nextStreamErrors = current.isEmpty() ? Collections.emptyMap()
+        : new IdentityHashMap<>(current.size());
 
     for (Object key : current.keySet()) {
       if (previous.containsKey(key)) {
@@ -2844,13 +3275,34 @@ public class ProcessModel implements Runnable, Serializable {
         double pressErr = Math.abs(curr[2] - prev[2]) / pressBase;
         maxPressErr = Math.max(maxPressErr, pressErr);
 
-        streamErrors.add(new BoundaryStreamError(getStreamName(key), getStreamProducerLabel(key, areaPlan), flowErr,
-            tempErr, pressErr, prev[0], curr[0]));
+        String streamName = getStreamName(key);
+        String producerLabel = getStreamProducerLabel(key, areaPlan);
+        BoundaryStreamError streamError = priorStreamErrors == null ? null : priorStreamErrors.get(key);
+        if (!matchesBoundaryStreamError(streamError, streamName, producerLabel, flowErr, tempErr, pressErr, prev[0],
+            curr[0])) {
+          streamError = new BoundaryStreamError(streamName, producerLabel, flowErr, tempErr, pressErr, prev[0],
+              curr[0]);
+        }
+        streamErrors.add(streamError);
+        nextStreamErrors.put(key, streamError);
       }
     }
 
     lastBoundaryStreamErrors = streamErrors;
-    return new double[] { maxFlowErr, maxTempErr, maxPressErr };
+    boundaryStreamErrorCache = nextStreamErrors;
+    return new double[] {maxFlowErr, maxTempErr, maxPressErr};
+  }
+
+  /** Returns whether an immutable cached diagnostic exactly represents the current boundary observation. */
+  private boolean matchesBoundaryStreamError(BoundaryStreamError cached, String streamName, String producerLabel,
+      double flowError, double temperatureError, double pressureError, double previousFlow, double currentFlow) {
+    return cached != null && java.util.Objects.equals(cached.getStreamName(), streamName)
+        && java.util.Objects.equals(cached.getProducerLabel(), producerLabel)
+        && Double.doubleToLongBits(cached.getFlowError()) == Double.doubleToLongBits(flowError)
+        && Double.doubleToLongBits(cached.getTemperatureError()) == Double.doubleToLongBits(temperatureError)
+        && Double.doubleToLongBits(cached.getPressureError()) == Double.doubleToLongBits(pressureError)
+        && Double.doubleToLongBits(cached.getPreviousFlow()) == Double.doubleToLongBits(previousFlow)
+        && Double.doubleToLongBits(cached.getCurrentFlow()) == Double.doubleToLongBits(currentFlow);
   }
 
   /**
@@ -3623,8 +4075,7 @@ public class ProcessModel implements Runnable, Serializable {
    *
    * @return relative mass-closure error, or NaN when no usable flow scale exists
    */
-  private double computeMassClosureError() {
-    double scale = Math.max(detectedPlantFlowScale, getTotalFeedFlowRate());
+  private double computeMassClosureError(AreaExecutionPlan plan, double scale) {
     if (!(scale > 0.0) || Double.isInfinite(scale)) {
       massClosureOffenders = "";
       return Double.NaN;
@@ -3632,7 +4083,11 @@ public class ProcessModel implements Runnable, Serializable {
     double created = 0.0;
     List<Map.Entry<String, Double>> offenders = new ArrayList<>();
     for (Map.Entry<String, ProcessSystem> area : processes.entrySet()) {
-      for (Map.Entry<String, Recycle> recycleEntry : getRecycleUnits(area.getValue())) {
+      ProcessSystem process = area.getValue();
+      if (!process.hasRecycles() && !plan.areasWithModules.contains(process)) {
+        continue;
+      }
+      for (Map.Entry<String, Recycle> recycleEntry : getRecycleUnits(process)) {
         Recycle recycle = recycleEntry.getValue();
         if (recycle.isLockedInactive() || !recycle.isActive()) {
           continue;
@@ -3692,8 +4147,7 @@ public class ProcessModel implements Runnable, Serializable {
    *
    * @return relative unit-level closure error, or NaN when no usable flow scale exists
    */
-  private double computeUnitMassClosureError() {
-    double scale = Math.max(detectedPlantFlowScale, getTotalFeedFlowRate());
+  private double computeUnitMassClosureError(double scale) {
     if (!(scale > 0.0) || Double.isInfinite(scale)) {
       unitMassClosureOffenders = "";
       return Double.NaN;
@@ -3734,9 +4188,11 @@ public class ProcessModel implements Runnable, Serializable {
     if (!autoConvergenceTuning || !autoMassClosureGate) {
       return true;
     }
-    double closure = computeMassClosureError();
+    AreaExecutionPlan plan = getAreaExecutionPlan();
+    double scale = Math.max(detectedPlantFlowScale, getTotalFeedFlowRate(plan));
+    double closure = computeMassClosureError(plan, scale);
     lastMassClosureError = closure;
-    double unitClosure = computeUnitMassClosureError();
+    double unitClosure = computeUnitMassClosureError(scale);
     lastUnitMassClosureError = unitClosure;
 
     boolean recycleAccepted = Double.isNaN(closure) || closure <= massClosureTolerance;
@@ -3849,19 +4305,18 @@ public class ProcessModel implements Runnable, Serializable {
    * @return total feed mass flow in kg/hr, or 0.0 when no feed stream could be read
    */
   public double getTotalFeedFlowRate() {
-    java.util.Set<StreamInterface> produced = java.util.Collections
-        .newSetFromMap(new java.util.IdentityHashMap<StreamInterface, Boolean>());
-    java.util.Set<StreamInterface> inlets = java.util.Collections
-        .newSetFromMap(new java.util.IdentityHashMap<StreamInterface, Boolean>());
-    for (ProcessSystem process : processes.values()) {
-      process.collectProducedStreams(produced);
-      process.collectInletStreams(inlets);
-    }
+    return getTotalFeedFlowRate(getAreaExecutionPlan());
+  }
+
+  /**
+   * Sums live feed flow values from an already-validated execution plan.
+   *
+   * @param plan current area execution plan
+   * @return total feed mass flow in kg/hr, or 0.0 when no feed stream could be read
+   */
+  private double getTotalFeedFlowRate(AreaExecutionPlan plan) {
     double total = 0.0;
-    for (StreamInterface stream : inlets) {
-      if (produced.contains(stream)) {
-        continue;
-      }
+    for (StreamInterface stream : plan.feedStreams) {
       try {
         double flow = stream.getFlowRate("kg/hr");
         if (!Double.isNaN(flow) && !Double.isInfinite(flow) && flow > 0.0) {
@@ -5660,6 +6115,83 @@ public class ProcessModel implements Runnable, Serializable {
       count += processSystem.applyMechanicalDesignCapacityConstraints();
     }
     return count;
+  }
+
+  /**
+   * Applies normalized design capacities to explicitly area-qualified equipment in this model.
+   *
+   * <p>
+   * Keys must have the form {@code area::equipment}. All target identities, supported properties and values across all
+   * areas are validated before any design value changes. Names containing the {@code ::} delimiter, and multiple area
+   * aliases for the same target instance, are rejected. The property schema and units are identical to
+   * {@link ProcessSystem#applyDesignCapacities(Map)}. No process run or sizing is performed.
+   * </p>
+   *
+   * @param designCapacities map from area-qualified equipment name to normalized numeric capacity properties
+   * @return application reports keyed by area-qualified equipment name
+   * @throws IllegalArgumentException if any target or property is missing, ambiguous, unsupported or invalid
+   */
+  public Map<String, EquipmentDesignData.ApplyResult> applyDesignCapacities(
+      Map<String, Map<String, Object>> designCapacities) {
+    if (designCapacities == null) {
+      throw new IllegalArgumentException("Design capacities must not be null");
+    }
+    for (String name : designCapacities.keySet()) {
+      if (name == null) {
+        throw new IllegalArgumentException("Design capacity name must be area::equipment: null");
+      }
+    }
+    Map<String, Map<String, Map<String, Object>>> byArea = new java.util.TreeMap<String, Map<String, Map<String, Object>>>();
+    for (Map.Entry<String, Map<String, Object>> entry : new java.util.TreeMap<String, Map<String, Object>>(
+        designCapacities).entrySet()) {
+      String qualifiedName = entry.getKey();
+      int separator = qualifiedName == null ? -1 : qualifiedName.indexOf("::");
+      if (separator <= 0 || separator + 2 == qualifiedName.length()
+          || qualifiedName.indexOf("::", separator + 2) >= 0) {
+        throw new IllegalArgumentException("Design capacity name must be area::equipment: " + qualifiedName);
+      }
+      String area = qualifiedName.substring(0, separator);
+      String name = qualifiedName.substring(separator + 2);
+      if (!processes.containsKey(area)) {
+        throw new IllegalArgumentException("Design capacity area not found: " + area);
+      }
+      if (!byArea.containsKey(area)) {
+        byArea.put(area, new LinkedHashMap<String, Map<String, Object>>());
+      }
+      byArea.get(area).put(name, entry.getValue());
+    }
+    Map<String, JsonObject> prepared = new LinkedHashMap<String, JsonObject>();
+    Map<ProcessEquipmentInterface, String> targets = new IdentityHashMap<ProcessEquipmentInterface, String>();
+    for (Map.Entry<String, Map<String, Map<String, Object>>> area : byArea.entrySet()) {
+      ProcessSystem process = processes.get(area.getKey());
+      prepared.put(area.getKey(), process.prepareDesignCapacities(area.getValue()));
+      for (String name : area.getValue().keySet()) {
+        ProcessEquipmentInterface target = null;
+        for (ProcessEquipmentInterface equipment : process.getUnitOperations()) {
+          if (name.equals(equipment.getName())) {
+            target = equipment;
+            break;
+          }
+        }
+        String previous = targets.put(target, area.getKey() + "::" + name);
+        if (previous != null) {
+          throw new IllegalArgumentException("Design capacity target is aliased by multiple areas: " + previous);
+        }
+      }
+    }
+    Map<String, EquipmentDesignData.ApplyResult> results = new LinkedHashMap<String, EquipmentDesignData.ApplyResult>();
+    for (Map.Entry<String, JsonObject> area : prepared.entrySet()) {
+      Map<String, EquipmentDesignData.ApplyResult> applied = processes.get(area.getKey())
+          .applyDesignCapacitiesJson(area.getValue());
+      for (Map.Entry<String, EquipmentDesignData.ApplyResult> entry : applied.entrySet()) {
+        String name = area.getKey() + "::" + entry.getKey();
+        EquipmentDesignData.ApplyResult qualified = new EquipmentDesignData.ApplyResult(name, entry.getValue().status,
+            entry.getValue().message);
+        qualified.appliedProperties.addAll(entry.getValue().appliedProperties);
+        results.put(name, qualified);
+      }
+    }
+    return results;
   }
 
   /**

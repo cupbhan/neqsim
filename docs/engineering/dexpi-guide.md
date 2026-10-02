@@ -16,7 +16,7 @@ simulation, an approved P&ID, or a construction release.
 | Export a quick Proteus-compatible P&ID | `DexpiXmlWriter.write(...)` | [DEXPI import, export, and visualization](../integration/dexpi-reader.md#exporting-to-dexpi-xml) |
 | Render through pyDEXPI | `DexpiXmlWriter.writeForPyDexpi(...)` or `DexpiDiagramBridge.exportForPyDexpi(...)` | [pyDEXPI-friendly export](../integration/dexpi-reader.md#pydexpi-friendly-export-namespace-omitted) |
 | Export a native DEXPI 2.0 P&ID Plant model | `Dexpi20XmlWriter.writeAndAssess(...)` | [DEXPI 2.0 conformance](../integration/dexpi-20-conformance.md) |
-| Export a native DEXPI 2.0 PFD/BFD Process model | `Dexpi20ProcessModelWriter.writeAndAssess(...)` | [DEXPI 2.0 conformance](../integration/dexpi-20-conformance.md#process-model-export) |
+| Export a native DEXPI 2.0 PFD/BFD Process model | `Dexpi20ProcessModelWriter.writeAndAssess(...)` or opt-in `writeAndAssessTopology(..., operatingCaseId)` | [DEXPI 2.0 conformance](../integration/dexpi-20-conformance.md#process-model-export) |
 | Generate a governed engineering package with DEXPI, registers, cases, and evidence | `EngineeringDeliverableCompiler` | [Standards-based DEXPI engineering generation](../integration/dexpi-engineering-generation.md) |
 | Generate a review-required P&ID proposal | `PidDesignSynthesizer`, `PidEngineeringPackageExporter` | [Governed P&ID design synthesis](../pid-design-synthesis.md) |
 
@@ -62,6 +62,15 @@ sinks, process steps, material ports, streams, and physical state quantities.
 Use it when the exchange purpose is process topology and state data. A Process exchange is not a less-detailed Plant
 file; it is a different official information model.
 
+After a successful simulation, use the five-argument
+`Dexpi20ProcessModelWriter.writeAndAssessTopology(...)` overload when operating values must come
+from one named canonical case. The overload writes only finite, `CALCULATED` calculation nodes
+whose subject is connected through the canonical topology. It converts kg/s to kg/h and K to
+degree Celsius, retains bara as absolute bar, and records
+`exportOperatingValueSource=CANONICAL_ENGINEERING_GRAPH_CALCULATION_NODES`. Missing or incompatible
+values are omitted with `DEXPI_PROCESS_OPERATING_VALUE_MISSING`; live streams are never used as a
+fallback. Existing writer APIs and their compatibility XML remain unchanged.
+
 ## Recommended engineering workflow
 
 1. **Define the exchange purpose.** State whether the recipient needs a P&ID Plant model, PFD/BFD Process model,
@@ -79,6 +88,16 @@ file; it is a different official information model.
    identities, and obtain accountable review of differences.
 8. **Control revisions.** Use the canonical graph and model-change impact analysis to identify stale exchanges,
    calculations, validations, and approvals.
+
+The synthetic public [engineering-diagram reference cases](../integration/dexpi-reference-cases.md)
+provide a reproducible simple, branched, and multi-area baseline across canonical topology, native
+DEXPI where supported, Proteus compatibility, legacy DOT, and review-required P&ID proposals.
+They are regression evidence rather than named-tool qualification or approved engineering.
+
+The [engineering diagram document and sheet model](../integration/engineering-diagram-document-model.md)
+adds an immutable controlled-document view of the same canonical topology. It provides stable
+drawing/sheet identities, revision and proposal state, and reciprocal off-page references without
+changing current DEXPI, Proteus, P&ID, or Classic DOT output.
 
 ## Native DEXPI 2.0 export
 
@@ -235,6 +254,9 @@ classification, target-system loading, or final information acceptance.
 ## Related documentation
 
 - [DEXPI import, export, and visualization](../integration/dexpi-reader.md)
+- [DEXPI and P&ID current-master audit](../integration/dexpi-pid-current-master-audit.md)
+- [DEXPI engineering-diagram reference cases](../integration/dexpi-reference-cases.md)
+- [Engineering diagram document and sheet model](../integration/engineering-diagram-document-model.md)
 - [DEXPI 2.0 native exchange and conformance](../integration/dexpi-20-conformance.md)
 - [Standards-based DEXPI engineering generation](../integration/dexpi-engineering-generation.md)
 - [Governed P&ID design synthesis](../pid-design-synthesis.md)

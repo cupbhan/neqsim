@@ -29,6 +29,11 @@ import com.google.gson.JsonObject;
  * </p>
  *
  * <p>
+ * The {@code getCapabilities} manifest uses discovery-specific recovery guidance and retains its implementation and
+ * Phase 0 evidence inventories because those contracts have no separate selective-retrieval route.
+ * </p>
+ *
+ * <p>
  * The limit is configurable through the {@code neqsim.mcp.maxResponseBytes} system property or the
  * {@code NEQSIM_MCP_MAX_RESPONSE_BYTES} environment variable. Set it to {@code 0} to disable trimming.
  * </p>
@@ -40,8 +45,8 @@ public final class ResponseSizeGuard {
 
   private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
 
-  /** Default maximum serialized response size in bytes. */
-  private static final int DEFAULT_MAX_BYTES = 262144;
+  /** Default maximum serialized response size in bytes; accommodates both protected discovery views. */
+  private static final int DEFAULT_MAX_BYTES = 272 * 1024;
 
   /** Configured maximum serialized response size in bytes; 0 disables trimming. */
   private static final int MAX_BYTES = readLimit();
@@ -50,6 +55,10 @@ public final class ResponseSizeGuard {
   private static final List<String> PROTECTED_FIELDS = Collections
       .unmodifiableList(java.util.Arrays.asList("apiVersion", "status", "tool", "message", "provenance", "validation",
           "qualityGate", "warnings", "errors", "truncation"));
+
+  /** Discovery members that have no equivalent selective-retrieval route. */
+  private static final List<String> PROTECTED_CAPABILITY_FIELDS = Collections
+      .unmodifiableList(java.util.Arrays.asList("implementationInventory", "phase0EvidenceInventory"));
 
   /**
    * Private constructor — utility class.
@@ -77,13 +86,14 @@ public final class ResponseSizeGuard {
     if (response == null || MAX_BYTES <= 0) {
       return false;
     }
-    int size = serializedSize(response);
-    if (size <= MAX_BYTES) {
+    int originalBytes = serializedSize(response);
+    if (originalBytes <= MAX_BYTES) {
       return false;
     }
 
     JsonArray omitted = new JsonArray();
-    for (String field : trimCandidates(response)) {
+    JsonObject truncation = null;
+    for (String field : trimCandidates(response, toolName)) {
       JsonElement removed = response.remove(field);
       if (removed == null) {
         continue;
@@ -98,8 +108,11 @@ public final class ResponseSizeGuard {
       if (response.has("data") && response.get("data").isJsonObject()) {
         response.getAsJsonObject("data").remove(field);
       }
-      size = serializedSize(response);
-      if (size <= MAX_BYTES) {
+
+      if (truncation == null) {
+        truncation = addTruncationMetadata(response, toolName, originalBytes, omitted);
+      }
+      if (updateReturnedBytes(response, truncation) <= MAX_BYTES) {
         break;
       }
     }
@@ -108,18 +121,51 @@ public final class ResponseSizeGuard {
       return false;
     }
 
+    // Once every removable payload has gone, verbose omission summaries can themselves exceed the remaining
+    // budget. Keep the field names, sizes and retrieval guidance, but drop optional prose before sacrificing
+    // protected discovery inventories or returning an oversized response.
+    for (JsonElement entry : omitted) {
+      if (updateReturnedBytes(response, truncation) <= MAX_BYTES) {
+        break;
+      }
+      entry.getAsJsonObject().remove("summary");
+    }
+    if (truncation != null && updateReturnedBytes(response, truncation) > MAX_BYTES) {
+      // Preserve every omitted field name and the protected contracts. Per-field size estimates and explanatory
+      // prose are optional; they must not make an otherwise deliverable response exceed the transport budget.
+      for (JsonElement entry : omitted) {
+        entry.getAsJsonObject().remove("approximateBytes");
+      }
+      truncation.remove("configuration");
+      truncation.remove("reason");
+      truncation.addProperty("howToRetrieve",
+          "getCapabilities".equals(toolName) ? "Use getSchema, getExample, getBenchmarkTrust or MCP catalog resources."
+              : "Use manageModel, listSimulationUnits, listUnitVariables and getSimulationVariable.");
+    }
+    updateReturnedBytes(response, truncation);
+    return true;
+  }
+
+  /**
+   * Adds the truncation description and warning before the final response size is evaluated.
+   *
+   * @param response response being trimmed
+   * @param toolName MCP tool that produced the response
+   * @param originalBytes serialized size before trimming
+   * @param omitted live array describing removed fields
+   * @return the added truncation block
+   */
+  private static JsonObject addTruncationMetadata(JsonObject response, String toolName, int originalBytes,
+      JsonArray omitted) {
     JsonObject truncation = new JsonObject();
     truncation.addProperty("truncated", true);
     truncation.addProperty("reason",
         "Response exceeded the " + MAX_BYTES + " byte limit. Large payloads exhaust an agent's context "
             + "and can break the stdio transport, so bulk detail was omitted rather than returned.");
-    truncation.addProperty("originalBytes", size + estimatedBytes(omitted));
-    truncation.addProperty("returnedBytes", size);
+    truncation.addProperty("originalBytes", originalBytes);
     truncation.addProperty("limitBytes", MAX_BYTES);
     truncation.add("omitted", omitted);
-    truncation.addProperty("howToRetrieve",
-        "Register the model with manageModel(action='register'), then read only what you need via "
-            + "listSimulationUnits, listUnitVariables and getSimulationVariable on the returned modelId.");
+    truncation.addProperty("howToRetrieve", recoveryGuidance(toolName));
     truncation.addProperty("configuration",
         "Raise or disable the limit with neqsim.mcp.maxResponseBytes (0 disables trimming).");
     response.add("truncation", truncation);
@@ -129,19 +175,38 @@ public final class ResponseSizeGuard {
         : new JsonArray();
     warnings.add("Response truncated for tool '" + toolName + "'. See the 'truncation' block.");
     response.add("warnings", warnings);
-    return true;
+    return truncation;
+  }
+
+  /**
+   * Records and returns the exact serialized response size, including the size field itself.
+   *
+   * @param response response containing the truncation block
+   * @param truncation truncation block to update
+   * @return exact serialized size in bytes
+   */
+  private static int updateReturnedBytes(JsonObject response, JsonObject truncation) {
+    int previousSize = -1;
+    int size = serializedSize(response);
+    while (size != previousSize) {
+      previousSize = size;
+      truncation.addProperty("returnedBytes", size);
+      size = serializedSize(response);
+    }
+    return size;
   }
 
   /**
    * Lists trimmable members in descending serialized size.
    *
    * @param response the response object
+   * @param toolName the MCP tool that produced the response
    * @return field names eligible for removal, largest first
    */
-  private static List<String> trimCandidates(JsonObject response) {
+  private static List<String> trimCandidates(JsonObject response, String toolName) {
     List<Map.Entry<String, Integer>> sized = new ArrayList<Map.Entry<String, Integer>>();
     for (Map.Entry<String, JsonElement> entry : response.entrySet()) {
-      if (PROTECTED_FIELDS.contains(entry.getKey()) || "data".equals(entry.getKey())) {
+      if (isProtected(entry.getKey(), toolName) || "data".equals(entry.getKey())) {
         continue;
       }
       sized.add(new java.util.AbstractMap.SimpleEntry<String, Integer>(entry.getKey(),
@@ -158,6 +223,34 @@ public final class ResponseSizeGuard {
       names.add(entry.getKey());
     }
     return names;
+  }
+
+  /**
+   * Returns whether a response member must survive transport trimming.
+   *
+   * @param fieldName response member name
+   * @param toolName MCP tool that produced the response
+   * @return true when the member must not be removed
+   */
+  private static boolean isProtected(String fieldName, String toolName) {
+    return PROTECTED_FIELDS.contains(fieldName)
+        || ("getCapabilities".equals(toolName) && PROTECTED_CAPABILITY_FIELDS.contains(fieldName));
+  }
+
+  /**
+   * Returns selective-retrieval guidance appropriate for the response type.
+   *
+   * @param toolName MCP tool that produced the response
+   * @return recovery guidance for omitted fields
+   */
+  private static String recoveryGuidance(String toolName) {
+    if ("getCapabilities".equals(toolName)) {
+      return "Use getSchema and getExample for focused tool contracts, getBenchmarkTrust for "
+          + "tool-specific trust evidence, and MCP catalog resources for selective discovery. "
+          + "The implementation and Phase 0 evidence inventories are retained in this response.";
+    }
+    return "Register the model with manageModel(action='register'), then read only what you need via "
+        + "listSimulationUnits, listUnitVariables and getSimulationVariable on the returned modelId.";
   }
 
   /**
@@ -188,23 +281,6 @@ public final class ResponseSizeGuard {
       return "array with " + element.getAsJsonArray().size() + " entries";
     }
     return "scalar value";
-  }
-
-  /**
-   * Sums the approximate byte sizes recorded for omitted entries.
-   *
-   * @param omitted the omitted-entry array
-   * @return total approximate bytes
-   */
-  private static int estimatedBytes(JsonArray omitted) {
-    int total = 0;
-    for (JsonElement element : omitted) {
-      JsonObject entry = element.getAsJsonObject();
-      if (entry.has("approximateBytes")) {
-        total += entry.get("approximateBytes").getAsInt();
-      }
-    }
-    return total;
   }
 
   /**

@@ -11,6 +11,9 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import org.junit.jupiter.api.Test;
 import neqsim.chemicalreactions.ChemicalReactionOperations;
+import neqsim.process.equipment.heatexchanger.Heater;
+import neqsim.process.equipment.stream.Stream;
+import neqsim.process.processmodel.ProcessSystem;
 import neqsim.thermo.component.ComponentInterface;
 import neqsim.thermo.phase.PhaseEos;
 import neqsim.thermo.phase.PhaseGEInterface;
@@ -18,6 +21,7 @@ import neqsim.thermo.phase.PhaseInterface;
 import neqsim.thermo.phase.PhasePitzer;
 import neqsim.thermo.phase.PhaseType;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
+import neqsim.thermodynamicoperations.flashops.TPHybridEosGeFlash;
 
 /** Regression tests for fixed-role EOS-gas / EOS-oil / GE-aqueous flashes. */
 class SystemHybridEosGeFlashTest extends neqsim.NeqSimTest {
@@ -48,6 +52,24 @@ class SystemHybridEosGeFlashTest extends neqsim.NeqSimTest {
   }
 
   /**
+   * Build a gas-forming system using the qualified PHREEQC CO2-Na2SO4 subset.
+   *
+   * @return configured unflashed system
+   */
+  private SystemPitzer createQualifiedCarbonDioxideSodiumSulfateSystem() {
+    SystemPitzer system = new SystemPitzer(373.15, 150.0);
+    system.addComponent("CO2", 100.0);
+    system.addComponent("water", 55.508);
+    system.addComponent("Na+", 2.0);
+    system.addComponent("SO4--", 1.0);
+    system.init(0);
+    system.applyPhreeqcCo2SodiumSulfateParameters();
+    system.setMixingRule("classic");
+    system.setMultiPhaseCheck(true);
+    return system;
+  }
+
+  /**
    * Build a reactive carbonate-scale system with optional EOS oil.
    *
    * @param includeOil whether to add an oil-forming hydrocarbon
@@ -61,8 +83,9 @@ class SystemHybridEosGeFlashTest extends neqsim.NeqSimTest {
       system.addComponent("n-heptane", 2.0);
     }
     system.addComponent("water", 55.5);
-    system.addComponent("Ca++", 1.0e-4);
-    system.addComponent("Na+", 1.0e-3);
+    // The feed is electrically neutral, while the primary-salt coverage topology remains
+    // the qualified binary Ca++/Cl- pair.
+    system.addComponent("Ca++", 6.0e-4);
     system.addComponent("Cl-", 2.0e-4);
     system.addComponent("HCO3-", 1.0e-3);
     system.chemicalReactionInit();
@@ -105,6 +128,156 @@ class SystemHybridEosGeFlashTest extends neqsim.NeqSimTest {
         }
       }
     }
+  }
+
+  /** Hybrid EOS-Pitzer states retain ions and finite properties through ordinary process equipment. */
+  @Test
+  void gasOilAqueousPitzerStateIsProcessComposable() {
+    SystemPitzer system = createGasOilAqueousSystem();
+    Stream feed = new Stream("electrolyte feed", system);
+    feed.setFlowRate(1000.0, "kg/hr");
+    Heater heater = new Heater("electrolyte heater", feed);
+    heater.setOutletTemperature(318.15);
+    ProcessSystem process = new ProcessSystem("electrolyte process property smoke test");
+    process.add(feed);
+    process.add(heater);
+
+    process.run();
+
+    SystemInterface outlet = heater.getOutletStream().getThermoSystem();
+    assertEquals(1000.0, heater.getOutletStream().getFlowRate("kg/hr"), 1.0e-6);
+    assertTrue(hasPhaseType(outlet, PhaseType.GAS));
+    assertTrue(hasPhaseType(outlet, PhaseType.OIL));
+    assertTrue(hasPhaseType(outlet, PhaseType.AQUEOUS));
+    assertBalancedAndAtEquilibrium(outlet);
+    for (int phaseIndex = 0; phaseIndex < outlet.getNumberOfPhases(); phaseIndex++) {
+      PhaseInterface phase = outlet.getPhase(phaseIndex);
+      assertTrue(Double.isFinite(phase.getDensity()) && phase.getDensity() > 0.0, phase.getType().toString());
+      assertTrue(Double.isFinite(phase.getEnthalpy()), phase.getType().toString());
+      assertTrue(Double.isFinite(phase.getCp()) && phase.getCp() > 0.0, phase.getType().toString());
+      for (int componentIndex = 0; componentIndex < phase.getNumberOfComponents(); componentIndex++) {
+        ComponentInterface component = phase.getComponent(componentIndex);
+        if ((component.isIsIon() || component.getIonicCharge() != 0.0) && phase.getType() != PhaseType.AQUEOUS) {
+          assertTrue(component.getx() <= 1.0e-40, component.getComponentName() + " escaped the aqueous phase");
+        }
+      }
+    }
+  }
+
+  /** An infeasible beta iterate is projected above the aqueous phase's fixed ionic inventory. */
+  @Test
+  void hybridBetaIterationRetainsAqueousIonCapacity() {
+    SystemPitzer system = createQualifiedCarbonDioxideSodiumSulfateSystem();
+    system.prepareHybridEosGeFlash();
+    system.init(1);
+
+    int aqueousPhaseIndex = -1;
+    double ionOverallFraction = 0.0;
+    for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
+      if (system.isHybridEosGeAqueousPhase(phaseIndex)) {
+        aqueousPhaseIndex = phaseIndex;
+      }
+    }
+    for (int componentIndex = 0; componentIndex < system.getPhase(0).getNumberOfComponents(); componentIndex++) {
+      ComponentInterface component = system.getPhase(0).getComponent(componentIndex);
+      if (component.getIonicCharge() != 0 || component.isIsIon()) {
+        ionOverallFraction += component.getz();
+      }
+    }
+    assertTrue(aqueousPhaseIndex >= 0);
+    assertTrue(system.getNumberOfPhases() >= 2);
+    system.setBeta(aqueousPhaseIndex, 0.5 * ionOverallFraction);
+    double nonAqueousBeta = (1.0 - system.getBeta(aqueousPhaseIndex)) / (system.getNumberOfPhases() - 1.0);
+    for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
+      if (phaseIndex != aqueousPhaseIndex) {
+        system.setBeta(phaseIndex, nonAqueousBeta);
+      }
+    }
+
+    TPHybridEosGeFlash solver = new TPHybridEosGeFlash(system, system);
+    solver.calcE();
+    solver.setXY();
+    system.init(1);
+
+    assertTrue(system.getBeta(aqueousPhaseIndex) > ionOverallFraction);
+    assertEquals(1.0, betaSum(system), 1.0e-12);
+    PhaseInterface aqueous = system.getPhase(aqueousPhaseIndex);
+    for (int componentIndex = 0; componentIndex < aqueous.getNumberOfComponents(); componentIndex++) {
+      ComponentInterface component = aqueous.getComponent(componentIndex);
+      if (component.getIonicCharge() != 0 || component.isIsIon()) {
+        assertEquals(component.getz(), system.getBeta(aqueousPhaseIndex) * component.getx(), 1.0e-12,
+            component.getComponentName());
+      }
+    }
+  }
+
+  /** An oversized beta proposal is damped before it can invalidate the aqueous neutral fugacities. */
+  @Test
+  void hybridBetaIterationLimitsAqueousFractionIncrease() {
+    SystemPitzer system = createQualifiedCarbonDioxideSodiumSulfateSystem();
+    system.prepareHybridEosGeFlash();
+    system.init(1);
+
+    int aqueousPhaseIndex = -1;
+    for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
+      if (system.isHybridEosGeAqueousPhase(phaseIndex)) {
+        aqueousPhaseIndex = phaseIndex;
+      }
+    }
+    assertTrue(aqueousPhaseIndex >= 0);
+
+    TPHybridEosGeFlash solver = new TPHybridEosGeFlash(system, system);
+    solver.setDoubleArrays();
+    solver.calcQ();
+    double settledAqueousBeta = system.getBeta(aqueousPhaseIndex);
+    system.setBeta(aqueousPhaseIndex, 0.999);
+    double nonAqueousBeta = 0.001 / (system.getNumberOfPhases() - 1.0);
+    for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
+      if (phaseIndex != aqueousPhaseIndex) {
+        system.setBeta(phaseIndex, nonAqueousBeta);
+      }
+    }
+    system.init(1);
+
+    solver.setXY();
+    system.init(1);
+
+    assertTrue(system.getBeta(aqueousPhaseIndex) <= 2.0 * settledAqueousBeta + 1.0e-12);
+    assertEquals(1.0, betaSum(system), 1.0e-12);
+    for (int componentIndex = 0; componentIndex < system.getPhase(aqueousPhaseIndex)
+        .getNumberOfComponents(); componentIndex++) {
+      ComponentInterface component = system.getPhase(aqueousPhaseIndex).getComponent(componentIndex);
+      assertTrue(Double.isFinite(component.getx()) && component.getx() > 0.0, component.getComponentName());
+      if (component.getz() > 1.0e-30 && component.getIonicCharge() == 0 && !component.isIsIon()) {
+        assertTrue(Double.isFinite(component.getFugacityCoefficient()) && component.getFugacityCoefficient() > 0.0,
+            component.getComponentName());
+      }
+    }
+  }
+
+  /** Qualified gas-forming CO2/Na2SO4 flashes remain closed across repeats and nearby pressure. */
+  @Test
+  void qualifiedCarbonDioxideSodiumSulfateGasAqueousFlashConverges() {
+    SystemPitzer system = createQualifiedCarbonDioxideSodiumSulfateSystem();
+    ThermodynamicOperations operations = new ThermodynamicOperations(system);
+
+    operations.TPflash();
+    assertEquals(2, system.getNumberOfPhases(), phaseDiagnostics(system));
+    assertTrue(hasPhaseType(system, PhaseType.GAS), phaseDiagnostics(system));
+    assertTrue(hasPhaseType(system, PhaseType.AQUEOUS), phaseDiagnostics(system));
+    assertBalancedAndAtEquilibrium(system);
+    double firstGasBeta = findPhaseBeta(system, PhaseType.GAS);
+
+    operations.TPflash();
+    assertEquals(firstGasBeta, findPhaseBeta(system, PhaseType.GAS), 1.0e-10);
+    assertBalancedAndAtEquilibrium(system);
+
+    system.setPressure(140.0);
+    operations.TPflash();
+    assertEquals(2, system.getNumberOfPhases(), phaseDiagnostics(system));
+    assertTrue(hasPhaseType(system, PhaseType.GAS), phaseDiagnostics(system));
+    assertTrue(hasPhaseType(system, PhaseType.AQUEOUS), phaseDiagnostics(system));
+    assertBalancedAndAtEquilibrium(system);
   }
 
   /** Every SystemEosGE subclass can explicitly promote its GE liquid to the hybrid aqueous role. */
@@ -171,8 +344,8 @@ class SystemHybridEosGeFlashTest extends neqsim.NeqSimTest {
   /** Built-in electrolyte GE systems expose the same fixed-role contract without Pitzer type checks. */
   @Test
   void electrolyteGeSystemsRegisterSharedHybridTopology() {
-    SystemEosGE[] systems = new SystemEosGE[] { new SystemDesmukhMather(313.15, 5.0),
-        new SystemKentEisenberg(313.15, 5.0) };
+    SystemEosGE[] systems = new SystemEosGE[] {new SystemDesmukhMather(313.15, 5.0),
+        new SystemKentEisenberg(313.15, 5.0)};
     for (SystemEosGE system : systems) {
       assertTrue(system.isHybridEosGeTopologyConfigured());
       assertTrue(system.getEquationOfStatePhase() instanceof PhaseEos);
@@ -288,7 +461,7 @@ class SystemHybridEosGeFlashTest extends neqsim.NeqSimTest {
   /** Nearby water-rich gas-condensate states retain finite balanced hybrid solutions. */
   @Test
   void waterRichGasCondensateNearbyStatesConverge() {
-    double[][] conditions = new double[][] { { 303.15, 40.0 }, { 323.15, 60.0 } };
+    double[][] conditions = new double[][] {{303.15, 40.0}, {323.15, 60.0}};
     for (double[] condition : conditions) {
       SystemPitzer system = createGasOilAqueousSystem();
       system.setTemperature(condition[0]);
@@ -564,6 +737,36 @@ class SystemHybridEosGeFlashTest extends neqsim.NeqSimTest {
     for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
       if (system.getPhase(phaseIndex).getType() == phaseType) {
         return system.getPhase(phaseIndex);
+      }
+    }
+    throw new AssertionError("Missing phase type " + phaseType);
+  }
+
+  /**
+   * Sum active phase fractions.
+   *
+   * @param system system to inspect
+   * @return active phase-fraction sum
+   */
+  private double betaSum(SystemInterface system) {
+    double total = 0.0;
+    for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
+      total += system.getBeta(phaseIndex);
+    }
+    return total;
+  }
+
+  /**
+   * Find the active fraction of a phase type.
+   *
+   * @param system system to inspect
+   * @param phaseType requested phase type
+   * @return matching phase fraction
+   */
+  private double findPhaseBeta(SystemInterface system, PhaseType phaseType) {
+    for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
+      if (system.getPhase(phaseIndex).getType() == phaseType) {
+        return system.getBeta(phaseIndex);
       }
     }
     throw new AssertionError("Missing phase type " + phaseType);

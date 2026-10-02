@@ -81,6 +81,21 @@ class DistributionGateTest(unittest.TestCase):
             self.assertEqual(7, summary["tests"])
             self.assertEqual(["regression"], summary["suites"])
 
+    def test_only_explicitly_recorded_upstream_disabled_cases_are_allowed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = Path(temporary) / "TEST-regression.xml"
+            report.write_text('<testsuite name="regression" tests="2" skipped="1">'
+                              '<testcase name="active"/>'
+                              '<testcase name="known"><skipped message="upstream disabled"/></testcase>'
+                              '</testsuite>')
+            with self.assertRaises(RuntimeError):
+                test_summary(temporary)
+            summary = test_summary(temporary, {"regression#known": "tracked upstream limitation"})
+            self.assertEqual(["regression#known"], summary["skippedCases"])
+            report.write_text(report.read_text().replace('name="known"', 'name="newSkip"'))
+            with self.assertRaises(RuntimeError):
+                test_summary(temporary, {"regression#known"})
+
     def test_untracked_sources_and_modified_sources_prevent_release(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -36,6 +36,60 @@ requirement`, or `confidential compressor route`.
 
 <!-- Add new entries at the top. Most recent first. -->
 
+### 2026-09-25 — Suspected gearbox damage on a motor-driven recompression train was coupling drive-bolt fatigue
+**Type:** G (Workflow)
+**Keywords:** gearbox vibration, 1X step, phase change, disc coupling, drive bolt fatigue, coupling unbalance, API 671, ISO 21940-11, ISO 7919-3, ISO 20816-1, fault localisation, historian, condition monitoring dropout, RotorUnbalanceAssessment
+**Solution:** `src/main/java/neqsim/process/mechanicaldesign/compressor/RotorUnbalanceAssessment.java`, `RotorUnbalanceAssessmentTest`; private task folder (redacted)
+**Notes:** A 1X step with phase change at the gear high-speed-shaft drive-end bearing, after months of slow rise, was diagnosed as gear damage; the inspection found a fatigued coupling drive bolt and a second one failed on the other flex pack ten weeks later. Localising each step by the change of every probe at unchanged speed and load pointed to the right flex pack both times (affected-bearing / other-bearing ratio > 10); a lost fragment of ~10 g at ~57 mm is ~80x the API 671 residual unbalance, so a single fragment explains the step. Torque was a third of the coupling rating, so the fatigue load is alternating (misalignment / hub separation / torsional / structure), not steady torque. Lessons: read SAP records raised after the action on every related tag; mask historian running state on driver power (interpolation holds values through stops); an all-zero vibration feed while the driver runs is a monitoring dropout.
+
+### 2026-09-22 — Router's agent_search.py could not find a CLI-installed agent (OLGA case study)
+**Type:** G (Workflow)
+**Keywords:** agent_search.py, router.agent.md, neqsim help, agent discovery, installed agents, ~/.neqsim/agents, sibling repo clone, olga-simulation-agent, NEQSIM_AGENTS_HOME, hermetic test
+**Solution:** `devtools/agent_search.py` (`_installed_agents_root`, new default root in `_discover_roots`), `devtools/test_agent_search.py` (`InstalledAgentsRootTest`, hermetic fix for `CrossRepoDedupTest` via `NEQSIM_AGENTS_HOME` override)
+**Notes:** While running an OLGA oil-water pressure-drop case through the newly-installed `olga-simulation-agent` (community, installed via `neqsim agent install olga-simulation-agent --vscode`, no local sibling clone of `neqsim-community-agents`), asked `@neqsim help "create and run an OLGA case"` to test router discovery. The router's own documented discovery command (`devtools/agent_search.py "<query>" --top 8`) returned a false-positive top hit (`@safety-depressuring`, keyword collision on "case") and never surfaced `olga-simulation-agent` at all, even though it was fully installed and already successfully invoked earlier in the same session. Root cause: `_discover_roots` only indexed community/enterprise agents from sibling git clones literally named `neqsim-community-agents`/`neqsim-enterprise-agents` next to the repo checkout — it had no awareness of `~/.neqsim/agents`, the directory `neqsim agent install` (the normal, documented way most users obtain community/private agents) actually populates. The `--agents-root` escape hatch existed but required knowing the exact nesting level to pass (`~/.neqsim`, not `~/.neqsim/agents`) and wasn't referenced anywhere in `router.agent.md`. Fix: added `~/.neqsim/agents` as a permanent default discovery root (mirroring `install_agent.py`'s `INSTALL_DIR` constant exactly), with an `NEQSIM_AGENTS_HOME` env-var override so tests stay hermetic. This also exposed and fixed a latent test-isolation bug: `CrossRepoDedupTest`'s synthetic `asset-economics-agent` fixture silently collided with the *real* `asset-economics-agent` already installed on the dev machine once the new default root was added — now redirected via the override. Verified end-to-end: `agent_search.py "create and run an OLGA case"` now ranks `olga-simulation-agent` #1 with no flags needed. All 12 tests pass (10 existing + 2 new regression tests). Lesson: a documented "recommended discovery tool" that only covers one of two supported installation paths (sibling clone vs. CLI catalog install) will silently mislead exactly the users who followed the documented install workflow instead of the undocumented one.
+
+### 2026-09-18 — Are the MCP tools optimal for general problem solving? Probe, verdict and contract fixes
+**Type:** E (Feature) / G (Workflow)
+**Keywords:** MCP, tools/list, tool contract, getSchema, validateInput, SchemaCatalog, SchemaChecker, schema coverage lint, unresolved inlet, misplaced properties, hydrateRiskMap NaN, RiskLevel.UNKNOWN, CPA mixing rule default, CLASSIC_TX_CPA, silent success, agent ergonomics
+**Solution:** `src/main/java/neqsim/mcp/catalog/SchemaCatalog.java` (9 new input schemas, `hasDetailedInputSchema`, `normalizeToolName`), `SchemaChecker.java`, `runners/Validator.java`, `runners/ProcessRunner.java`, `runners/FlowAssuranceRunner.java`, `runners/FluidDefaults.java`, `pvtsimulation/flowassurance/HydrateRiskMapper.java`, `thermo/mixingrule/EosMixingRuleType.defaultForModel`; tests in `SchemaCatalogTest`, `ValidatorTest`, `ProcessRunnerTest`, `FlowAssuranceRunnerTest`, `HydrateRiskMapperTest`
+**Notes:** Method: drive the packaged server over stdio JSON-RPC exactly as a model would (no source access), dump `tools/list`, then run four blind task chains (PH flash, 3-stage compression, hydrate risk, PSV sizing) and record every turn a model would have wasted. Verdict: scope is optimal (71 tools, all disciplines reachable, good response envelope with provenance/qualityGate, 0.2 s process runs) but the *contract* was not — 47 tools took one opaque `*Json` string, `getSchema(run_relief)` returned a placeholder pointing at a 392 KB `getCapabilities` that did not contain the field either, and three answers were silently wrong: a guessed process JSON ran a fully disconnected flowsheet and reported `success` (inlet `feed` never defined, parameters beside `properties` ignored); `hydrateRiskMap` returned `NaN` → `LOW` risk (`HydrateRiskMapper` never set `setHydrateCheck(true)` and mapped a failed flash to "assume safe"); and, found only while verifying the fix, every runner defaulted CPA fluids to the `"classic"` (SRK kij) mixing rule giving a wet-gas hydrate temperature of −0.04 °C instead of 15.7 °C. Fixes: real input schemas for all calculation tools with a CI gate that fails when a new `run_*` tool ships without one; `validateInput({tool, input})` for any tool via a 200-line dependency-free JSON-Schema subset checker; `UNRESOLVED_INLET` / `MISPLACED_UNIT_PARAMETERS` / `UNRECOGNIZED_INPUT_SHAPE` as pre-flight errors and `runProcess` refusing success on unresolved inlets; `RiskLevel.UNKNOWN` + `failureReasons` + `RESULT_NOT_AVAILABLE`; `EosMixingRuleType.defaultForModel`. Lesson: "does the tool exist" is the wrong question for agent tooling — the probe that finds defects is "can a model that has never seen the source get a correct answer in one or two turns, and does it know when the answer is wrong". Re-running the same four chains against the rebuilt jar: all four now either succeed correctly or fail with the exact field name.
+
+### 2026-09-18 — Packaging NeqSim skills, agents and MCP as VS Code Agent Plugins
+**Type:** G (Workflow)
+**Keywords:** agent plugins, plugin.json, mcp.json, marketplace, skills, agents, kebab-case, required_skills, frontmatter, install_agent, build_agent_plugin, SessionStart hook, editable install, version gate
+**Solution:** `devtools/build_agent_plugin.py`, `devtools/agent_frontmatter.py`, `devtools/sync_agent_required_skills.py`, `.github/mcp/mcp.json`; renames via `devtools/rename_underscore_skills.py`, `devtools/rename_dotted_agents.py`; sibling-repo changes in community-skills (folder names), enterprise-agents (`enterprise-` prefix), both skills repos (root `setup.py`)
+**Notes:** The Agent Plugins 1.0 layout maps 1:1 onto what already existed (SKILL.md folders → `skills/`, AGENT.md → `com.github.copilot/agents/*.agent.md`, MCP config → `mcp.json`), but three source-repo habits would have made most content vanish silently: 79 community skill folders did not equal their frontmatter `name`, 45 paperlab skills used underscores, and 31 core agents used dotted filenames. All three were fixed at the source and turned into lint errors rather than papered over in the packager. Skill declarations lived in three different parsers (prose `Loaded skills:` line, `## Loaded skills` bullets, `required_skills` yaml) — consolidated into one module so the plugin build validates agent→skill resolution with the same code the installer uses. The packager is a thin copier with a content-hash version gate, because VS Code only updates a plugin on a `version` change. Python packages inside skills are not installed by the plugin; a `SessionStart` hook runs one `pip install -e` of the bundled repo root into the shared interpreter, which required a `setup.py` that aggregates every `skills/*/*/src` package (all 76 + 118 names are unique). **Follow-up (same day):** the first real build exposed that the flat plugin layout (`skills/<skill>/`, no category folders) defeated that `skills/*/*/src` glob, so the hook would have installed an empty distribution — `setup.py` now matches both depths with a flat-layout regression test. `pyproject.toml`'s `readme = "README.md"` also needed the README copied into the plugin. `devtools/validate_agent_plugin.py` now re-checks a built marketplace against VS Code's silent-skip rules and runs in CI. First marketplace published to `equinor/neqsim-copilot-plugin` (internal): `neqsim` 86 skills / 36 agents, `neqsim-community` 79 / 52, `neqsim-enterprise` 119 / 76, all v0.1.0. PRs: neqsim#3793, community-skills#8, community-agents#8, enterprise-skills#14, enterprise-agents#9.
+
+### 2026-09-14 — "Operations already swapped the part, is the spec right?" — a Class 150 valve that is 3 % under its Class 150 line
+**Type:** D (Standards) / G (Workflow)
+**Keywords:** breakdown notification, malfunction report, spec verification, replacement valve, piping class, PCS, VDS, valve element table, ASME B16.5 material group, CF8M, WCB, 275 psig, 285 psig, soft seated, metal seated, trunnion ball, fire-safe, API 607, nameplate, attachment download, jetty drain valve
+**Solution:** private task folder (redacted); skill updates in `enterprise-maintenance-api` and `enterprise-tr2000-api` SKILL.md
+**Notes:** A very common breakdown-notification pattern: the field has already fitted a spare and asks the responsible discipline whether it may stay. Three transferable lessons. (1) **The maintenance API cannot answer the material half of the question** — there is no `/materials` endpoint (three probe paths all 404) and the equipment record's manufacturer/model/part/serial fields are routinely empty. The photographs the reporter attaches carry more specification than the master record would: one nameplate close-up gave manufacturer, figure number, class/size, MWP, body/ball/stem/seat materials and design standard. Downloading them has two traps — the client accessor returns an envelope with `status: ok` and **zero bytes**, and `client.base_url`/`api_version` are `None`, so fetch the binary with an explicit bearer against the literal gateway URL and check the magic bytes. (2) **"Class 150" is not a single number.** ASME B16.5 rates by material group: carbon steel (1.1) is 285 psig at 38 °C = 19.6 barg, cast CF8M (2.2) only 275 psig = 18.96 barg. A carbon-steel Class 150 pipe class carries the 19.6 barg figure, so an honestly-marked stainless Class 150 valve sits ~3 % **below** the design pressure of the Class 150 piping it was just bolted into — the discriminating check is the component's own marked MWP against the class `DesignPress02`, never class label against class label. (3) **Read the class's valve-element table, not just its rating.** The class permitted exactly one live ball VDS, metal-seated trunnion; the generic soft-seated floating-ball spare is outside the class whatever its rating. Also: a P&ID class annotation lacks the two-digit suffix the spec API stores (`A1AP` → `A1AP01`), so a literal lookup returns zero revisions and reads as "no such class"; and older line numbers on the same drawing carry no class at all, which makes the class an inference to declare, not assert.
+
+### 2026-09-12 — Chemical-injection nozzle performance, and testing a historian tag before trusting it
+**Type:** E (Feature) / G (Workflow)
+**Keywords:** H2S scavenger, MEA-triazine, chemical injection quill, atomizer nozzle, Sauter mean diameter, Lefebvre pressure-swirl, critical Weber breakup, interfacial area, wall impingement, nozzle turndown, mixing efficiency, dose loop, signal independence
+**Solution:** `neqsim.process.chemistry.injection.ChemicalInjectionNozzlePerformance` + `ChemicalInjectionNozzlePerformanceTest`; private task folder (redacted)
+**Notes:** NeqSim could size a scavenger's chemistry but had nothing for the hardware that decides whether the chemical ever reaches the gas, so `H2SScavenger.setMixingEfficiency` had to be guessed. The new class computes drop size from Lefebvre for an atomizer and from the critical-Weber aerodynamic limit for a bare quill, then interfacial area, settling velocity, distance to wall contact given off-centre insertion, and a bounded dispersion index — turning a hardware change into a number comparable against drop-size guidance. Two reusable lessons. (1) A fixed-orifice nozzle follows `Q = K√ΔP`, so `SMD ∝ Q^-0.75`: atomisation collapses on turndown, and splitting a given total rate over two nozzles in parallel is always coarser than the better single nozzle, because each sees a quarter of the ΔP. (2) Test a historian tag for independence before deriving anything from it — a controller process value labelled in concentration units tracked its own setpoint through a step change with no movement in the controller output, i.e. it was not measuring the process. A first pass had already produced a load, a stoichiometric demand and a capacity utilisation from it; all were withdrawn and replaced by the chemical-consumption totaliser, which is an independent measurement. The cheap discriminating test is: step the setpoint and watch whether the manipulated variable moves.
+
+### 2026-08-24 — Solid-argon Helmholtz reference EOS and publication regression
+**Type:** A (Property) / E (Feature)
+**Keywords:** argon, solid, Helmholtz EOS, Buckingham exp-6, FCC lattice, Debye, Einstein, anharmonicity, 16 GPa, Table 8, reference state
+**Solution:** `ArgonSolidHelmholtzEquation`, `SystemArgonSolidHelmholtzEos`, and `ArgonSolidHelmholtzEquationTest`
+**Notes:** Implemented the Maltby-Hammer-Wilhelmsen JPCRD 53, 043102 (2024) equation with second-order automatic derivatives and a safeguarded physical-branch volume solve. The paper does not publish its two absolute Gibbs/entropy reference offsets, so they are recovered from the authors' Table 8 sample calculation rather than from NeqSim GERG-2008, which uses a different caloric convention. Reproducing Table 8 with the rounded parameter table requires the finite 20-shell FCC lattice sum; independently adding the printed continuum long-range integral changes the low-pressure cancellation and does not reproduce the sample. Regression covers all nine tabulated properties plus molar volume, derivative identities, and pressure inversion through 300 K and 16 GPa.
+
+### 2026-08-24 — Assess a solid para-hydrogen Helmholtz EOS for NeqSim
+**Type:** A (Property)
+**Keywords:** para-hydrogen, solid Phase I, Helmholtz EOS, Vinet, Leachman, freezing point, phase equilibrium, experimental model
+**Solution:** `task_solve/2026-08-24_solid_para_hydrogen_eos_thesis_assessment/`
+**Notes:** A 2026 academic formulation adds dedicated Vinet, vibrational, and anharmonic Helmholtz terms that are not represented by the generic `ComponentSolid` liquid-reference path. Treat its reported property and phase-boundary deviations as author-reported until independently reproduced; the 17.64% sublimation Gibbs-consistency deviation precludes production-ready adoption. Recommended sequence: repair the `SystemLeachmanEos(T, P, true)` null-phase constructor defect, replace the `-500 K` freezing sentinel with explicit failure status, then add an opt-in experimental Phase I para-hydrogen model with coefficient/derivative audit and independent PVT, caloric, melting, sublimation, and triple-point regressions.
+
+### 2026-08-20 — Gas-turbine water-wash interval planning and permanent-wash business case
+**Type:** E (Feature)
+**Keywords:** gas turbine, compressor fouling, water wash, on-line wash, crank wash, corrected efficiency, degradation, wash interval, heat rate, fuel gas, CO2 tax, payback, GasTurbineWashPlanner, GasTurbineDegradation
+**Solution:** `neqsim.process.equipment.powergeneration.gasturbine.GasTurbineWashPlanner`, `GasTurbineDegradation.onlineWash(double)`, `GasTurbineWashPlannerTest`
+**Notes:** Driven by an operational action asking whether to resume water washing of an export-compressor gas-turbine driver and install a permanent wash arrangement. `GasTurbineDegradation` previously modelled a wash only as a full reset, so an on-line wash (which recovers ~30-50 %) could not be represented, and there was no path from a plant's trended "corrected turbine efficiency" KPI to a wash interval. The planner carries the steady-state sawtooth with partial recovery (`L0 = (1-e)rT/e`), integrates the extra-fuel fraction `1/(1-L)-1` over the cycle instead of evaluating it at the mean loss, prices fuel/CO2/wash/outage, optimises the interval and returns the payback of a permanent installation; `lossRateFromCorrectedEfficiencyTrend` is the KPI-to-model bridge. Two gotchas worth remembering: the outage/deferment term dominates any off-line crank-wash case, so report the payback excluding it as the headline; and an off-line optimum that lands on the scan upper bound means annual crank washing is already correct and on-line washing is the actual lever. Applied in a private task folder (redacted) where a measured degradation of 0.24 pp of corrected efficiency per 1000 fired hours and a measured wash recovery of 1.75 pp on a 22 MW driver were converted, via `GasTurbineUnit` and `Standard_ISO6976`, into ~1 MSm3/yr of fuel gas and ~2100 t CO2/yr.
+
 ### 2026-08-09 — Expose Naphtali-Sandholm tray K-value convergence work
 **Type:** E (Feature)
 **Keywords:** distillation, Naphtali-Sandholm, MESH, fugacity, K-value, convergence, diagnostics, telemetry
@@ -714,3 +768,203 @@ Formula provenance, all verified against rendered ISO page images (not trusted f
 **Keywords:** flow accelerated corrosion, FAC, magnetite dissolution, wall thinning at welds and bends, heating medium loop, cooling medium, WHRU tube leak, boiler feedwater, in-situ pH, pH at temperature, alkaline margin, amine buffer, DEA protonation, pKa temperature dependence, Cr-Mo upgrade, P11, erosion-corrosion distinction
 **Solution:** `src/main/java/neqsim/process/corrosion/{FlowAcceleratedCorrosion,AmineBufferedPH}.java` + tests; skill `.github/skills/neqsim-flow-accelerated-corrosion/`
 **Notes:** Two traps. (1) A laboratory pH is measured on a COOLED sample; neutrality is pH 7.00 at 25 C but ~5.85 at 150 C, so a hot-system pH must never be judged against 7 — use the alkaline margin pH(T) - pH_neutral(T). For a buffered fluid the pH shift equals the pKa shift exactly. (2) NORSOK M-506 is CO2 corrosion and does NOT apply to a CO2-free closed loop; FAC is also NOT erosion-corrosion (electrochemical dissolution under mass-transfer control vs mechanical particle impingement) — same locations, different mitigation. Also: wall shear goes as v^1.75, so a "3% velocity exceedance" is a ~13% shear exceedance — always report shear. Re rises ~70% from 100 to 150 C at constant velocity (viscosity halves), so damage should concentrate at the hot end — a cheap testable prediction. Magnetite fines are 1-10 um, so an 80 um filter removes essentially none. Found and fixed: the DEAprot reaction had full stoichiometry AND full constants but USEREACTION=0, so DEA-buffered systems silently returned no acid-base equilibrium.
+
+### 2026-08-17 — Riser hydrostatics: section inclination from atan2 on the axial cell length
+**Type:** E (Feature)
+**Keywords:** severe slugging, riser, pipeline-riser, section inclination, elevation profile, atan2 asin, hydrostatic head, Taylor bubble film, slug unit cell, falling film, Brotz, Taitel Barnea, TwoFluidPipe, mesh convergence, limit cycle
+**Solution:** `TwoFluidPipe.createSections` inclination + `TwoFluidPipe.taylorBubbleFilmHoldup(...)`; benchmark `SevereSluggingExperimentalBenchmarkTest`
+**Notes:** Two coupled defects, both found by driving a pipeline-riser severe-slugging case and asking why the answer moved with the mesh. **(1) Geometry.** Each section was built with `inclination = atan2(elev[i+1] - elev[i], secDx)`, but `secDx` is the cell length *along the pipe axis* - it is the finite-volume dx and it sums to `length` - so the elevation change across a cell is its vertical component and the angle is `asin(dz/secDx)`. `atan2` treats `secDx` as a horizontal run, so a vertical cell came out at **45 degrees** and a riser only ever delivered `sin(45) = 71%` of its hydrostatic head. The error is maximal exactly at a riser and vanishes on a gentle line (`dz << dx` makes asin ~ atan), which is why it survived every existing test. The initial-pressure estimate twenty lines above already used the correct sine form, `avgSinTheta = totalElevChange / length` - the two halves of the same method disagreed. The second half of the same defect: the **last section always got inclination 0** because there is no `elev[i+1]`, so the top riser cell was horizontal and the lost fraction of the riser was `1/nRiserCells`, i.e. **mesh dependent**. It now inherits its neighbour. **(2) Closure.** `calculateSlugHoldupOLGA` took the Taylor-bubble film from `calculateAnnularHoldupOLGA`, whose momentum balance is written for a film dragged *upward* by the gas core, so gravity and wall shear sit on the same side of `tau_i = tau_wL + rhoL*g*sin(theta)*delta` and it has no root in a riser: the iteration walked to its `delta/D = 0.2` clamp, returned a film hold-up of 0.64, drove the slug-length ratio to its clamp and pinned every riser cell at 0.90. A riser held permanently liquid-full cannot drain and therefore cannot slug at all. The film is now also bounded by liquid conservation across the slug unit with a gravity-drained film (Taitel & Barnea 1990), `H*(v_TB + 9.916*sqrt(g*D*|sin(theta)|*(1 - sqrt(1-H)))) = H_LS*(v_TB - v_m)`, which is monotone in H so the root is unique at any inclination and is found by bisection; the smaller of the two bounds is used. **Lesson: when a riser result moves with the mesh, print the section inclinations before touching a closure - a vertical pipe reporting 45 degrees is the tell.** Second lesson: a five-minute hand solve of the new closure at riser conditions predicted a film hold-up near 0.13 and an average near 0.43, and that is what the implementation returned; do the arithmetic before writing the code.
+**Validation:** On the 19.81 m flowline + 14.94 m riser benchmark, closure-development runs moved the steady riser hold-up from a constant 0.90 clamp to a 0.74-0.65 profile and produced 81-97 kPa pressure swings. The independent targets are approximate direct digitizations of the green experimental `SS` trace in Tengesdal Figure 5-6 (printed page 91, physical PDF page 111): 98 +/- 5 kPa and 38 +/- 2 s; the black `Model` trace is excluded. These are benchmark values, not plant values. The current `SevereSluggingExperimentalBenchmarkTest` is disabled pending #2909/#2911: the coupled route does not progress, and the legacy route sets `isTransientOutletBackflowClamped()`. Any clamped trajectory is invalid regardless of apparent amplitude, period, or mass closure. The earlier amplitude improvement remains diagnostic development evidence, not model qualification.
+
+### 2026-09-03 - addTBPfraction2 silently discarded its boiling point
+**Type:** E (Feature)
+**Keywords:** addTBPfraction2, addTBPfraction3, addTBPfraction4, boiling point, normal boiling point, Tb, TBP fraction, pseudo-component, specific gravity, Riazi-Daubert, Watson characterization factor, Kw, PNA, paraffin naphthene aromatic, calcTB, PedersenSRK, phase envelope insensitive to boiling point, gas chromatograph, DHA
+**Solution:** `SystemThermo.calculateDensityFromBoilingPoint` / `calculateMolarMassFromDensityAndBoilingPoint` / `addTBPfraction2,3,4` + new `calculateDensityFromBoilingPointAndWatsonK`; tests `TBPBoilingPointInversionTest`
+**Notes:** A user reported that a phase envelope did not move when the boiling point of a C10/C11 pseudo-component was changed from 447 K to 10 K. Root cause: `addTBPfraction2` did not store the boiling point at all - it inverted the selected TBP model's own `calcTB` for a density and passed that to `addTBPfraction`. For the Pedersen models `calcTB` has **no density term below 540 g/mol** (`2e-6*M^3 - 0.0035*M^2 + 2.4003*M + 171.74`), so the inverse problem has no root. The bisection then degenerated in a way that hid it: `f_mid` was identical every iteration, so the best-point tracker `if (abs(f_mid) < abs(fmidOLD))` fired only on iteration 0 and froze the answer at the first midpoint, `0.5*(0.5+1.5) = 1.0`. **Every boiling point returned exactly 1.000 g/cm3**, so Tc/Pc/omega were bit-identical for Tb = 10 K and Tb = 1000 K - and 1.000 is also physically wrong for a C10 cut (~0.734), so the base case was biased too. `PedersenPR2` (Soreide) is the only model whose `calcTB` depends on density, and even there it is **non-monotonic** with a minimum near 429 K, so bisection was invalid: below the minimum there is no root (it silently returned the frozen value) and above it there are two (it returned the wrong one). Replaced with the closed-form inversion of Riazi-Daubert (1980) `M = 4.5673e-5*Tb^2.1962*SG^-1.0164` (Tb in Rankine) - a pure power law, strictly monotonic, single valued, no iteration. Added guards: a resulting SG outside 0.5-1.3 now throws instead of returning a fabricated number, so an inconsistent (M, Tb) pair is rejected rather than silently accepted. **Three further latent defects found on the way.** (1) `addTBPfraction4` called `setBoilingPoint` on the *shared* TBP model and never cleared it; since `TBPBaseModel.calcTB` short-circuits on `getBoilingPoint() > 0`, that one boiling point leaked into every fraction added afterwards - now pinned for the duration of the call and cleared in a `finally`. (2) The molar-mass solve returned a stale best rather than the converged root and never checked its bracket - now brackets properly and throws with the attainable range. (3) The 7-arg `addTBPfraction` silently discards the caller's acentric factor (overwritten by the value back-calculated from the EOS `m` parameter), and its JavaDoc claimed Pc in Pa when it is stored as bara - documented, not yet changed, because fixing it is behaviour-changing. **Engineering lesson: M and Tb are not independent.** Specifying both over-determines the cut; the only freedom left is SG, and SG has almost no leverage on Tb (0 K for PedersenSRK, 11 K for Cavett, 85 K for Lee-Kesler over SG 0.6-1.0), so the inversion is ill-posed by construction. The well-conditioned direction is the other one: solving for M given (SG, Tb) works because M has hundreds of K of leverage, which is why `addTBPfraction3` was sound all along. **If the PNA split is known, do not go through molar mass at all** - the Watson factor `Kw = (1.8*Tb)^(1/3)/SG` encodes exactly the paraffinic/naphthenic/aromatic character that a generic M-based correlation cannot represent, and reproduces pure-component SG to 0.1-0.4 % against 5-7 % for Riazi-Daubert. Riazi-Daubert is a single-valued surface over (M, Tb), so two cuts with the same M and Tb *must* get the same SG - nC9 and propylcyclohexane sit at nearly the same M and Tb but differ by 11 % in density, and the correlation cannot separate them. Its residuals are systematic (paraffins +5 to +6.7 %, naphthenes +0.2 %, aromatics -1.9 to -4.9 %), i.e. it is implicitly calibrated to naphthenic character. Added `calculateDensityFromBoilingPointAndWatsonK` for that route.
+**Validation:** `TBPBoilingPointInversionTest` 10 tests (monotonic response to Tb, non-physical input rejected, Watson K within 1 % on four pure components, no boiling-point leak, unattainable Tb rejected, plus two tests that execute the documentation examples verbatim). `TBPBoilingPointCorrelationTest` 7/7 and `TBPfractionModelTest` 13/13 unchanged. Full `neqsim.thermo.**` = 1209 tests, 0 failures. Reference values are read from `COMP.csv` itself rather than typed in, so the verification tracks the database. Also corrected two documentation examples that had the argument order reversed (`addTBPfraction(name, moles, density, molarMass)`), which would have meant a 730 g/mol molar mass and a specific gravity of 7.5.
+
+### 2026-09-07 - GasTurbine returned unburned fuel as its exhaust in driven-load mode
+**Type:** E (Feature)
+**Keywords:** GasTurbine, addDrivenLoad, runPowerDemand, power-demand mode, combustion exhaust, CO2 emission, carbon balance, emission factor, combustFuel, calcStoichiometricOxygenDemand, element database, pseudo-component, TBP fraction, characterised fluid, E300, combustion air, fuel gas, thermal efficiency, driven compressor, tie-back CO2 profile, STEA, external profiles, fmu-steaclient, CashFlowEngine, breakeven gas price, unit development cost
+**Solution:** `GasTurbine.buildExhaust` / `GasTurbine.carbonAndHydrogen`; test `src/test/java/neqsim/process/equipment/powergeneration/GasTurbineCombustionTest.java`
+**Notes:** Found while building an incremental-CO2 profile for a subsea tie-back, where the host facility's fuel and flare are booked against the facility rather than the field, so the emissions had to be modelled from the incremental compression duty rather than read from a production forecast. **(1)** `GasTurbine.run` branches: with no driven loads it runs the Brayton path and sets its outlet stream to combustion exhaust via `combustFuel`; with `addDrivenLoad`/`setRequiredPower` it takes `runPowerDemand`, which sized the fuel correctly but then set `outStream` to `thermoSystem.clone()` - **the unburned fuel**. So `getOutletStream()` returned two physically different things depending on a mode the caller may not have thought about, and an emission calculation on a load-driven turbine read the fuel's own CO2 content instead of the combustion products: **60.6 kg/hr against a true 1089.6 kg/hr, a factor of 18 low, with no error and a plausible-looking number**. The right guard here is a carbon balance on the fuel: CO2 out must equal fuel carbon in, and that check is what exposed it. `runPowerDemand` now builds the exhaust the same way the Brayton path does. **(2)** The combustion stoichiometry asked `getElements().getNumberOfElements("C")` of every hydrocarbon, and the pseudo-components of any characterised reservoir fluid are absent from the element database, so a real fluid aborted the whole solve with `Element:getNumberOfElements - Input C component not in element database`. Atom counts are now estimated from molar mass with the paraffinic relation when the database has no entry; `Element.getElementNames()` returns null in that case, so it can be detected without catching an exception. **(3) Found and deliberately not fixed:** `Fluid.create("combustion air")` is `nitrogen 0.78084 / oxygen 0.20946 / CO2 0.033 / water 0.1` - an unnormalised set that works out to **2.9 mol% CO2 and 8.9 mol% water** against atmospheric 0.04 % and about 1 %, so every turbine exhaust CO2 is inflated by air-borne CO2 (75 % in this case). Correcting it to atmospheric values breaks `GasTurbineTest.testRun` with "net power must be positive": the Brayton net power balance is marginal and depends on the humid air as a working fluid, which is a deeper problem than the task warranted. Left alone, with the air-borne CO2 subtracted explicitly where the exhaust is read. Practical guidance also added to the `neqsim-power-generation` skill: build the fuel from real named components (renormalising an export gas onto `nitrogen, CO2, methane..n-hexane` captures over 99.8 mol%), and always cross-check the exhaust against a carbon balance.
+**Validation:** `GasTurbineCombustionTest` 2 tests - exhaust CO2 must close the carbon balance on fuel plus combustion-air CO2 to within 2 %, and a fuel containing a TBP pseudo-component must burn rather than throw. Full `neqsim.process.equipment.powergeneration` package 63 tests, 0 failures, including the pre-existing `GasTurbineTest` (12) that the reverted air-composition change had broken. In the study that found this, the fixed exhaust read and an independent carbon balance agreed to 0.0 % at 1089.6 kg/hr.
+
+### 2026-09-14 — Gas-to-LNG value chain concept evaluation (offshore hub, dense-phase export, FLNG)
+**Type:** F (Design)
+**Keywords:** LNG, liquefaction, SMR, FLNG, dense phase, cricondenbar, gas export hub, gas injection conversion, iceberg scour, trenching, TEG dehydration, hydrate, DNV-ST-F101, NGL extraction, CAPEX, AACE Class 5, Monte Carlo
+**Solution:** private task folder (redacted); reusable outputs: `.github/skills/neqsim-lng-liquefaction/`, `.github/agents/lng-value-chain.agent.md`, `devtools/py_to_notebook.py`
+**Notes:** Seven-notebook single-basis fan-out — one module holds the fluid and the design feed
+rate, every downstream stage reads it and never re-derives it, so the report sections cannot drift.
+Four NeqSim defects found and fixed, three of them silent factor errors caught only by
+independently computed anchors: phase-envelope continuation truncating and under-reporting the
+cricondenbar by 50%; DNV-ST-F101 burst resistance missing a factor 2; cost correlations
+extrapolated 80x beyond validity while weight-based vessel methods overstated columns (net study
+error 3x); and a hard-wired LNG refrigerant inventory giving a specific energy 2.2x outside its own
+published band. Key method points: calibrate an unknown gas composition against published NGL
+yields using GPA 2145 liquid densities rather than EOS densities; derive the feed rate backwards
+from LNG capacity; solve the dehydration specification from the hydrate curve rather than assuming
+a sales-gas spec; always check the Joule-Thomson letdown temperature at an onshore reception (it
+landed at -30 degC here, making inlet heating mandatory). See
+`/memories/repo/neqsim-silent-factor-errors.md`.
+
+### 2026-09-15 — Are two named units of a five-unit fleet really the cost and production-loss drivers?
+**Type:** G (Workflow)
+**Keywords:** fleet comparison, worst unit, maintenance cost ranking, production efficiency loss, PE loss, attribution artefact, booking default, permutation test, duty normalisation, running hours, campaign work, gas turbine generator, maintenance API work order costs, man-hours, PEPR loss tag, tag hierarchy sub-tree
+**Solution:** private task folder (redacted); reusable outputs: `devtools/generate_sources_md.py`, `devtools/generate_work_record.py`, `devtools/validate_task_results.py`; enterprise skills `enterprise-maintenance-api`, `enterprise-pepr-actions`, `enterprise-ots-timeseries`, `enterprise-fleet-equipment-benchmarking`
+**Notes:** An internal conclusion named two of five nominally identical units as the drivers of both
+maintenance cost and production loss. Half of it survived, and the two halves failed differently, so
+the reusable result is the gate rather than the ranking. Adjudicate every metric before ranking with
+it: the work-order cost field was populated on corrective orders only and exactly zero on 80% of
+those, covering 8.8% of the population and no planned maintenance, which forced a second metric
+(confirmed man-hours from work-order operations). That metric has its own unit trap -
+`plannedWorkHours` is ALREADY man-hours, so multiplying by `capacityCount` inflated the plant total
+13-fold and the error is invisible in the median. Define a machine as its tag SUB-TREE (866-906 tags
+here); a root-tag-only roll-up named a different leader. Then normalise by measured running hours
+and permute the unit label 20 000 times: the observed max/min spread of 1.94 sat BELOW the null
+median of 2.04 (p = 0.58), i.e. the fleet was more uniform than random allocation produces. On the
+consequence side the loss-record equipment tag turned out to be a booking default - 87% of
+unit-tagged loss value sat on the unit that ran 7.5% of fleet hours, under weather and national-grid
+categories - so consequence must be attributed twice (tag, and the unit the free text names) and
+cross-checked against exposure. Removing fleet-campaign work (same job title on >= 3 units, 19% of
+work orders) changed the leader again. The claimed pair survived in 3 of 7 metrics. Method sanity
+anchor: the identical pipeline returned p = 5e-09 on an earlier recurring-failure study and p = 0.58
+here, which is the evidence that it can return a negative. Also fixed three devtools gaps found on
+the way: `generate_sources_md.py` never wrote the `document_evidence_manifest.json` the quality gate
+requires, the two manifest tools disagreed on which files count as sources, and the work-record
+generator only scanned step 2 so step-1 data-acquisition scripts were falsely reported missing. See
+`/memories/repo/fleet-worst-unit-significance-gate.md`.
+
+### 2026-09-16 — Instrument review and measurement readout of a first-stage (inlet) separator
+**Type:** B (Process)
+**Keywords:** historian readout, instrument loop, STID tag discovery, frozen mirror namespace,
+level transmitter pegged, discriminating test, recurrence scan, positive control, PI Web API,
+tagreader, produced-water outlet, erosion probe full-scale saturation
+**Solution:** private task folder (redacted); devtools fixes on
+`task/norwegian-task-spec-headings-and-assumption-rendering`
+**Notes:** Two general lessons, both of which produced a WRONG answer before being caught.
+(1) A plant can expose two historian namespaces for the same tag where one is a frozen legacy
+mirror: it returns rows, raises nothing, and yields plausible setpoints and valve outputs that are
+months stale. Prove a series is alive (distinct-value count and last-change timestamp) before
+interpreting any number from it. (2) A single multi-month historian read came back silently
+truncated, and an episode scan over it reported ZERO events when the true answer was nine — which
+would have flipped the conclusion from "recurring operating practice" to "one-off". Chunk long
+reads, concatenate, and assert a known event is inside the assembled frame before believing any
+negative finding. Also: a level transmitter sitting at exactly full scale is not automatically a
+fault — the discriminating test (independent transmitter tracking, surviving signal noise, level
+responding to valve movement with the right lag) showed a real high interface, while an erosion-rate
+tag pinned at exactly full scale for 90 days WAS a dead reading, contradicted by its own accumulated
+metal-loss channel by five orders of magnitude. Same symptom, opposite verdicts, decided by data.
+devtools fixes: `extract_spec_section` matched English headings only, so a fully written Norwegian
+scope section was reported as "lacks source data"; and the work-record generator dumped
+schema-correct assumption/data-gap dicts as raw JSON. Both now covered by tests.
+
+### 2026-09-17 — Missing piping isometrics for a chemical-injection system: four-register search
+**Type:** G (Workflow)
+**Keywords:** STID, SAP Maintenance API, PEPR, historian, isometric drawing search, proven negative,
+positive control, tag-form traps, anchor object, P&ID topology reading, dosing regime change point,
+DCS reconciliation, document control
+**Solution:** private task folder (redacted); enterprise skill updates (STID / maintenance / PEPR /
+plant-data)
+**Notes:** A "we cannot find the drawings" request is a search problem, and the failure mode is
+reporting absence when the search was wrong. Four transferable lessons. (1) Query TWO independent
+registers. The engineering document register and the maintenance register disagreed: the maintenance
+register carried a drawing link that the document register did not expose on the line object, so a
+single-system search would have reported a drawing that exists as missing. (2) A negative is only
+worth reporting with a POSITIVE CONTROL. Every zero-row result was re-run against the full corpus,
+the same module and the same size class; the surviving conclusion is "this specific 2004 project
+filed no per-line isometrics", not "this kind of drawing is not registered". Six competing
+explanations (thin corpus, small-bore never drawn, poor module coverage, filed on a work order,
+access failure, malformed query) were each refuted with a count. (3) THE ANCHOR-OBJECT RULE: a
+fabrication isometric is named after the piping segment and filed against the equipment it serves,
+not against every line tag it crosses. When a line-tag search finds nothing, look on the mixer, the
+valve or the package. Reading the P&ID showed the small-bore tubing and the downstream piping were
+one physical run separated only by a spec break — which explained why one drawing was linked to both
+injection valves and the mixer, and turned an apparent two-line gap into probably one. Reading the
+drawings, not just listing them, was what produced the answer. (4) Three tag-form traps each
+sufficient to fake an absence: case (`12mm` stored `12MM`, and the SAP tag lookup is case-sensitive
+while its prefix search is not); the historic-vs-as-built leading zero (drawings filed under `.75"`
+for a line now tagged `0.75"`); and word-valued status filters where the API takes single-letter
+codes and silently returns zero rows. Also: the PEPR `contains` filter is a word-PREFIX match, not a
+substring match — proven with mid-word probes returning zero — so every negative from it must be
+qualified. Operating-data lesson: for a chemical-dosing system a 30-day mean is not the operating
+point once the dose has been stepped; detect the change point and report both, and cross-check a
+dosing rate against the tank level slope because these tags are prone to multi-day frozen segments.
+Report hygiene: the report generator embeds every PNG in `figures/`, so working crops must be moved
+to a subfolder — leaving them in place produced a 100 MB Word file instead of 2.9 MB.
+
+### 2026-09-21 — 3-stage compression with intercooling from 5 to 150 bara
+**Type:** B (Process)
+**Keywords:** Compressor, Cooler, intercooler, multi-stage compression, equal pressure ratio,
+SRK EOS, ProcessSystem, screening, lean pipeline gas, devtools task template
+**Solution:** `task_solve/2026-09-21_3_stage_compression_with_intercooling_from_5_to_150_bara/step2_analysis/run_compression_train.py`
+**Notes:** Screening-level (AACE 4-5) calc: 3x `Compressor` in series with equal per-stage
+pressure ratio `(P_out/P_in)^(1/3)`, each followed by a `Cooler` intercooler back to suction
+temperature (no aftercooler on the final stage). At 5 -> 150 bara the equal split gives PR = 3.107
+per stage, comfortably inside the typical centrifugal range (2.5-4) — worth checking before
+assuming an equal split is fine, since a 2-stage split for the same ratio (PR ~ 5.5) would not be.
+Flow rate wasn't specified, so used a 1000 kmol/hr basis and reported power per kmol/hr alongside
+the absolute number so the answer rescales linearly for a real design flow.
+Devtools fix (same session, Continuous Improvement Rule): `devtools/task_template/README.md` held
+maintainer-facing "Canonical Task Template Files" documentation instead of the per-task README —
+because `setup_workspace()` overlays every file under `devtools/task_template/` verbatim into
+`task_solve/TASK_TEMPLATE/` and then into every new task folder, **every task ever created by
+`neqsim new-task` got this meta-doc as its `README.md`** instead of the real step-by-step
+instructions (the `TASK_README` constant in `new_task.py`). Fixed by writing the correct per-task
+README content into `devtools/task_template/README.md` and relocating the maintainer-facing
+overlay-mechanism doc to `devtools/TASK_TEMPLATE_OVERLAY.md` (outside the walked directory, so it
+can no longer leak into task folders). Lesson: nothing meant for humans browsing a source folder
+should be placed inside a directory that a tool copies wholesale — check what walks/overlays a
+directory before adding a README to it.
+
+### 2026-09-22 — TwoFluidPipe benchmark matrix: one-, two- and three-phase, steady and transient
+**Type:** G (Workflow)
+**Keywords:** TwoFluidPipe, multiphase pipe flow, benchmark matrix, gas condensate, gas-oil,
+three-phase, riser, hilly terrain, transient turndown, ramp-up, energy balance, equilibrium cp,
+Andritsos-Hanratty, steady-consistent transient, regime gate, work record
+**Solution:** private task folder (redacted); Java fixes in `TwoFluidPipe`,
+`TwoFluidConservationEquations`, `InterfacialFriction`; tests `TwoFluidPipeEnergyBalanceTest`,
+`SteadyMomentumCorrectionTest`
+**Notes:** 13 steady and 5 transient cases against an industry transient multiphase simulator on
+one shared NeqSim fluid basis (the reference PVT table and source phase fractions were written from
+the same SRK flash). Fixes that mattered:
+- the steady energy balance used a frozen-phase cp, which ignores condensation latent heat, so every
+  condensing case arrived too cold; now equilibrium cp/JT from flashed-enthalpy differences plus
+  the `g dz/cp` term;
+- the transient read cp/JT from the live inlet stream; now cached from the reference fluid;
+- the steady-consistency momentum correction must be **regime-gated** — applied after an
+  annular-to-stratified turndown it drained the line, while in slug flow it is required.
+Andritsos-Hanratty interfacial enhancement belongs in the solver, not in `FlowRegimeDetector` (it
+broke the flow-map validation there). Remaining gaps: slug-unit friction over-predicts dP, the
+three-phase stratified/slug boundary is evaluated on the combined liquid level, the two-phase slip
+floor binds in gas-condensate flow, liquid acoustic transients ring, and riser dP is high.
+Tooling fix: the report and work-record generators took glob `produces:` entries such as
+`figures/*.png` literally and flagged them missing, and the work record listed the template
+notebook plan as missing work even with `notebooks.required: false`.
+
+### 2026-09-24 — Contaminated closed MEG/water cooling-medium loop: cleaning, monitoring, materials basis
+**Type:** G (Workflow)
+**Keywords:** cooling medium, MEG, glycol, biofilm, MIC, crevice corrosion, strainer dP, water activity, pH buffer, feed and bleed, PEPR
+**Solution:** private task folder (redacted); pattern in .github/skills/neqsim-production-chemistry/SKILL.md "Closed Glycol Cooling/Heating Media"
+**Notes:** SRK-CPA water activity of 20 wt% MEG = 0.923 (above the ~0.91 bacterial growth limit;
+0.88 needs 28.5 wt%). Unbuffered MEG/water loses pH 8 -> 7 with ~0.007 mmol/L organic acid, so
+caustic dosing cannot hold pH. A past feed-and-bleed chloride drop reconciled to a well-mixed volume
+of ~10 m3 versus a stated 35 m3 -> stagnant branches/dead legs. Historised strainer dP was the leading
+indicator (48x baseline before the deposit find, regrowth within a year). SAP gotcha: a cleaning
+work order went TECO with every operation confirmed at 0 actual hours although the work was not done.
+NIP: SRK-CPA CO2-water Henry constant 19% low at 25 C / 1 atm.
+
+### 2026-09-24 - Lifetime-programme action for an ageing fire-door population (peer benchmark in the lifetime register)
+**Type:** G (Workflow)
+**Keywords:** levetidsprogram, lifetime programme, LTP action, fire doors, A60, barrier, failure to close on demand, Crow-AMSAA, peer benchmark, robustgjoring, Thelma
+**Solution:** private task folder (redacted); pattern in enterprise-life-extension-assessment steps 1b and 8b
+**Notes:** The lifetime programme had no action for the doors because a pre-yard lifetime evaluation had rated them satisfactory; 18 other installations carried a fire-door lifetime case, which gave a sourced expected life (25 y) and unit costs. Trend excluded ageing, but a flat demand-failure rate on A60/H doors made it a barrier case. Robust option = survey + pneumatic operators + targeted replacement + verified function test: same barrier gain as full replacement at one third of the cost; targeted-only collapses if failures do not concentrate on known bad doors (the discriminating test). Horizon in the lifetime register (2045) differed from the task horizon (2037) - assess both.
+
+### 2026-09-25 - Continuous agentic improvement of task folders (living tasks)
+**Type:** G (Workflow)
+**Keywords:** continuous improvement, living task, daily cycle, digital twin, drift detection, EWMA, CUSUM, improvement ledger, baseline promotion, watermark, incremental pull, scheduled agent, Copilot CLI headless, ProcessAutomation evaluate, AgenticProcessOptimizer, OnlineCalibrator
+**Solution:** private task folder (redacted); design document following up the two 2026 agentic engineering books
+**Notes:** Proposes a continuous/ layer per task (promoted baseline, append-only watermarked data, immutable per-cycle folders, JSONL improvement ledger) and an eight-stage cycle (sense, refresh, qualify, replay, drift, re-optimise, diff+ledger, review+promote) built on existing ProcessAutomation/AgenticProcessOptimizer/OperationalEvidencePackage/OnlineCalibrator/ProcessModelState APIs. Rule: program the loop, prompt the exceptions - the daily runner makes no LLM calls; an agent runs only on triggers; only an engineer promotes. Replay baseline inputs whenever the NeqSim commit changes to separate tool change from plant change. Keep large historian partitions off OneDrive. Copilot CLI 1.0.87 supports -p/--silent/--agent/--allow-tool/--deny-tool/--log-dir for bounded headless reviews. Not implemented yet (Phases 1-4 proposed).
+Update: foundation implemented in `devtools/neqsim_continuous/` (entry-point plugin registry, stop rules, append-only ledger with union merge, watermarks, file adapter; `test_neqsim_continuous.py`) and Word/Markdown briefs for `new-task --prompt-file` (backward compatible). Public-first placement: engine/agent/methods/reference case in neqsim + community; only site adapters in enterprise. SOTA additions planned: EnKF + identifiability, Bayesian/multi-fidelity search, guarded hybrid model, branches + critic, backtesting metrics.
+Update 2: implemented end to end. `neqsim task-living/task-cycle/task-solve/task-backtest/task-schedule/task-promote/task-ledger/task-status/task-reference-case`; Java `neqsim.process.operations.continuous` (ModelDriftMonitor, BaselineComparator, ImprovementCycle); core agent `continuous-improvement` + skill `neqsim-continuous-task-improvement`; community toolkit (tagreader adapter, GP-EI, EnKF, identifiability) and agent; enterprise OTS/PDM adapters and overlay agent. Public reference case: 3/3 injected faults detected, 0 false alarms, 100 % reproducible. Gotchas: a 30-sample warm-up underestimates sigma - without per-signal `min_sigma` floors white noise gave 3 false alarms in 2 months; start EWMA at the baseline mean, not the first value; make step/criterion triggers fire on crossing only; `os.replace` on Windows/OneDrive needs a retry on PermissionError; plugins resolve by dotted path (`pkg.mod:Class`) so aggregated skill installs need no entry points.
+Update 3: living tasks use the general task root (`neqsim --show-task-root`): every `<task>` argument accepts a folder name inside it, and `task-status` / `task-reference-case` default to it. User guide: `docs/development/CONTINUOUS_TASK_SOLVING.md`, introduced in `TASK_SOLVING_GUIDE.md` § "Keeping a Task Alive".

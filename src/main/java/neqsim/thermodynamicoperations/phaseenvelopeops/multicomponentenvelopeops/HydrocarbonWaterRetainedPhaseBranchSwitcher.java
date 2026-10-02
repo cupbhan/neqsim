@@ -120,7 +120,7 @@ public final class HydrocarbonWaterRetainedPhaseBranchSwitcher {
     double[] originalZero = root.getPhaseZeroComposition();
     double[] originalOne = root.getPhaseOneComposition();
     double[] alternative = candidate.getComposition();
-    double[] blendFractions = new double[] { 1.0, 0.75, 0.5, 0.25 };
+    double[] blendFractions = new double[] {1.0, 0.75, 0.5, 0.25};
     double[] betaSeeds = distinctBetaSeeds(root.getBeta());
     SpecifiedTwoPhaseFlashSolver flashSolver = new SpecifiedTwoPhaseFlashSolver(template, root.getRetainedPhaseZero(),
         root.getRetainedPhaseOne())
@@ -184,7 +184,7 @@ public final class HydrocarbonWaterRetainedPhaseBranchSwitcher {
   }
 
   private static double[] distinctBetaSeeds(double sourceBeta) {
-    double[] candidates = new double[] { sourceBeta, 0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 0.98 };
+    double[] candidates = new double[] {sourceBeta, 0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 0.98};
     List<Double> distinct = new ArrayList<Double>();
     for (double candidate : candidates) {
       boolean duplicate = false;

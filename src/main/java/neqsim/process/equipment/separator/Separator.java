@@ -24,9 +24,12 @@ import neqsim.process.equipment.capacity.CapacityConstrainedEquipment;
 import neqsim.process.equipment.capacity.CapacityConstraint;
 import neqsim.process.equipment.capacity.StandardConstraintType;
 import neqsim.process.equipment.mixer.Mixer;
+import neqsim.process.equipment.separator.entrainment.EntrainmentProviderRegistry;
+import neqsim.process.equipment.separator.entrainment.EntrainmentResult;
 import neqsim.process.equipment.separator.entrainment.InletDeviceModel;
 import neqsim.process.equipment.separator.entrainment.MultiphaseFlowRegime;
 import neqsim.process.equipment.separator.entrainment.SeparatorPerformanceCalculator;
+import neqsim.process.equipment.separator.entrainment.SpecCarryOverProvider;
 import neqsim.process.equipment.separator.sectiontype.ManwaySection;
 import neqsim.process.equipment.separator.sectiontype.MeshSection;
 import neqsim.process.equipment.separator.sectiontype.NozzleSection;
@@ -67,8 +70,9 @@ import neqsim.util.ExcludeFromJacocoGeneratedReport;
  * <li><b>Design gas load factor (K-factor)</b> — {@link #setDesignGasLoadFactor(double)} [m/s]. Default: 0.11 m/s. This
  * is the design K-factor from the Souders-Brown equation. Typical range: 0.07–0.15 m/s for horizontal separators,
  * 0.04–0.10 m/s for vertical scrubbers.</li>
- * <li><b>Design liquid level fraction</b> (vertical only) — {@link #setDesignLiquidLevelFraction(double)}. Default:
- * 0.8. The fraction of cross-sectional area occupied by liquid at design conditions.</li>
+ * <li><b>Design liquid level fraction</b> (horizontal only) — {@link #setDesignLiquidLevelFraction(double)}. Default:
+ * 0.8. The fraction of cross-sectional area occupied by liquid at design conditions. A vertical separator uses the full
+ * cross-section for gas flow, so this value does not affect it.</li>
  * </ol>
  *
  * <p>
@@ -247,6 +251,7 @@ public class Separator extends ProcessEquipmentBaseClass
   private double lastEnthalpy;
   private double lastFlowRate;
   private double lastPressure;
+  private double lastPressureDrop;
 
   // Heat input capabilities
   private boolean setHeatInput = false;
@@ -269,6 +274,11 @@ public class Separator extends ProcessEquipmentBaseClass
    * divide-by-near-zero that returns a nonsensically large K.
    */
   private static final double MIN_LIQUID_GAS_DENSITY_DIFFERENCE = 10.0;
+  /**
+   * Liquid density [kg/m3] used by the gas-load factor when the vessel is dry. NaN means
+   * {@link #DEFAULT_LIQUID_DENSITY}.
+   */
+  private double dryLiquidDensity = Double.NaN;
   /** Design gas load factor (K-factor) from mechanical design [m/s]. */
   private double designGasLoadFactor = DEFAULT_DESIGN_GAS_LOAD_FACTOR;
   /** Liquid level fraction (Fg) from mechanical design. */
@@ -303,6 +313,9 @@ public class Separator extends ProcessEquipmentBaseClass
    * it is not serializable by default.
    */
   private transient SeparatorPerformanceCalculator performanceCalculator;
+
+  /** Id of the selected entrainment model; null means the default applies. */
+  private String entrainmentProviderId = null;
 
   /**
    * Whether to use the detailed performance calculator for entrainment computation. When false (default), the simple
@@ -674,13 +687,14 @@ public class Separator extends ProcessEquipmentBaseClass
     double flow = inletStreamMixer.getOutletStream().getFlowRate("kg/hr");
     double pres = inletStreamMixer.getOutletStream().getPressure();
     if (Math.abs((lastEnthalpy - enthalpy) / enthalpy) < 1e-6 && Math.abs((lastFlowRate - flow) / flow) < 1e-6
-        && Math.abs((lastPressure - pres) / pres) < 1e-6) {
+        && Math.abs((lastPressure - pres) / pres) < 1e-6 && lastPressureDrop == pressureDrop) {
       setCalculationIdentifier(id);
       return;
     }
     lastEnthalpy = inletStreamMixer.getOutletStream().getFluid().getEnthalpy();
     lastFlowRate = inletStreamMixer.getOutletStream().getFlowRate("kg/hr");
     lastPressure = inletStreamMixer.getOutletStream().getPressure();
+    lastPressureDrop = pressureDrop;
     thermoSystem2 = inletStreamMixer.getOutletStream().getThermoSystem().clone();
     thermoSystem2.setPressure(thermoSystem2.getPressure() - pressureDrop);
 
@@ -1226,6 +1240,59 @@ public class Separator extends ProcessEquipmentBaseClass
   }
 
   /**
+   * Selects the entrainment model used by {@link #getEntrainmentResult()}.
+   *
+   * <p>
+   * Models are discovered through {@link java.util.ServiceLoader}, so the set available depends on what is on the
+   * classpath. Public NeqSim ships {@code "zero"} (no carry-over), {@code "spe-0.1gal-mmscf"} (a fixed 13.4 L per MSm3,
+   * the default) and {@code "neqsim-7stage"} (the physics chain). Private plug-ins such as {@code "eqn-pi-v1"} appear
+   * only when their JAR is present.
+   * </p>
+   *
+   * <p>
+   * This selection affects {@link #getEntrainmentResult()} only. It does not change the entrainment applied during
+   * {@link #run()}, so setting it cannot move the results of an existing model.
+   * </p>
+   *
+   * @param providerId the model id, or null to fall back to the default
+   * @throws IllegalStateException if no model with that id is on the classpath
+   */
+  public void setEntrainmentProvider(String providerId) {
+    if (providerId == null) {
+      this.entrainmentProviderId = null;
+      return;
+    }
+    EntrainmentProviderRegistry.find(providerId);
+    this.entrainmentProviderId = providerId;
+  }
+
+  /**
+   * Returns the id of the selected entrainment model.
+   *
+   * @return the model id, or null when none has been set and the default applies
+   */
+  public String getEntrainmentProvider() {
+    return entrainmentProviderId;
+  }
+
+  /**
+   * Computes carry-over using the selected entrainment model, or the default when none has been selected.
+   *
+   * <p>
+   * The default is {@code "spe-0.1gal-mmscf"} — a fixed 13.4 L per MSm3 of gas. That figure is an assumption rather
+   * than a prediction: it does not respond to gas load or overload. Select {@code "neqsim-7stage"} for a
+   * performance-based estimate, or {@code "zero"} to exclude carry-over deliberately.
+   * </p>
+   *
+   * @return the carry-over result produced by the selected model; never null
+   * @throws IllegalStateException if the selected model is not on the classpath
+   */
+  public EntrainmentResult getEntrainmentResult() {
+    String id = (entrainmentProviderId == null) ? SpecCarryOverProvider.ID : entrainmentProviderId;
+    return EntrainmentProviderRegistry.find(id).compute(this);
+  }
+
+  /**
    * Enables the enhanced (state-of-the-art) entrainment calculation with flow regime prediction, inlet device modeling,
    * detailed vessel geometry, and database-driven internals. This automatically enables the detailed entrainment
    * calculation.
@@ -1465,6 +1532,31 @@ public class Separator extends ProcessEquipmentBaseClass
   }
 
   /**
+   * Sets the liquid density used by the Souders-Brown gas-load, allowable-velocity and sizing calculations when the
+   * vessel carries no liquid phase.
+   *
+   * <p>
+   * A scrubber that flips between dry gas and a trace of condensate otherwise jumps between the 1000 kg/m3 default and
+   * the real condensate density (often 500-650 kg/m3 at high pressure), a 20-30 % step in the reported gas load for an
+   * insignificant change in duty. Setting the design condensate density here makes both states use the same basis.
+   * </p>
+   *
+   * @param density liquid density in kg/m3; a non-positive value or NaN restores the 1000 kg/m3 default
+   */
+  public void setDryLiquidDensity(double density) {
+    this.dryLiquidDensity = density > 0.0 ? density : Double.NaN;
+  }
+
+  /**
+   * Returns the liquid density used by the gas-load factor when the vessel is dry.
+   *
+   * @return liquid density in kg/m3
+   */
+  public double getDryLiquidDensity() {
+    return Double.isNaN(dryLiquidDensity) ? DEFAULT_LIQUID_DENSITY : dryLiquidDensity;
+  }
+
+  /**
    * getGasLoadFactor.
    *
    * @return a double
@@ -1474,18 +1566,18 @@ public class Separator extends ProcessEquipmentBaseClass
     thermoSystem.initPhysicalProperties();
     double gasDensity = thermoSystem.getPhase(0).getPhysicalProperties().getDensity();
     double liquidDensity;
-    // For dry gas (single phase), use default liquid density of 1000 kg/m3
+    // For dry gas (single phase), use the dry-vessel liquid density (default 1000 kg/m3)
     if (thermoSystem.getNumberOfPhases() < 2
         || !thermoSystem.hasPhaseType("oil") && !thermoSystem.hasPhaseType("aqueous")) {
-      liquidDensity = DEFAULT_LIQUID_DENSITY; // Default liquid density for dry separators/scrubbers
+      liquidDensity = getDryLiquidDensity();
     } else {
       liquidDensity = thermoSystem.getPhase(1).getPhysicalProperties().getDensity();
     }
     // Guard: a near-dry or gas-like second phase (liquidDensity approximately equal to
     // gasDensity) would collapse the Souders-Brown denominator and return a
-    // nonsensically large K. Fall back to the default liquid density in that case.
+    // nonsensically large K. Fall back to the dry-vessel liquid density in that case.
     if (liquidDensity - gasDensity < MIN_LIQUID_GAS_DENSITY_DIFFERENCE) {
-      liquidDensity = DEFAULT_LIQUID_DENSITY;
+      liquidDensity = getDryLiquidDensity();
     }
     double term1 = (liquidDensity - gasDensity) / gasDensity;
     return getGasSuperficialVelocity() * Math.sqrt(1.0 / term1);
@@ -1507,13 +1599,13 @@ public class Separator extends ProcessEquipmentBaseClass
     double liquidDensity;
     // For dry gas (single phase), use default liquid density of 1000 kg/m3
     if (thermoSystem.getNumberOfPhases() < 2 || phaseNumber >= thermoSystem.getNumberOfPhases()) {
-      liquidDensity = DEFAULT_LIQUID_DENSITY; // Default liquid density for dry separators/scrubbers
+      liquidDensity = getDryLiquidDensity();
     } else {
       liquidDensity = thermoSystem.getPhase(phaseNumber).getPhysicalProperties().getDensity();
     }
     // Guard against a gas-like second phase collapsing the Souders-Brown denominator.
     if (liquidDensity - gasDensity < MIN_LIQUID_GAS_DENSITY_DIFFERENCE) {
-      liquidDensity = DEFAULT_LIQUID_DENSITY;
+      liquidDensity = getDryLiquidDensity();
     }
     double term1 = 1.0 / gasAreaFraction * (liquidDensity - gasDensity) / gasDensity;
     return getGasSuperficialVelocity() * Math.sqrt(1.0 / term1);
@@ -1537,7 +1629,7 @@ public class Separator extends ProcessEquipmentBaseClass
     double liquidDensity;
     if (thermoSystem.getNumberOfPhases() < 2
         || !thermoSystem.hasPhaseType("oil") && !thermoSystem.hasPhaseType("aqueous")) {
-      liquidDensity = DEFAULT_LIQUID_DENSITY_FOR_SIZING;
+      liquidDensity = getDryLiquidDensity();
     } else {
       liquidDensity = thermoSystem.getPhase(1).getPhysicalProperties().getDensity();
     }
@@ -1626,8 +1718,7 @@ public class Separator extends ProcessEquipmentBaseClass
         ? thermoSystem.getPhase("gas").getPhysicalProperties().getDensity()
         : 50.0; // Default gas density if no gas phase
 
-    // Use actual liquid density if available, otherwise default to 1000 kg/m³
-    double liqDensity = DEFAULT_LIQUID_DENSITY_FOR_SIZING;
+    double liqDensity = getDryLiquidDensity();
     if (thermoSystem.hasPhaseType("oil")) {
       liqDensity = thermoSystem.getPhase("oil").getPhysicalProperties().getDensity();
     } else if (thermoSystem.hasPhaseType("aqueous")) {
@@ -1654,8 +1745,8 @@ public class Separator extends ProcessEquipmentBaseClass
       // For horizontal, gas flows through upper section above design liquid level
       gasArea = getSepCrossArea() * (1.0 - designLiquidLevelFraction);
     } else {
-      // For vertical separator
-      gasArea = getSepCrossArea() * (1.0 - designLiquidLevelFraction);
+      // For vertical separators, gas flows through the full vessel cross-section.
+      gasArea = getSepCrossArea();
     }
     return maxVelocity * gasArea;
   }
@@ -1678,7 +1769,7 @@ public class Separator extends ProcessEquipmentBaseClass
    * <li>{@link #setSeparatorLength(double)} — separator length [m]</li>
    * <li>{@link #setDesignGasLoadFactor(double)} — design K-factor [m/s]</li>
    * <li>{@link #setOrientation(String)} — "horizontal" or "vertical"</li>
-   * <li>{@link #setDesignLiquidLevelFraction(double)} — for vertical separators</li>
+   * <li>{@link #setDesignLiquidLevelFraction(double)} — for horizontal separators</li>
    * </ul>
    *
    * @return capacity utilization fraction (0.0 to 1.0+ if overloaded), or 0.0 if liquid-only (no gas separation
@@ -1705,6 +1796,16 @@ public class Separator extends ProcessEquipmentBaseClass
     }
 
     return currentGasFlow / maxFlow;
+  }
+
+  /**
+   * Captures a detached, fail-closed gas-capacity assessment for optimization and reporting.
+   *
+   * @param designBasisProvenance non-blank source for geometry and K-factor limits
+   * @return immutable separator capacity evidence
+   */
+  public SeparatorCapacityAssessment getCapacityAssessment(String designBasisProvenance) {
+    return SeparatorCapacityAssessment.from(this, designBasisProvenance);
   }
 
   /**
@@ -1898,8 +1999,7 @@ public class Separator extends ProcessEquipmentBaseClass
       return;
     }
 
-    // Use actual liquid density if available, otherwise default to 1000 kg/m³
-    double liqDensity = DEFAULT_LIQUID_DENSITY_FOR_SIZING;
+    double liqDensity = getDryLiquidDensity();
     if (thermoSystem.hasPhaseType("oil")) {
       liqDensity = thermoSystem.getPhase("oil").getPhysicalProperties().getDensity();
     } else if (thermoSystem.hasPhaseType("aqueous")) {
@@ -1912,9 +2012,8 @@ public class Separator extends ProcessEquipmentBaseClass
     // Required gas area
     double requiredGasArea = gasVolumeFlow / maxVelocity;
 
-    // Calculate diameter (assuming gas area fraction based on orientation)
-    double gasAreaFraction = orientation.equals("horizontal") ? (1.0 - designLiquidLevelFraction)
-        : (1.0 - designLiquidLevelFraction);
+    // Calculate diameter using the orientation-specific gas flow area.
+    double gasAreaFraction = orientation.equals("horizontal") ? (1.0 - designLiquidLevelFraction) : 1.0;
     double requiredTotalArea = requiredGasArea / gasAreaFraction;
     double requiredDiameter = Math.sqrt(4.0 * requiredTotalArea / Math.PI);
 
@@ -2075,8 +2174,7 @@ public class Separator extends ProcessEquipmentBaseClass
       thermoSystem.initPhysicalProperties();
       double gasDensity = thermoSystem.getPhase("gas").getPhysicalProperties().getDensity();
 
-      // Use actual liquid density if available, otherwise default to 1000 kg/m³
-      double liqDensity = DEFAULT_LIQUID_DENSITY_FOR_SIZING;
+      double liqDensity = getDryLiquidDensity();
       if (thermoSystem.hasPhaseType("oil")) {
         liqDensity = thermoSystem.getPhase("oil").getPhysicalProperties().getDensity();
       } else if (thermoSystem.hasPhaseType("aqueous")) {
@@ -2085,8 +2183,9 @@ public class Separator extends ProcessEquipmentBaseClass
 
       double gasVolumeFlow = thermoSystem.getPhase("gas").getFlowRate("m3/hr");
       double maxVelocity = designGasLoadFactor * Math.sqrt((liqDensity - gasDensity) / gasDensity);
+      double gasAreaFraction = orientation.equals("horizontal") ? 1.0 - designLiquidLevelFraction : 1.0;
       double actualVelocity = gasVolumeFlow / 3600.0
-          / (Math.PI * Math.pow(getInternalDiameter() / 2, 2) * (1.0 - designLiquidLevelFraction));
+          / (Math.PI * Math.pow(getInternalDiameter() / 2, 2) * gasAreaFraction);
 
       sb.append("\n--- Operating Conditions ---\n");
       sb.append("Gas Volume Flow: ").append(String.format("%.1f m3/hr", gasVolumeFlow)).append("\n");
@@ -2120,8 +2219,7 @@ public class Separator extends ProcessEquipmentBaseClass
       thermoSystem.initPhysicalProperties();
       double gasDensity = thermoSystem.getPhase("gas").getPhysicalProperties().getDensity();
 
-      // Use actual liquid density if available, otherwise default to 1000 kg/m³
-      double liqDensity = DEFAULT_LIQUID_DENSITY_FOR_SIZING;
+      double liqDensity = getDryLiquidDensity();
       boolean liquidDensityAssumed = true;
       if (thermoSystem.hasPhaseType("oil")) {
         liqDensity = thermoSystem.getPhase("oil").getPhysicalProperties().getDensity();
@@ -2133,8 +2231,9 @@ public class Separator extends ProcessEquipmentBaseClass
 
       double gasVolumeFlow = thermoSystem.getPhase("gas").getFlowRate("m3/hr");
       double maxVelocity = designGasLoadFactor * Math.sqrt((liqDensity - gasDensity) / gasDensity);
+      double gasAreaFraction = orientation.equals("horizontal") ? 1.0 - designLiquidLevelFraction : 1.0;
       double actualVelocity = gasVolumeFlow / 3600.0
-          / (Math.PI * Math.pow(getInternalDiameter() / 2, 2) * (1.0 - designLiquidLevelFraction));
+          / (Math.PI * Math.pow(getInternalDiameter() / 2, 2) * gasAreaFraction);
 
       report.put("gasVolumeFlow_m3hr", gasVolumeFlow);
       report.put("gasDensity_kgm3", gasDensity);
@@ -2720,7 +2819,13 @@ public class Separator extends ProcessEquipmentBaseClass
   /**
    * Getter for the field <code>designLiquidLevelFraction</code>.
    *
-   * @return the designGasLevelFraction
+   * <p>
+   * The fraction of the vessel cross-sectional area occupied by liquid at design conditions. It derates the gas area
+   * for a horizontal separator; a vertical separator uses the full cross-section for gas flow and is therefore
+   * unaffected.
+   * </p>
+   *
+   * @return the design liquid level fraction (0.0 to 1.0)
    */
   public double getDesignLiquidLevelFraction() {
     return designLiquidLevelFraction;
@@ -2729,7 +2834,13 @@ public class Separator extends ProcessEquipmentBaseClass
   /**
    * Setter for the field <code>designLiquidLevelFraction</code>.
    *
-   * @param designLiquidLevelFraction a double
+   * <p>
+   * Only affects horizontal separators, where the gas area is derated by {@code (1 - designLiquidLevelFraction)}. A
+   * vertical separator uses the full cross-section for gas flow.
+   * </p>
+   *
+   * @param designLiquidLevelFraction fraction of the cross-sectional area occupied by liquid at design conditions, in
+   * the range 0.0 to 1.0
    */
   public void setDesignLiquidLevelFraction(double designLiquidLevelFraction) {
     this.designLiquidLevelFraction = designLiquidLevelFraction;

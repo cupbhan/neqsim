@@ -1,12 +1,17 @@
+import base64
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import quote
 
 from convert_notebooks import (
     CURATED_NOTEBOOKS,
     convert_all_notebooks,
     create_examples_index,
+    markdown_heading_anchor,
+    notebook_to_markdown,
 )
 
 
@@ -16,7 +21,7 @@ def write_notebook(path: Path, title: str, documentation_metadata=None) -> None:
             {
                 "cell_type": "markdown",
                 "metadata": {},
-                "source": [f"# {title}\\n"],
+                "source": [f"# {title}\n"],
             }
         ],
         "metadata": {
@@ -30,6 +35,60 @@ def write_notebook(path: Path, title: str, documentation_metadata=None) -> None:
 
 
 class ConvertNotebooksTest(unittest.TestCase):
+    def test_converter_preserves_stored_png_results_without_duplicate_text(self):
+        # One transparent PNG pixel; no plotting dependencies are required.
+        encoded_png = (
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8"
+            "/x8AAwMCAO+aZ1sAAAAASUVORK5CYII="
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "Two figures.ipynb"
+            write_notebook(path, "Stored figure example")
+            notebook = json.loads(path.read_text(encoding="utf-8"))
+            notebook["cells"].append({
+                "cell_type": "code",
+                "source": ["print('Power: 2500 kW')\n"],
+                "execution_count": 1,
+                "metadata": {},
+                "outputs": [
+                    {"output_type": "stream", "name": "stdout", "text": "Power: 2500 kW\n"},
+                    {"output_type": "display_data", "metadata": {}, "data": {
+                        "image/png": encoded_png, "text/plain": "<Figure size 640x480>"}},
+                    {"output_type": "execute_result", "execution_count": 1, "metadata": {}, "data": {
+                        "image/png": [encoded_png[:40] + "\n", encoded_png[40:]],
+                        "text/plain": "<Figure size 800x600>"}},
+                ],
+            })
+            path.write_text(json.dumps(notebook), encoding="utf-8")
+
+            markdown = notebook_to_markdown(path)
+            self.assertIn("Power: 2500 kW", markdown)
+            self.assertTrue(markdown.endswith("\n"))
+            self.assertFalse(markdown.endswith("\n\n"))
+            self.assertNotIn("<Figure size", markdown)
+            self.assertEqual(2, markdown.count("![Result figure"))
+            for output_number in (2, 3):
+                image_name = f"Two figures_cell_2_output_{output_number}.png"
+                self.assertIn("figures/" + quote(image_name), markdown)
+                self.assertEqual(base64.b64decode(encoded_png),
+                                 (path.parent / "figures" / image_name).read_bytes())
+            self.assertEqual(markdown, notebook_to_markdown(path))
+            self.assertEqual(2, len(list((path.parent / "figures").glob("*.png"))))
+
+    def test_converter_rejects_corrupt_stored_png_instead_of_losing_figure(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "Corrupt.ipynb"
+            write_notebook(path, "Broken result")
+            notebook = json.loads(path.read_text(encoding="utf-8"))
+            notebook["cells"].append({
+                "cell_type": "code", "source": [], "execution_count": 1, "metadata": {},
+                "outputs": [{"output_type": "display_data", "metadata": {},
+                             "data": {"image/png": "invalid@@@"}}],
+            })
+            path.write_text(json.dumps(notebook), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Invalid PNG output in Corrupt, cell 2"):
+                notebook_to_markdown(path)
+
     def test_converter_uses_curated_page_metadata(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             examples_dir = Path(temp_dir)
@@ -59,7 +118,59 @@ class ConvertNotebooksTest(unittest.TestCase):
                 generated_content,
             )
             self.assertNotIn(f"# {curated_title}", generated_content)
-            self.assertEqual(generated_content.count("# Notebook title"), 1)
+            self.assertNotIn("# Notebook title", generated_content)
+
+    def test_converter_can_strip_notebook_h1_from_generated_page(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            examples_dir = Path(temp_dir)
+            notebook_path = examples_dir / "Curated.ipynb"
+            markdown_path = examples_dir / "Curated.md"
+            write_notebook(
+                notebook_path,
+                "Notebook title",
+                {
+                    "title": "Curated page title",
+                    "show_generated_title": False,
+                    "strip_first_h1": True,
+                },
+            )
+
+            convert_all_notebooks(examples_dir)
+
+            generated_content = markdown_path.read_text(encoding="utf-8")
+            self.assertIn('title: "Curated page title"', generated_content)
+            self.assertNotIn("# Curated page title", generated_content)
+            self.assertNotIn("# Notebook title", generated_content)
+
+    def test_converter_preserves_legacy_mercury_guide_contract(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            examples_dir = Path(temp_dir)
+            notebook_path = (
+                examples_dir / "MercuryRemoval_LNG_Pretreatment.ipynb"
+            )
+            markdown_path = (
+                examples_dir / "MercuryRemoval_LNG_Pretreatment.md"
+            )
+            write_notebook(
+                notebook_path,
+                "Mercury Removal in LNG Pre-Treatment — NeqSim Tutorial",
+            )
+
+            convert_all_notebooks(examples_dir)
+
+            generated_content = markdown_path.read_text(encoding="utf-8")
+            self.assertIn(
+                'title: "Mercury Removal in LNG Pre-Treatment"',
+                generated_content,
+            )
+            self.assertIn(
+                "Executable NeqSim mercury-removal screening with transient",
+                generated_content,
+            )
+            self.assertIn("open it in Google Colab", generated_content)
+            body = generated_content.split("\n---\n", 1)[1]
+            self.assertNotRegex(body, r"(?m)^# ")
+
     def test_converter_repairs_legacy_process_equipment_guide(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             examples_dir = Path(temp_dir)
@@ -81,7 +192,7 @@ class ConvertNotebooksTest(unittest.TestCase):
                 "field-life depletion, well and flowline hydraulics",
                 generated_content,
             )
-            self.assertEqual(generated_content.count(f"# {title}"), 1)
+            self.assertNotIn(f"# {title}", generated_content)
             self.assertNotIn("# process equipmentutl", generated_content)
             self.assertIn(
                 "docs/examples/process%20equipmentutl.ipynb",
@@ -92,7 +203,7 @@ class ConvertNotebooksTest(unittest.TestCase):
                 generated_content,
             )
 
-    def test_converter_keeps_default_metadata_behavior(self):
+    def test_converter_uses_notebook_title_as_default_page_metadata(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             examples_dir = Path(temp_dir)
             notebook_path = examples_dir / "Generated.ipynb"
@@ -102,9 +213,18 @@ class ConvertNotebooksTest(unittest.TestCase):
             convert_all_notebooks(examples_dir)
 
             generated_content = markdown_path.read_text(encoding="utf-8")
-            self.assertIn('title: "Generated"', generated_content)
-            self.assertIn("# Generated", generated_content)
-            self.assertIn("# Current notebook title", generated_content)
+            self.assertIn(
+                'title: "Current notebook title"',
+                generated_content,
+            )
+            self.assertIn(
+                "Notebook for Current notebook title, including NeqSim "
+                "Python examples and workflow context.",
+                generated_content,
+            )
+            body = generated_content.split("\n---\n", 1)[1]
+            self.assertNotRegex(body, r"(?m)^# ")
+            self.assertIn("open in Google Colab", generated_content)
 
     def test_converter_ignores_non_mapping_documentation_metadata(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -120,12 +240,139 @@ class ConvertNotebooksTest(unittest.TestCase):
             convert_all_notebooks(examples_dir)
 
             generated_content = markdown_path.read_text(encoding="utf-8")
-            self.assertIn('title: "InvalidMetadata"', generated_content)
             self.assertIn(
-                'description: "Jupyter notebook tutorial for NeqSim"',
+                'title: "Notebook title"',
+                generated_content,
+            )
+            self.assertIn(
+                "Notebook for Notebook title, including NeqSim Python "
+                "examples and workflow context.",
                 generated_content,
             )
 
+    def test_committed_generated_pages_use_front_matter_title_only(self):
+        docs_dir = Path(__file__).resolve().parent
+        examples_dir = docs_dir / "examples"
+
+        generated_pages = []
+        for notebook_path in sorted(examples_dir.glob("*.ipynb")):
+            markdown_path = notebook_path.with_suffix(".md")
+            if markdown_path.exists():
+                generated_pages.append(markdown_path)
+
+        self.assertGreater(len(generated_pages), 20)
+        for markdown_path in generated_pages:
+            with self.subTest(path=markdown_path.name):
+                generated_content = markdown_path.read_text(encoding="utf-8")
+                self.assertTrue(generated_content.startswith("---\n"))
+                self.assertNotIn(
+                    'description: "Jupyter notebook tutorial for NeqSim"',
+                    generated_content,
+                )
+                body = generated_content.split("\n---\n", 1)[1]
+                body_without_fences = re.sub(
+                    r"[\x60]{3}.*?[\x60]{3}",
+                    "",
+                    body,
+                    flags=re.DOTALL,
+                )
+                self.assertNotRegex(body_without_fences, r"(?m)^# ")
+
+    def test_converter_repairs_unambiguous_local_heading_links(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            examples_dir = Path(temp_dir)
+            notebook_path = examples_dir / "Navigation.ipynb"
+            notebook = {
+                "cells": [
+                    {
+                        "cell_type": "markdown",
+                        "metadata": {},
+                        "source": [
+                            "# Navigation example\n\n",
+                            "[Setup](#1.-Setup-and-Installation)\n",
+                            "[Chart](#622-using-compressorchart-generator-",
+                            "automatic-curves)\n\n",
+                            "## 1. Setup and Installation\n\n",
+                            "### 6.2.2 Using CompressorChartGenerator ",
+                            "(Automatic Curves)\n\n",
+                            "```text\n",
+                            "[Literal](#1.-Setup-and-Installation)\n",
+                            "```\n",
+                        ],
+                    }
+                ],
+                "metadata": {"language_info": {"name": "python"}},
+                "nbformat": 4,
+                "nbformat_minor": 5,
+            }
+            notebook_path.write_text(
+                json.dumps(notebook),
+                encoding="utf-8",
+            )
+
+            convert_all_notebooks(examples_dir)
+
+            generated_content = (
+                examples_dir / "Navigation.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                "[Setup](#1-setup-and-installation)",
+                generated_content,
+            )
+            self.assertIn(
+                "[Chart](#622-using-compressorchartgenerator-"
+                "automatic-curves)",
+                generated_content,
+            )
+            self.assertIn(
+                "[Literal](#1.-Setup-and-Installation)",
+                generated_content,
+            )
+            self.assertNotIn(
+                "#622-using-compressorchart-generator",
+                generated_content,
+            )
+
+    def test_committed_generated_pages_resolve_local_heading_links(self):
+        docs_dir = Path(__file__).resolve().parent
+        examples_dir = docs_dir / "examples"
+        generated_pages = [
+            notebook_path.with_suffix(".md")
+            for notebook_path in sorted(examples_dir.glob("*.ipynb"))
+            if notebook_path.with_suffix(".md").exists()
+        ]
+
+        self.assertEqual(30, len(generated_pages))
+        for markdown_path in generated_pages:
+            content = markdown_path.read_text(encoding="utf-8")
+            visible_content = re.sub(
+                r"[\x60]{3}.*?[\x60]{3}|~~~.*?~~~",
+                "",
+                content,
+                flags=re.DOTALL,
+            )
+            headings = {
+                markdown_heading_anchor(heading)
+                for heading in re.findall(
+                    r"(?m)^#{1,6}\s+(.+?)\s*$",
+                    visible_content,
+                )
+            }
+            targets = {
+                target.lower()
+                for target in re.findall(
+                    r"\[[^\]\n]+\]\(#([^)]+)\)",
+                    visible_content,
+                )
+            }
+            with self.subTest(path=markdown_path.name):
+                self.assertFalse(
+                    targets - headings,
+                    msg=(
+                        "Unresolved local heading links: "
+                        + ", ".join(sorted(targets - headings))
+                    ),
+                )
 
     def test_index_preserves_curated_notebooks(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -200,6 +447,97 @@ class ConvertNotebooksTest(unittest.TestCase):
                 "(process equipmentutl.md)",
                 generated_content,
             )
+
+    def test_index_preserves_validation_contract_sections(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            examples_dir = Path(temp_dir)
+            notebook_path = examples_dir / "Curated.ipynb"
+            java_path = examples_dir / "Example.java"
+            write_notebook(notebook_path, "Notebook title")
+            java_path.write_text("class Example {}\n", encoding="utf-8")
+
+            create_examples_index(examples_dir)
+
+            generated_content = (
+                examples_dir / "index.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Maintained workflow notebooks", generated_content)
+            self.assertIn("## Local notebook catalog", generated_content)
+            self.assertIn(
+                "## Standalone Java source examples",
+                generated_content,
+            )
+            self.assertIn(
+                "| **Executed** | **Notebook title** | "
+                "Notebook for Notebook title, including NeqSim Python "
+                "examples and workflow context. |",
+                generated_content,
+            )
+            self.assertNotIn("See notebook for details", generated_content)
+            self.assertIn(
+                "[Example](Example.java) | **Build-verified source** |",
+                generated_content,
+            )
+            self.assertIn(
+                "build verification only, not runtime",
+                generated_content,
+            )
+            self.assertNotIn("no installation needed", generated_content.lower())
+            self.assertIn(
+                "dependency installation and stored execution status vary",
+                generated_content,
+            )
+
+    def test_committed_index_matches_companion_page_metadata(self):
+        docs_dir = Path(__file__).resolve().parent
+        examples_dir = docs_dir / "examples"
+        index_content = (examples_dir / "index.md").read_text(
+            encoding="utf-8",
+        )
+        catalog_rows = [
+            line
+            for line in index_content.splitlines()
+            if line.startswith("| **") and "[Markdown](" in line
+        ]
+
+        companion_pages = sorted(examples_dir.glob("*.ipynb"))
+        self.assertGreater(len(companion_pages), 20)
+        self.assertEqual(len(catalog_rows), len(companion_pages))
+        self.assertNotIn("See notebook for details", index_content)
+
+        for notebook_path in companion_pages:
+            markdown_path = notebook_path.with_suffix(".md")
+            with self.subTest(path=markdown_path.name):
+                page_content = markdown_path.read_text(encoding="utf-8")
+                title_match = re.search(
+                    r"(?m)^title:\s+(.+)$",
+                    page_content,
+                )
+                description_match = re.search(
+                    r"(?m)^description:\s+(.+)$",
+                    page_content,
+                )
+                self.assertIsNotNone(title_match)
+                self.assertIsNotNone(description_match)
+
+                title = json.loads(title_match.group(1))
+                description = json.loads(description_match.group(1))
+                encoded_markdown_name = quote(markdown_path.name, safe="")
+                link = f"[Markdown]({encoded_markdown_name})"
+                row = next(
+                    (line for line in catalog_rows if link in line),
+                    None,
+                )
+                self.assertIsNotNone(row)
+                normalized_title = " ".join(str(title).split()).replace(
+                    "|",
+                    r"\|",
+                )
+                normalized_description = (
+                    " ".join(str(description).split()).replace("|", r"\|")
+                )
+                self.assertIn(f"**{normalized_title}**", row)
+                self.assertIn(normalized_description, row)
 
 
 if __name__ == "__main__":

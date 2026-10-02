@@ -3,8 +3,6 @@ title: "Scale Prediction API Reference"
 description: "Complete API reference for NeqSim mineral scale prediction classes. Covers ScalePredictionCalculator (empirical), CheckScalePotential (EOS-based), solid solution models, water compatibility, flowline profiles, and mass calculators."
 ---
 
-# Scale Prediction API Reference
-
 NeqSim provides three complementary approaches for mineral scale prediction:
 
 1. **Rigorous EOS-based** (`CheckScalePotential`) — Uses Electrolyte CPA or Pitzer activity coefficients from a full thermodynamic flash. Best accuracy, requires complete fluid definition.
@@ -213,6 +211,278 @@ for i in range(1, len(table)):
 - MEG-aware (temporarily replaces MEG with water for calculation)
 - Returns **saturation ratio** (SR = IAP/Ksp), where SR > 1 = supersaturated
 
+### Dissolved-salt saturation diagnostics
+
+`calcSaltSaturation(String)` adds dissociated salt formula units until the aqueous ion activity
+product reaches the COMPSALT solubility product. Use
+`calcSaltSaturationWithDiagnostics(String)` for the same system mutation plus immutable convergence
+and work diagnostics:
+
+```java
+SystemPitzer fluid = new SystemPitzer(404.15, 995.0);
+fluid.addComponent("water", 55.508);
+fluid.setMixingRule("classic");
+
+ThermodynamicOperations operations = new ThermodynamicOperations(fluid);
+SaltSaturationResult result =
+    operations.calcSaltSaturationWithDiagnostics("CaSO4_A");
+
+double initialSaturationRatio = result.getInitialSaturationRatio();
+double finalSaturationRatio = result.getFinalSaturationRatio();
+double addedFormulaUnitsMol = result.getAddedSaltMoles();
+int fullThermodynamicInitializations = result.getThermodynamicInitializationCount();
+boolean converged = result.isConverged();
+```
+
+The result also reports bracket and bisection evaluation counts, whether the input was already
+saturated, whether the solve reached its iteration limit, and the absolute residual from unit
+saturation. These diagnostics expose the existing calculation's work without adding flashes or
+changing its `1e-6` saturation-ratio tolerance. They do not create a solid phase, describe
+precipitated mass, or qualify the COMPSALT, Ksp, reaction-volume, or activity-model parameters.
+
+### Activity-consistent pure-mineral precipitation
+
+`ThermodynamicOperations.precipitateScale(String)` removes one named COMPSALT mineral
+stoichiometrically until its aqueous activity saturation ratio is one. It returns an immutable
+`SaltPrecipitationResult`; the thermodynamic system is the residual gas/oil/aqueous fluid, while
+the result is the corresponding pure-solid material ledger. The solid is deliberately not inserted
+as a NeqSim phase.
+
+```java
+SystemPitzer fluid = new SystemPitzer(298.15, 50.0);
+fluid.addComponent("water", 55.508);
+fluid.addComponent("Na+", 1.0);
+fluid.addComponent("Ca++", 0.2);
+fluid.addComponent("Mg++", 0.15);
+fluid.addComponent("Cl-", 1.3);
+fluid.addComponent("SO4--", 0.2);
+fluid.setMixingRule("classic");
+fluid.init(0); // Automatically selects the complete PHREEQC Pitzer catalog topology.
+fluid.setMultiPhaseCheck(true);
+
+ThermodynamicOperations operations = new ThermodynamicOperations(fluid);
+SaltPrecipitationResult solid = operations.precipitateScale("CaSO4_A");
+
+double residualSaturationRatio = solid.getFinalSaturationRatio();
+double solidAmountMol = solid.getPrecipitatedMoles();
+double solidMassGram = solid.getPrecipitatedMassGrams();
+double materialResidualMol = solid.getMaximumIonBalanceResidualMoles();
+```
+
+The default `SystemPitzer` policy automatically selects the bundled PHREEQC catalog when every
+interaction required by the active aqueous topology is present; this complete Ca/Mg/Cl/SO4 example
+needs no manual dataset-selection call. Missing mixed interactions still fail closed rather than
+becoming zero. `useLegacyPitzerParameters()` is an explicit compatibility opt-out that must be
+called before the first property evaluation.
+
+The operation uses the selected aqueous activity model without transferring Pitzer parameters into
+the mineral-reaction database. Every trial extent is evaluated on a fresh clone; the accepted
+composition is reflashed and physical properties are reinitialised. Consequently the residual
+fluid can continue through `Stream`, `Heater`, and `ProcessSystem` calculations. Ions remain in the
+aqueous phase, while gas and oil phases retain their EOS roles.
+
+Callers should require a complementarity residual such as
+`solid.getComplementarityViolation() <= 1e-5` and independently check total and elemental balances.
+
+### Simultaneous competing pure minerals
+
+`ThermodynamicOperations.precipitateScales(String...)` enforces non-negative pure-solid amounts and
+aqueous saturation complementarity for several named COMPSALT minerals. The active set precipitates
+supersaturated minerals and redissolves an undersaturated present mineral. Names are sorted before
+iteration, so caller ordering cannot select a different solid topology.
+
+```java
+MultiSaltPrecipitationResult scales =
+    operations.precipitateScales("CaSO4_A", "CaSO4_G");
+
+SaltPrecipitationResult anhydrite = scales.getMineralResult("CaSO4_A");
+SaltPrecipitationResult gypsumCorrelation = scales.getMineralResult("CaSO4_G");
+double complementarity = scales.getMaximumComplementarityViolation();
+double componentBalanceMol = scales.getMaximumComponentBalanceResidualMoles();
+```
+
+The returned ledger is absolute for that call and is not inserted into the NeqSim phase list. Carry
+it with the residual fluid. After a heater, pressure change, dilution, or composition change, pass
+the same ledger back so available solids can dissolve as well as precipitate:
+
+```java
+MultiSaltPrecipitationResult updatedScales =
+    new ThermodynamicOperations(changedFluid).equilibrateScales(scales);
+```
+
+The continuation API conserves dissolved plus ledgered formula units and fails closed if the
+bounded active set cannot reach `1e-6` log10-SR complementarity. Non-reactive component and element
+ledgers use a `1e-10 mol` absolute balance tolerance. Reactive element ledgers use the same absolute
+floor plus a `1e-8` relative tolerance on each element inventory, matching the numerical closure of
+the chemical-equilibrium solver without weakening trace-element checks. The result reports both the
+maximum absolute residual and the maximum residual normalized by its quantity-specific tolerance;
+the normalized value must not exceed one. It also reports the update count, maximum complementarity
+violation, per-mineral saturation ratios and non-negative amounts. It is serializable and its mineral
+map is defensively immutable for Java and Python process workflows. A thermodynamic system remains
+mutable and must not be shared between threads. Sequential clones are deterministic, and independently
+constructed systems are covered by a parallel determinism regression. Concurrent use of clones from
+one Pitzer instance is not qualified because current shared Pitzer internals can race; construct each
+parallel system independently until that separate prerequisite is resolved.
+
+The calcium-sulfate COMPSALT rows distinguish anhydrite `CaSO4_A` from gypsum
+`CaSO4_G`. Gypsum explicitly carries two waters per formula unit: its saturation ratio includes
+the active aqueous model's solvent activity squared, precipitation removes two moles of water into
+each mole of solid, dissolution returns them, and the solid ledger reports the hydrated molar mass.
+Anhydrite remains the water-free `CaSO4` reaction. The implementation follows the PHREEQC 3.9.0
+reactions `CaSO4 = Ca+2 + SO4-2` and
+`CaSO4:2H2O = Ca+2 + SO4-2 + 2 H2O` from the USGS public-domain
+`pitzer.dat` catalog at commit `b0b3be767158ccc3322d2c816625cf470045e67e`.
+
+A separate dilution continuation proves that an existing solid can redissolve without stale-state
+carryover. These regressions establish standard-state and material-ledger semantics; they do not
+independently validate the COMPSALT temperature/pressure correlations. In particular, the current
+COMPSALT pressure-volume coefficients differ from PHREEQC mineral molar volumes, so quantitative
+high-pressure gypsum/anhydrite phase-boundary use remains outside the qualified scope.
+
+#### Calcium-sulfate phase-boundary evidence
+
+Use `ThermodynamicOperations.qualifyCalciumSulfatePhaseBoundary()` to inspect the mineral-standard-state evidence
+separately from Pitzer or electrolyte-CPA aqueous parameter qualification:
+
+```java
+CalciumSulfatePhaseBoundaryQualification evidence =
+    operations.qualifyCalciumSulfatePhaseBoundary();
+
+double transitionC = evidence.getPredictedPureWaterTransitionCelsius();
+double transitionAtPressureC = evidence.getPredictedPureWaterTransitionAtEvaluatedPressureCelsius();
+double anhydriteVdelta = evidence.getAnhydriteLumpedReactionVolumeCm3PerMol();
+double ambientReactionVolume =
+    evidence.getCrystallographicTransitionReactionVolumeCm3PerMol();
+double compsaltReactionVolume =
+    evidence.getCompsaltTransitionReactionVolumeCm3PerMol();
+boolean independentAqueousPressureEvidence =
+    evidence.hasIndependentAqueousPressureEvidence();
+boolean aqueousPressureRowsAudited =
+    CalciumSulfatePhaseBoundaryQualification.isAqueousPressureEvidenceRowAudited();
+boolean aqueousPressureDensityQualified =
+    CalciumSulfatePhaseBoundaryQualification.isAqueousPressureDensityModelQualified();
+boolean aqueousLimitingVolumeResolved =
+    evidence.isAqueousLimitingVolumeEvidenceResolved();
+double requiredWaterActivity25C = evidence.getRequiredWaterActivityAt25Celsius();
+boolean publicationReady = evidence.isPublicationReady();
+```
+
+The immutable Java result is available through JPype and uses the exact COMPSALT solubility-product calculation used
+by precipitation. For simultaneous anhydrite and gypsum equilibrium, the ion activities cancel and the required water
+activity is $a_{\mathrm{w}}=\sqrt{K_{sp,\mathrm{G}}/K_{sp,\mathrm{A}}}$. The registered independent evidence is Voigt
+and Freyer (2023), [DOI 10.3389/fnuen.2023.1208582](https://doi.org/10.3389/fnuen.2023.1208582), CC BY 4.0:
+
+| Observable | Independent envelope | Current COMPSALT result |
+|------------|----------------------|-------------------------|
+| Pure-water transition | 42 ± 1 °C | 60.445190 °C |
+| NaCl crossing at 25 °C | $a_{\mathrm{w}}=0.8551$–$0.8634$ | $a_{\mathrm{w}}=0.7736299$ |
+| NaCl crossing at 40 °C | $a_{\mathrm{w}}=0.9370$–$0.9587$ | $a_{\mathrm{w}}=0.8437837$ |
+
+The NaCl intervals retain Bock (1961), [DOI 10.1139/v61-228](https://doi.org/10.1139/v61-228), as their primary
+experimental lineage without redistributing the copyrighted primary table. The current correlations fail all three
+registered envelopes, so the result deliberately reports `REJECTED` and `publicationReady=false`; it does not tune a
+coefficient toward the evidence. Absolute-solubility residuals, primary-row uncertainty, mixed-brine qualification and
+the high-pressure reaction-volume convention remain explicit follow-on boundaries.
+
+The pressure diagnostic reproduces the exact constant-volume correction used by the authoritative COMPSALT Ksp path,
+with a 1.01325 bara correlation reference. It reports `Vdelta=-52.4 cm3/mol` for anhydrite and
+`Vdelta=-33.0 cm3/mol` for gypsum, their separate logarithmic Ksp corrections at the evaluated state, and the resulting
+pure-water transition prediction. These are lumped reaction-volume coefficients—not pure-mineral molar volumes. The
+diagnostic therefore always reports `aqueousSpeciesVolumeResolved=false` and `highPressureQualified=false`. The primary
+high-pressure anhydrite-solubility lineage is Dickson, Blount and Tunell (1963),
+[DOI 10.2475/ajs.261.1.61](https://doi.org/10.2475/ajs.261.1.61); no copyrighted table rows or fitted coefficients are
+redistributed. Quantitative adoption still requires a complete primary-row audit, aqueous-species volume mapping, and
+an uncertainty-aware held-out acceptance criterion.
+
+The same result exposes an independent ambient structural check without changing either COMPSALT
+coefficient. Antao (2011), [DOI 10.1154/1.3659285](https://doi.org/10.1154/1.3659285), reports an
+anhydrite synchrotron unit-cell volume of 305.487(1) Å3 with four formula units per cell. De la
+Torre et al. (2004), [DOI 10.1154/1.1725254](https://doi.org/10.1154/1.1725254), report a gypsum
+synchrotron unit-cell volume of 494.536(5) Å3, also with four formula units per cell. Together with
+the Pátek et al. (2009) liquid-water reference density at 298.15 K and 0.1 MPa,
+[DOI 10.1063/1.3043575](https://doi.org/10.1063/1.3043575), the nominal ambient cycle
+
+`V(anhydrite) + 2 V(H2O,l) - V(gypsum)`
+
+is +7.67528 cm3/mol. The difference between the existing lumped COMPSALT values is +19.4 cm3/mol,
+or 2.52759 times the measurement-derived cycle. This independently confirms that the current
+pressure response is not a pure-mineral-volume mapping. It is a diagnostic, not a replacement
+`Vdelta`: published cell standard errors do not bound thermal expansion, compressibility, sample
+and other systematic effects, or aqueous partial molar volumes. Consequently
+`highPressureQualified` and `aqueousSpeciesVolumeResolved` remain false.
+
+The result also registers the independent finite-concentration aqueous pressure evidence separately
+from the missing limiting-volume term. Al Ghafri et al. (2012),
+[DOI 10.1021/je2013704](https://doi.org/10.1021/je2013704), provide 197 CaCl2 density points in
+[NIST ThermoML](https://trc.nist.gov/ThermoML/10.1021/je2013704.html): 1–6 mol/kg,
+283.15–472.96 K, and 10.5–681.2 bara. The complete JSON and XML records were independently
+extracted to identical canonical row hashes, and the test fixture retains every row's 95% combined
+expanded density uncertainty. Against this hold-out, the current aqueous density path has MARE
+0.632%, RMSRE 0.845%, and maximum absolute relative error 2.661%; it is therefore explicitly
+unqualified for quantitative pressure-density use. This is not primarily an ambient-density offset:
+anchoring each of 25 molality-temperature isotherms to its lowest-pressure observation leaves 172
+pressure increments with MARE 0.596%, RMSRE 0.732%, maximum absolute relative error 2.129%, and a
+maximum increment residual 48.0 times the combined expanded source uncertainty. The anchored MARE
+also increases from 0.341% at 1 mol/kg to 0.670% at 3 mol/kg and 0.810% at 6 mol/kg. The existing
+path therefore fails the offset-free pressure-response test, and a replacement must represent the
+solution pressure response rather than merely retune an atmospheric density intercept. The
+machine-readable record is available under
+the [NIST data license](https://www.nist.gov/open/license). Its lowest concentration is 1 mol/kg, so
+it cannot determine the infinite-dilution CaCl2 volume needed to close the calcium-sulfate
+reaction-volume cycle. The candidate dilute lineage, Oakes et al. (1990),
+[DOI 10.1021/je00061a022](https://doi.org/10.1021/je00061a022), predates the ThermoML archive;
+row-level audit, propagated uncertainty, and redistribution-compatible provenance remain unresolved.
+Accordingly `hasIndependentAqueousPressureEvidence()` and
+`isAqueousPressureEvidenceRowAudited()` are true, while
+`isAqueousPressureDensityModelQualified()`, `isAqueousPressureResponseQualified()`, and
+`isAqueousLimitingVolumeEvidenceResolved()` remain false. These flags register evidence scope only;
+they do not change a COMPSALT coefficient or make high-pressure calcium-sulfate use qualified.
+
+The process-system test carries the solid ledger beside the residual fluid through a
+`Stream -> Heater -> ProcessSystem` calculation, then re-equilibrates it at the outlet. Its
+charge-balanced feed contains nonzero Ca++, Mg++, Cl-, and SO4--; Ca/SO4 close against the solid
+ledger while Mg/Cl remain unchanged spectators. Fluid-phase density, enthalpy and heat capacity
+remain finite and ions remain aqueous. This exercises the complete four-ion PHREEQC topology but
+does not by itself qualify quaternary mixed-brine observables. Solid density, enthalpy,
+heat capacity and heat of precipitation are not yet represented, so rigorous process energy balances
+with a material solid stream remain a separate model/property boundary.
+
+Neither pure-mineral API solves solid solutions, nucleation, kinetics, deposition, or inhibitor
+performance. A Pitzer calculation
+must first select a parameter dataset complete for its active aqueous topology. Missing binary,
+same-sign, ternary, or neutral interactions remain an error; they are not silently set to zero.
+
+`SaltPrecipitationPerformanceBenchmark` records explicit-operation cost separately from the neutral
+control. On OpenJDK 17 in the development container, its median fresh-system calculations were
+78.9 ms for aqueous anhydrite precipitation and 1.018 s for the complete gas-oil-aqueous case.
+The unchanged neutral SRK control measured 0.215 ms before and 0.055 ms after the Pitzer batches
+(ratio 0.254, reflecting JIT warmup rather than a regression). This operation is invoked only by
+`precipitateScale` or `precipitateScales`; neutral PR/SRK/CPA calculations execute no new branch or
+allocation.
+
+With simultaneous `CaSO4_A`/`CaSO4_G` enabled in the same benchmark, median fresh-system times were
+80.5 ms for the aqueous calculation and 1.206 s for gas-oil-aqueous. The active set required one
+solid update, reached `9.995e-9` maximum log10-SR complementarity violation, and closed the component
+ledger to reported machine zero. The unchanged neutral SRK control measured 0.205 ms before and
+0.049 ms after the electrolyte batches (ratio 0.238, JIT dominated). Timings are diagnostic and not
+portable hardware guarantees.
+
+### Reaction-level saturation diagnostics
+
+`ChemicalReaction.getSaturationRatio(system, phaseNumber)` evaluates the same thermodynamic definition for
+reaction-backed minerals:
+
+$\mathrm{SR}=\frac{\mathrm{IAP}}{K_{sp}},\quad \mathrm{IAP}=\prod_i a_i^{-\nu_i}$
+
+Here $\nu_i<0$ identifies each dissolved reactant and $a_i$ is its dimensionless activity. Electrolyte-CPA uses its
+established mole-fraction/activity-coefficient convention; Pitzer uses solute molality and molality-scale activity
+coefficients while retaining the solvent convention. `calcLogSaturationRatio(...)` returns $\ln(\mathrm{SR})$ directly
+for trace systems where the linear ratio may underflow.
+
+This activity-based definition is consistent with USGS PHREEQC saturation-index reporting and the calcite equilibrium
+treatment of Plummer and Busenberg (1982), DOI `10.1016/0016-7037(82)90056-4`. The regression uses synthetic
+compositions and an analytical identity; it copies or fits no external numerical data.
+
 ---
 
 ## 3. Pitzer Activity Coefficient Model
@@ -235,7 +505,20 @@ Parameters follow the form:
 
 $$\beta(T) = \beta_{25} + T_1 \left(\frac{1}{T} - \frac{1}{298.15}\right) + T_2 \ln\left(\frac{T}{298.15}\right)$$
 
-The Pitzer parameter database (`PitzerParameters.csv`) currently contains 30 cation-anion rows. Of these, 23 non-estimated rows have populated binary parameters and are covered by regression tests for database loading plus finite mean ionic activity and osmotic coefficients. The covered ions include Na, K, Ca, Mg, Ba, Sr, Fe and H with Cl, SO4, HCO3, CO3 and OH. NaCl is additionally benchmarked against Robinson & Stokes / Pitzer 25 C mean ionic activity and osmotic-coefficient data.
+The Pitzer parameter database (`PitzerParameters.csv`) currently contains 30 cation-anion rows. Of these, 23 non-estimated rows have populated binary parameters and are covered by regression tests for database loading plus finite mean ionic activity and osmotic coefficients. The covered ions include Na, K, Ca, Mg, Ba, Sr, Fe and H with Cl, SO4, HCO3, CO3 and OH.
+
+At 298.15 K and 1.01325 bara, NaCl has a separate public reference validation against the traceable recommended
+values in Tables 6 and 10 of Partanen and Partanen (2020), DOI
+[10.1021/acs.jced.0c00402](https://doi.org/10.1021/acs.jced.0c00402), licensed
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The validation covers 0.2, 0.5 and 1.0 mol/kg water;
+2.0 and 3.0 mol/kg water are retained as a concentrated hold-out. Pointwise acceptance limits are 2% relative for the
+mean molal activity coefficient and 0.75% relative for the osmotic coefficient. The tabulated values are rounded to
+0.001 and were derived by the authors from traceable electrochemical, isopiestic, vapor-pressure and solubility
+evidence. NeqSim parameters are not fitted or changed by this validation.
+
+This evidence applies only to binary NaCl(aq) at 298.15 K on the molality standard state. It does not validate
+temperature dependence, mixed salts, carbonate speciation, mineral parameters, precipitation complementarity or
+transfer of Pitzer parameters to electrolyte EOS models.
 
 ### Using the Pitzer Model
 
@@ -245,8 +528,7 @@ pitzer.addComponent("methane", 5.0);
 pitzer.addComponent("CO2", 0.05);
 pitzer.addComponent("n-heptane", 2.0);
 pitzer.addComponent("water", 55.5);
-pitzer.addComponent("Ca++", 1.0e-4);
-pitzer.addComponent("Na+", 1.0e-3);
+pitzer.addComponent("Ca++", 6.0e-4);
 pitzer.addComponent("Cl-", 2.0e-4);
 pitzer.addComponent("HCO3-", 1.0e-3);
 pitzer.chemicalReactionInit();
@@ -262,6 +544,15 @@ double calciteScalePotential = ops.getRelativeScalePotential("CaCO3");
 ```
 
 The example couples SRK gas and oil phases to Pitzer aqueous chemistry. Remove `n-heptane` for a gas-aqueous case.
+Its ionic feed is electroneutral: `2 m(Ca++) = m(Cl-) + m(HCO3-)`. The primary-salt coverage topology is therefore
+the qualified binary Ca/Cl pair; bicarbonate remains part of the reactive carbonate subsystem.
+
+Do not extend this fixture to a mixed primary salt by adding Na, Ba, Sr, Mg, sulfate, or another ion without defining
+the complete binary, same-sign `theta`, and ternary `psi` family from one convention-mapped dataset.
+`PhasePitzer.getPitzerParameterCoverage()` reports the exact missing tuples, and standard initialization fails closed
+when a mixed primary-salt topology is incomplete. An explicit zero is a scientific parameter definition, not a
+placeholder.
+
 The returned value is the calcite saturation ratio, where values above one indicate thermodynamic supersaturation.
 It does not calculate precipitated mass or deposition kinetics. The fixed-role hybrid flash currently rejects explicit
 solid- and wax-phase checks.
@@ -421,6 +712,41 @@ ss.calculate();
 System.out.println("BaSO4 in solid: " + (ss.getBaSO4MoleFraction() * 100) + "%");
 System.out.println("Total SI: " + ss.getTotalSaturationIndex());
 ```
+
+---
+
+## Coupled mineral-equilibrium diagnostics
+
+`MultiMineralScaleEquilibrium` exposes the numerical evidence needed to decide whether a coupled precipitation result
+is acceptable:
+
+- `getIterationCount()` reports coordinate-descent updates;
+- `hasReachedIterationLimit()` distinguishes normal step convergence from an exhausted solver budget;
+- `getMaximumComplementarityViolation()` reports `abs(SI)` for minerals with solid present and
+  `max(SI, 0)` for absent solids;
+- `getMaximumIonBalanceResidualMolPerL()` closes each tracked free-ion inventory against the sum of 1:1 mineral
+  precipitation extents.
+
+The same values appear in the JSON `diagnostics` object. Acceptance remains case-specific: an iteration-limit flag is
+not itself a thermodynamic residual, and a small step does not prove that the mineral inequalities are satisfied. The
+reference regression requires maximum complementarity violation <= 1e-3 SI and maximum tracked-ion balance residual <=
+1e-12 mol/L. A deliberately one-iteration solve remains material-balanced but fails complementarity, preventing silent
+classification as an equilibrated mineral state.
+
+This contract follows the equilibrium-phase convention in Parkhurst (1995), *U.S. Geological Survey
+Water-Resources Investigations Report 95-4227*, [doi:10.3133/wri954227](https://doi.org/10.3133/wri954227):
+minerals in the stable phase assemblage satisfy the target SI equality, while absent minerals remain inequality
+constraints at or below the target. The current PHREEQC 3
+[`EQUILIBRIUM_PHASES` documentation](https://water.usgs.gov/water-resources/software/PHREEQC/documentation/phreeqc3-html/phreeqc3-13.htm)
+states the same convention. USGS-authored information is
+[public domain](https://www.usgs.gov/faqs/are-usgs-reportspublications-copyrighted). No numerical data, parameter,
+correlation or PHREEQC code is copied or fitted by this diagnostic regression.
+
+The diagnostic is limited to the standalone coupled solver's tracked free ions and fixed 1:1 mineral stoichiometries.
+It does not prove elemental/charge closure for the predictor's aqueous speciation, update activity coefficients during
+precipitation, select a globally stable phase topology, or validate Ksp and activity parameters against independent
+precipitation data. Full electrolyte EOS/GE calculations must continue to apply their model-specific activity,
+speciation and balance gates.
 
 ---
 

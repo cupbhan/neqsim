@@ -3,8 +3,6 @@ title: "Component Package"
 description: "Documentation for component modeling in NeqSim."
 ---
 
-# Component Package
-
 Documentation for component modeling in NeqSim.
 
 ## Table of Contents
@@ -39,6 +37,25 @@ ComponentInterface comp = fluid.getComponent(0);
 // In specific phase
 ComponentInterface methaneInGas = fluid.getGasPhase().getComponent("methane");
 ```
+
+Recognized aliases, systematic names, and case variants use the same resolver for addition and
+retrieval. The name accepted by `addComponent` can therefore be reused through the system or a
+specific phase:
+
+```java
+fluid.addComponent("2,2,4-trimethylpentane", 1.0);
+
+ComponentInterface fromSystem =
+    fluid.getComponent("isooctane");
+ComponentInterface fromPhase =
+    fluid.getPhase(0).getComponent("ISOOCTANE");
+```
+
+Both lookups return the component stored under its canonical database name, `224-TM-C5`.
+`hasComponent(String)` follows the same normalized-name contract. Unknown, ambiguous, and
+near-miss inputs are not guessed, and `getComponent(String)` returns `null` when no exact or
+recognized alias is present. See the [component reference list](../component_list#component-name-resolution)
+for the supported naming conventions and mutation/removal APIs.
 
 ### Common Methods
 
@@ -247,10 +264,10 @@ fluid.addComponent("methane", 1.0);
 fluid.addComponent("CO2", 0.5);  // Carbon dioxide
 
 // Add pseudo-component (TBP method)
-fluid.addTBPfraction("C10", 0.1, 140.0, 0.75);  // name, moles, MW, SG
+fluid.addTBPfraction("C10", 0.1, 140.0 / 1000.0, 0.75);  // name, moles, MW [g/mol], SG
 
 // Add plus fraction
-fluid.addPlusFraction("C7+", 0.05, 150.0, 0.78);
+fluid.addPlusFraction("C7+", 0.05, 150.0 / 1000.0, 0.78);
 ```
 
 ### Component Name Lookup

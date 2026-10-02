@@ -92,7 +92,7 @@ class TwoFluidPipeClosedThermalTest {
     double[][] faceMassFlows = new double[4][3];
     faceMassFlows[1][0] = 1.0;
     faceMassFlows[2][0] = 1.0;
-    double[] previousTemperatures = { 300.0, 320.0, 340.0 };
+    double[] previousTemperatures = {300.0, 320.0, 340.0};
 
     double source = TwoFluidPipe.calculateExplicitSensibleAdvectionSource(1, faceMassFlows, previousTemperatures, 280.0,
         2000.0, 10.0);
@@ -122,10 +122,10 @@ class TwoFluidPipeClosedThermalTest {
 
   @Test
   void invalidThermalMassFallbackUsesFinitePositiveFloor() {
-    assertArrayEquals(new double[] { 2.0, 3.0, 1.0e-12 },
-        new double[] { TwoFluidPipe.selectFinitePositiveFluidMassPerLength(2.0, Double.NaN),
+    assertArrayEquals(new double[] {2.0, 3.0, 1.0e-12},
+        new double[] {TwoFluidPipe.selectFinitePositiveFluidMassPerLength(2.0, Double.NaN),
             TwoFluidPipe.selectFinitePositiveFluidMassPerLength(Double.NaN, 3.0),
-            TwoFluidPipe.selectFinitePositiveFluidMassPerLength(Double.NaN, Double.NaN) },
+            TwoFluidPipe.selectFinitePositiveFluidMassPerLength(Double.NaN, Double.NaN)},
         0.0);
   }
 
@@ -213,6 +213,64 @@ class TwoFluidPipeClosedThermalTest {
   }
 
   @Test
+  void closedMultilayerInnerHtcIsIndependentOfOverallCoefficientCallOrder() {
+    PipeFixture configureThenOverride = createInitializedPipe("multilayer-configure-then-override");
+    PipeFixture overrideThenConfigure = createInitializedPipe("multilayer-override-then-configure");
+
+    prepareClosedMultilayerCooldown(configureThenOverride.pipe);
+    configureThenOverride.pipe.setHeatTransferCoefficient(50.0);
+
+    prepareClosedCooldownBoundary(overrideThenConfigure.pipe);
+    overrideThenConfigure.pipe.setHeatTransferCoefficient(50.0);
+    overrideThenConfigure.pipe.configureSubseaThermalModel(0.02, 0.0, RadialThermalLayer.MaterialType.PU_FOAM);
+
+    assertTrue(
+        Math.abs(configureThenOverride.pipe.getHeatTransferCoefficient()
+            - overrideThenConfigure.pipe.getHeatTransferCoefficient()) > 1.0e-6,
+        "The fixture must exercise different configuration-level overall coefficients");
+
+    double configureThenOverrideHtc = configureThenOverride.pipe.calculateInnerHTC(0.0, 1.0);
+    double overrideThenConfigureHtc = overrideThenConfigure.pipe.calculateInnerHTC(0.0, 1.0);
+
+    assertEquals(configureThenOverrideHtc, overrideThenConfigureHtc, 0.0,
+        "Closed multilayer cooldown must not reinterpret the overall coefficient as the stagnant inner HTC");
+    assertEquals(50.0, configureThenOverrideHtc, 0.0);
+
+    double[] configureThenOverrideState = initialLayerTemperatures(configureThenOverride.pipe.getThermalCalculator());
+    double[] overrideThenConfigureState = initialLayerTemperatures(overrideThenConfigure.pipe.getThermalCalculator());
+    double configureThenOverrideWall = TwoFluidPipe.advanceMultilayerCellThermalState(
+        configureThenOverride.pipe.getThermalCalculator(), configureThenOverrideState, 300.0, 280.0,
+        configureThenOverrideHtc, 1.0e-3);
+    double overrideThenConfigureWall = TwoFluidPipe.advanceMultilayerCellThermalState(
+        overrideThenConfigure.pipe.getThermalCalculator(), overrideThenConfigureState, 300.0, 280.0,
+        overrideThenConfigureHtc, 1.0e-3);
+
+    assertArrayEquals(configureThenOverrideState, overrideThenConfigureState, 0.0);
+    assertEquals(configureThenOverrideWall, overrideThenConfigureWall, 0.0);
+    assertEquals(configureThenOverride.pipe.getThermalCalculator().getLastFluidHeatTransferPerLength(),
+        overrideThenConfigure.pipe.getThermalCalculator().getLastFluidHeatTransferPerLength(), 0.0);
+  }
+
+  @Test
+  void stagnantInnerHtcHasDocumentedDefaultAndIndependentSetter() {
+    TwoFluidPipe pipe = new TwoFluidPipe("stagnant-inner-htc-api");
+    assertEquals(50.0, pipe.getStagnantInnerHeatTransferCoefficient(), 0.0);
+    assertEquals(50.0, pipe.calculateInnerHTC(0.0, 1.0), 0.0);
+
+    pipe.setHeatTransferCoefficient(8.0);
+    assertEquals(50.0, pipe.calculateInnerHTC(0.0, 1.0), 0.0);
+
+    pipe.setStagnantInnerHeatTransferCoefficient(75.0);
+    assertEquals(75.0, pipe.getStagnantInnerHeatTransferCoefficient(), 0.0);
+    assertEquals(75.0, pipe.calculateInnerHTC(0.0, 1.0), 0.0);
+
+    org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+        () -> pipe.setStagnantInnerHeatTransferCoefficient(-1.0));
+    org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+        () -> pipe.setStagnantInnerHeatTransferCoefficient(Double.NaN));
+  }
+
+  @Test
   void simpleAndMultilayerCooldownCloseFluidWallAmbientEnergyBalance() {
     PipeFixture simple = createInitializedPipe("simple-energy-balance");
     configureClosedCooldown(simple.pipe);
@@ -231,9 +289,9 @@ class TwoFluidPipeClosedThermalTest {
 
   @Test
   void explicitAndImexPathsCloseForSimpleAndMultilayerModels() {
-    TimeIntegrator.Method[] methods = { TimeIntegrator.Method.EULER, TimeIntegrator.Method.IMEX_PRESSURE_CORRECTION };
+    TimeIntegrator.Method[] methods = {TimeIntegrator.Method.EULER, TimeIntegrator.Method.IMEX_PRESSURE_CORRECTION};
     for (TimeIntegrator.Method method : methods) {
-      for (boolean multilayer : new boolean[] { false, true }) {
+      for (boolean multilayer : new boolean[] {false, true}) {
         PipeFixture fixture = createInitializedPipe("thermal-path-" + method + "-" + multilayer);
         double[] initial = fixture.pipe.getTemperatureProfile();
         fixture.pipe.setTimeIntegrationMethod(method);
@@ -275,6 +333,7 @@ class TwoFluidPipeClosedThermalTest {
     PipeFixture fixture = createInitializedPipe("serialized-multilayer-source");
     configureClosedCooldown(fixture.pipe);
     fixture.pipe.configureSubseaThermalModel(0.02, 0.0, RadialThermalLayer.MaterialType.PU_FOAM);
+    fixture.pipe.setStagnantInnerHeatTransferCoefficient(75.0);
     fixture.pipe.runTransient(1.0e-3, TRANSIENT_ID);
 
     TwoFluidPipe copied = (TwoFluidPipe) fixture.pipe.copy();
@@ -283,6 +342,7 @@ class TwoFluidPipeClosedThermalTest {
 
     assertArrayEquals(fixture.pipe.getTemperatureProfile(), copied.getTemperatureProfile(), 0.0);
     assertArrayEquals(fixture.pipe.getWallTemperatureProfile(), copied.getWallTemperatureProfile(), 0.0);
+    assertEquals(75.0, copied.getStagnantInnerHeatTransferCoefficient(), 0.0);
     assertThermalReportCloses(fixture.pipe.getLastThermalEnergyBalanceReport());
     assertThermalReportCloses(copied.getLastThermalEnergyBalanceReport());
   }
@@ -325,6 +385,14 @@ class TwoFluidPipeClosedThermalTest {
     return sum / values.length;
   }
 
+  private double[] initialLayerTemperatures(MultilayerThermalCalculator calculator) {
+    double[] temperatures = new double[calculator.getNumberOfLayers()];
+    for (int layer = 0; layer < temperatures.length; layer++) {
+      temperatures[layer] = calculator.getLayers().get(layer).getTemperature();
+    }
+    return temperatures;
+  }
+
   private void assertThermalReportCloses(TwoFluidThermalEnergyBalanceReport report) {
     assertNotNull(report);
     assertTrue(report.getAcceptedSubsteps() > 0);
@@ -336,11 +404,20 @@ class TwoFluidPipeClosedThermalTest {
   }
 
   private void configureClosedCooldown(TwoFluidPipe pipe) {
+    prepareClosedCooldownBoundary(pipe);
+    pipe.setHeatTransferCoefficient(50.0);
+  }
+
+  private void prepareClosedMultilayerCooldown(TwoFluidPipe pipe) {
+    prepareClosedCooldownBoundary(pipe);
+    pipe.configureSubseaThermalModel(0.02, 0.0, RadialThermalLayer.MaterialType.PU_FOAM);
+  }
+
+  private void prepareClosedCooldownBoundary(TwoFluidPipe pipe) {
     pipe.closeInlet();
     pipe.closeOutlet();
     pipe.setEnableJouleThomson(false);
     pipe.setSurfaceTemperature(280.0, "K");
-    pipe.setHeatTransferCoefficient(50.0);
   }
 
   private PipeFixture createInitializedPipe(String name) {
@@ -366,6 +443,9 @@ class TwoFluidPipeClosedThermalTest {
     pipe.setNumberOfSections(sections);
     pipe.setEnableAdaptiveTimestepping(false);
     pipe.setEnableSlugTracking(false);
+    // These tests isolate wall and transient thermal behaviour, so the fixture must start from a
+    // uniform profile. Joule-Thomson would otherwise impose a small gradient during initialization.
+    pipe.setEnableJouleThomson(false);
     pipe.setThermodynamicUpdateInterval(Integer.MAX_VALUE);
     // Disable the wall-clock cutoff so fixture state depends only on convergence or the fixed iteration cap.
     pipe.setSteadyStateMaxWallClockTime(Double.POSITIVE_INFINITY);

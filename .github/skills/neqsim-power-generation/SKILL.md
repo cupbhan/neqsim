@@ -128,6 +128,41 @@ double reqW      = gt.getRequiredPower();         // required power in Watts
 > fuel/CO₂ vs a load demand, prefer `GasTurbineVendorPerformance` (top of this
 > skill) or the catalog-driven `GasTurbineUnit` (section 7).
 
+### Reading CO₂ off a load-driven turbine — three traps
+
+`addDrivenLoad(compressor)` is the cleanest way to size fuel to a real duty: the
+turbine sums `Compressor.getPower()` over its loads each solve, so the fuel gas
+tracks the process. Getting an **emission** number out of it has three traps.
+
+```java
+GasTurbine gt = new GasTurbine("GT-driver");
+gt.setInletStream(fuelStream);
+gt.setThermalEfficiency(0.32);      // REQUIRED
+gt.addDrivenLoad(exportCompressor); // loads must be run before the turbine
+gt.run();
+double fuel_kghr = gt.getFuelFlowRate("kg/hr");
+```
+
+1. **Pseudo-components abort the combustion balance.** The stoichiometry asks the
+   element database for each hydrocarbon's C and H count, and a characterised
+   fluid's `C7P`/`C10A`… pseudo-components are not in it. Older builds threw
+   `Element:getNumberOfElements - Input C component not in element database`;
+   current builds estimate the atom counts from molar mass. Either way, prefer
+   building the **fuel** from real named components (`nitrogen, CO2, methane,
+   ethane, propane, i-butane, n-butane, i-pentane, n-pentane, n-hexane`) —
+   renormalising an export-gas composition onto that set typically captures
+   >99.8 mol% and matches what a plant actually burns.
+2. **The combustion air carries CO₂ of its own.** `Fluid.create("combustion air")`
+   is an *unnormalised* `N2 0.78084 / O2 0.20946 / CO2 0.033 / water 0.1`, i.e.
+   **2.9 mol% CO₂** against atmospheric 0.04 %. Subtract the air-borne CO₂
+   (`gt.airStream`) before quoting an exhaust CO₂, or the number is inflated
+   (75 % in one 1.7 MW case).
+3. **Cross-check against a carbon balance.** The defensible number is
+   `fuel_moles × (C atoms per mole fuel) × 44.01 g/mol`. Compare it with the
+   exhaust read; agreement to <1 % is the check that both the fuel sizing and the
+   exhaust composition are right. Do this before putting a CO₂ profile in a
+   report or a STEA export.
+
 ## 2. Steam Turbine
 
 ```java
@@ -239,12 +274,51 @@ with `ProcessSystem` and link to `Compressor.getPower()` via the
 | `GasTurbineCatalog` | Loads the bundled `gas_turbine_catalog.csv` (14 aero + industrial models: LM2500, LM2500PLUS_G4, LM6000PF/PG, RB211_6562, Trent 60, SGT-700/750, Centaur 50, Taurus 60/70, Mars 100, Titan 130/250) |
 | `GasTurbineSpec` | Immutable rating point (rated MW, ISO heat rate, exhaust flow/T, NOx, mass) |
 | `GasTurbinePerformanceMap` | Part-load + ambient correction (aero vs industrial polynomials, min-load fraction) |
-| `GasTurbineDegradation` | Recoverable + non-recoverable fouling vs fired hours, water-wash and overhaul reset |
+| `GasTurbineDegradation` | Recoverable + non-recoverable fouling vs fired hours, `offlineWash()` full reset and `onlineWash(effectiveness)` partial recovery |
+| `GasTurbineWashPlanner` | Wash-interval economics: sawtooth with partial recovery, extra fuel/CO2/cost per interval, optimal interval, payback of a permanent on-line wash installation |
 | `GasTurbineEmissions` | Full-carbon-balance CO2, NOx, methane slip from fuel composition |
 | `CO2TaxSchedule` | Loads `co2_tax_norway.csv` (2020–2040 NOK/tonne, CO2 tax + EU ETS), linear interpolation |
 | `GasTurbineUnit` | `TwoPortEquipment` — runs inside a `ProcessSystem`, accepts fuel `Stream`, aggregates `Compressor` shaft load via `addPowerConsumer` |
 | `TurbineDispatchOptimizer` | Picks the cheapest feasible on/off combination (brute-force ≤8 units, merit-order above) with N+1 reserve |
 | `LateLifeRetrofitStudy` | Year-by-year NPV / CO2-avoided / payback for baseline vs retrofit fleet over a declining demand profile |
+
+### Water-wash interval and permanent-wash business case
+
+When the question is *"how often should we wash, and is a permanent on-line wash
+skid worth it?"*, drive `GasTurbineWashPlanner` from the plant's **measured**
+corrected-efficiency trend rather than a generic OEM rate. An energy-management
+system usually trends "corrected turbine efficiency" in percentage points;
+`lossRateFromCorrectedEfficiencyTrend(ppPer1000FiredHours, cleanEfficiencyPercent)`
+converts that KPI slope into the fractional loss rate the planner needs.
+
+```java
+GasTurbineWashPlanner planner = new GasTurbineWashPlanner();
+planner.setShaftPowerW(22.1e6);
+planner.setBaselineHeatRateKJPerKWh(10090.0);
+planner.setFuelLhvKJPerSm3(36500.0);          // from Standard_ISO6976 getValue("LCV","kJ/m3")
+planner.setCo2PerSm3Fuel(2.06);               // carbon balance on the fuel composition
+planner.setEfficiencyLossRatePerFiredHour(
+    GasTurbineWashPlanner.lossRateFromCorrectedEfficiencyTrend(0.24, 92.0));
+planner.setRecoveryEffectiveness(0.40);       // on-line ~0.3-0.5, off-line crank ~0.85-0.95
+planner.setOutageHoursPerWash(0.0);           // on-line washing has no outage
+planner.setWashCostPerEvent(20000.0);
+planner.setFuelValuePerSm3(3.0);
+planner.setCo2PricePerTonne(CO2TaxSchedule.loadDefault().getTotalNOKPerTonne(2026));
+GasTurbineWashPlanner.WashPlan best = planner.optimize(24.0, 4380.0, 12.0);
+double payback = GasTurbineWashPlanner.paybackYears(6.0e6, currentPractice, best);
+```
+
+Gotchas:
+
+- The **outage/deferment term dominates** an off-line crank-wash case. Price it
+  with an explicit deferment fraction and report the payback **excluding** it as
+  the headline; a fully-deferred outage makes crank washing look arbitrarily bad.
+- An off-line optimum that lands on the scan upper bound means annual crank
+  washing is already the best off-line practice — the lever is on-line washing,
+  not a shorter crank cycle.
+- The two methods are complementary: on-line washing controls the sawtooth
+  amplitude, off-line washing resets the residual `(1-e)rT/e` that an imperfect
+  on-line wash leaves behind.
 
 ### Catalog & site-corrected available power
 

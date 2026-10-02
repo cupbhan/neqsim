@@ -419,7 +419,7 @@ public final class HydrocarbonWaterBoundaryBranchAssembler {
   }
 
   private GeneratedSeed generateSecondSeed(BoundaryFamily family, AnchorPoint anchor) {
-    double[] logPressureOffsets = new double[] { 0.125, -0.125, 0.25, -0.25, 0.0625, -0.0625, 0.5, -0.5 };
+    double[] logPressureOffsets = new double[] {0.125, -0.125, 0.25, -0.25, 0.0625, -0.0625, 0.5, -0.5};
     TwoToThreePhaseArcLengthCorrector corrector = new TwoToThreePhaseArcLengthCorrector(template,
         family.getRetainedPhaseZero(), family.getRetainedPhaseOne(), family.getIncipientPhase())
         .setNumericalControls(maximumCorrectorIterations, residualTolerance, finiteDifferenceStep);
@@ -437,7 +437,7 @@ public final class HydrocarbonWaterBoundaryBranchAssembler {
         return generated;
       }
     }
-    double[] temperatureOffsetsK = new double[] { 2.0, -2.0, 5.0, -5.0, 1.0, -1.0, 10.0, -10.0, 20.0, -20.0 };
+    double[] temperatureOffsetsK = new double[] {2.0, -2.0, 5.0, -5.0, 1.0, -1.0, 10.0, -10.0, 20.0, -20.0};
     for (double offsetK : temperatureOffsetsK) {
       double temperatureK = anchorState.getTemperatureK() + offsetK;
       if (domainBoundsEnabled && (temperatureK < minimumTemperatureK || temperatureK > maximumTemperatureK)) {
@@ -449,9 +449,9 @@ public final class HydrocarbonWaterBoundaryBranchAssembler {
         return generated;
       }
     }
-    double[] localArcSteps = new double[] { 0.05, 0.10, 0.025, 0.20, 0.01, 0.40 };
+    double[] localArcSteps = new double[] {0.05, 0.10, 0.025, 0.20, 0.01, 0.40};
     for (double arcStep : localArcSteps) {
-      for (int orientation : new int[] { 1, -1 }) {
+      for (int orientation : new int[] {1, -1}) {
         TwoToThreePhaseArcLengthCorrector.Result correction = corrector.correctFromLocalTangent(anchorState, arcStep,
             orientation);
         GeneratedSeed generated = acceptedGeneratedSeed(anchorState, correction, stabilityGate);

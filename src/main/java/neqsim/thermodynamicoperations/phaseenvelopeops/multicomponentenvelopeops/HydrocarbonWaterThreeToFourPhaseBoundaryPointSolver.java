@@ -171,8 +171,8 @@ public final class HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver {
       phaseOne = retainedSplit;
     }
     double[] incipient = normalized(state.getIncipientComposition());
-    int[] referenceIndices = new int[] { largestComponentIndex(phaseZero), largestComponentIndex(phaseOne),
-        largestComponentIndex(bifurcating), largestComponentIndex(incipient) };
+    int[] referenceIndices = new int[] {largestComponentIndex(phaseZero), largestComponentIndex(phaseOne),
+        largestComponentIndex(bifurcating), largestComponentIndex(incipient)};
     double[] variables = new double[4 * componentCount];
     writeLogRatioCoordinates(variables, 0, phaseZero, referenceIndices[0]);
     writeLogRatioCoordinates(variables, coordinateCount, phaseOne, referenceIndices[1]);
@@ -207,7 +207,7 @@ public final class HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver {
     double[][] compositions = new double[][] {
         compositionFromLogRatios(variables, 0, referenceIndices[0], componentCount),
         compositionFromLogRatios(variables, coordinateCount, referenceIndices[1], componentCount),
-        compositionFromLogRatios(variables, 2 * coordinateCount, referenceIndices[2], componentCount) };
+        compositionFromLogRatios(variables, 2 * coordinateCount, referenceIndices[2], componentCount)};
     double[] incipientComposition = compositionFromLogRatios(variables, incipientStart, referenceIndices[3],
         componentCount);
     SystemInterface working = createWorkingSystem(temperatureK, pressureBara, fractions, compositions,
@@ -271,8 +271,8 @@ public final class HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver {
     }
     working.setTemperature(temperatureK);
     working.setPressure(pressureBara);
-    CandidatePhase[] slots = new CandidatePhase[] { retainedPhaseZero, retainedPhaseOne, bifurcatingPhase,
-        incipientPhase };
+    CandidatePhase[] slots = new CandidatePhase[] {retainedPhaseZero, retainedPhaseOne, bifurcatingPhase,
+        incipientPhase};
     for (int phaseIndex = 0; phaseIndex < 4; phaseIndex++) {
       working.setPhaseType(phaseIndex, toPhaseType(slots[phaseIndex]));
       working.setBeta(phaseIndex, phaseIndex < 3 ? fractions[phaseIndex] * (1.0 - 1.0e-14) : 1.0e-14);
@@ -292,7 +292,7 @@ public final class HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver {
     if (waterIndex < 0) {
       return true;
     }
-    CandidatePhase[] slots = new CandidatePhase[] { retainedPhaseZero, retainedPhaseOne, bifurcatingPhase };
+    CandidatePhase[] slots = new CandidatePhase[] {retainedPhaseZero, retainedPhaseOne, bifurcatingPhase};
     for (int phaseIndex = 0; phaseIndex < slots.length; phaseIndex++) {
       double water = retainedCompositions[phaseIndex][waterIndex];
       if (slots[phaseIndex] == CandidatePhase.OIL && water >= 0.5
@@ -407,7 +407,7 @@ public final class HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver {
     double one = Math.exp(firstLogit - maximum);
     double two = Math.exp(secondLogit - maximum);
     double total = zero + one + two;
-    return new double[] { zero / total, one / total, two / total };
+    return new double[] {zero / total, one / total, two / total};
   }
 
   private static void writeLogRatioCoordinates(double[] variables, int start, double[] composition,

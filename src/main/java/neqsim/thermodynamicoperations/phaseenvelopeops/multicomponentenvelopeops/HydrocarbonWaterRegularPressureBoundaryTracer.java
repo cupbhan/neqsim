@@ -167,7 +167,7 @@ public final class HydrocarbonWaterRegularPressureBoundaryTracer {
     double upper = Math.min(2500.0, predictedTemperatureK + halfWidth);
     double[] temperatures = linearGrid(lower, upper, temperatureProbeCount);
     HydrocarbonWaterStableRegionTransitionScanner.Result scan = new HydrocarbonWaterStableRegionTransitionScanner(
-        template).setNumericalControls(60, 0.05, 1.0e-9).scan(temperatures, new double[] { pressureBara });
+        template).setNumericalControls(60, 0.05, 1.0e-9).scan(temperatures, new double[] {pressureBara});
     AnchorPoint best = null;
     double bestScore = Double.POSITIVE_INFINITY;
     int matchingBracketCount = 0;

@@ -286,8 +286,8 @@ public final class SpecifiedThreePhaseFlashSolver {
     for (int componentIndex = 0; componentIndex < componentCount; componentIndex++) {
       double firstLogK = Math.max(-700.0, Math.min(700.0, variables[componentIndex]));
       double secondLogK = Math.max(-700.0, Math.min(700.0, variables[componentCount + componentIndex]));
-      double logDenominator = logSumOfExponentials(new double[] { Math.log(fractions[0]),
-          Math.log(fractions[1]) + firstLogK, Math.log(fractions[2]) + secondLogK });
+      double logDenominator = logSumOfExponentials(new double[] {Math.log(fractions[0]),
+          Math.log(fractions[1]) + firstLogK, Math.log(fractions[2]) + secondLogK});
       if (!Double.isFinite(logDenominator)) {
         throw new IllegalStateException("invalid generalized Rachford-Rice denominator");
       }
@@ -361,7 +361,7 @@ public final class SpecifiedThreePhaseFlashSolver {
     }
     working.setTemperature(temperatureK);
     working.setPressure(pressureBara);
-    CandidatePhase[] phaseSlots = new CandidatePhase[] { phaseZero, phaseOne, phaseTwo };
+    CandidatePhase[] phaseSlots = new CandidatePhase[] {phaseZero, phaseOne, phaseTwo};
     for (int phaseIndex = 0; phaseIndex < 3; phaseIndex++) {
       working.setPhaseType(phaseIndex, toPhaseType(phaseSlots[phaseIndex]));
       working.setBeta(phaseIndex, fractions[phaseIndex]);
@@ -425,7 +425,7 @@ public final class SpecifiedThreePhaseFlashSolver {
     double one = Math.exp(firstLogit - maximum);
     double two = Math.exp(secondLogit - maximum);
     double total = zero + one + two;
-    double[] fractions = new double[] { zero / total, one / total, two / total };
+    double[] fractions = new double[] {zero / total, one / total, two / total};
     for (int phaseIndex = 0; phaseIndex < fractions.length; phaseIndex++) {
       fractions[phaseIndex] = Math.max(fractions[phaseIndex], MINIMUM_PHASE_FRACTION);
     }

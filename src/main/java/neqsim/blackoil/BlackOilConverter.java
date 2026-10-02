@@ -11,6 +11,11 @@ import neqsim.thermodynamicoperations.ThermodynamicOperations;
 /**
  * Converter from a compositional (EOS) NeqSim fluid to a Black-Oil PVT table + stream.
  *
+ * <p>
+ * Units follow {@link neqsim.blackoil.BlackOilPVTTable}: pressure in bar, Rs in Sm3/Sm3, Rv in Sm3/Sm3, formation
+ * volume factors in rm3/Sm3 and <b>viscosities in Pa.s</b>. Multiply viscosity by 1000 when writing a reservoir
+ * simulator deck, which expects cP.
+ *
  * @author esol
  */
 public class BlackOilConverter {
@@ -24,7 +29,34 @@ public class BlackOilConverter {
     public double rho_o_sc;
     public double rho_g_sc;
     public double rho_w_sc;
+
+    /**
+     * Highest pressure in the grid at which free gas is present.
+     *
+     * <p>
+     * This is the bubble point for an oil. For a retrograde gas condensate free gas is present at every pressure, so
+     * this degenerates to the top of the pressure grid and carries no meaning; use {@link #saturationPressure} instead.
+     */
     public double bubblePoint;
+
+    /**
+     * Highest pressure at which two hydrocarbon phases coexist.
+     *
+     * <p>
+     * This is the bubble point of an oil and the dew point of a gas condensate, so it is the quantity to use when the
+     * fluid type is not known in advance. NaN when the fluid is single-phase over the whole grid.
+     */
+    public double saturationPressure;
+
+    /**
+     * True when the fluid is single-phase gas at the top of the pressure grid and drops out liquid below the saturation
+     * pressure, i.e. a retrograde gas condensate.
+     *
+     * <p>
+     * A retrograde fluid needs a vaporised-oil (PVTG) treatment; a standard black-oil PVTO/PVDG table cannot represent
+     * its liquid dropout.
+     */
+    public boolean retrogradeCondensate;
   }
 
   /**
@@ -47,6 +79,7 @@ public class BlackOilConverter {
     StdTotals stdTotals = computeStdTotalsFromWhole(eosFluid, Pstd, Tstd);
 
     List<BlackOilPVTTable.Record> recs = new ArrayList<>();
+    List<PerPressureProps> propsByPressure = new ArrayList<>();
     double bubblePoint = Double.NaN;
 
     double rho_o_sc = Double.NaN;
@@ -56,6 +89,7 @@ public class BlackOilConverter {
 
     for (double p : P) {
       PerPressureProps props = evalAtPressure(eosFluid, Tref, p, Pstd, Tstd);
+      propsByPressure.add(props);
       if (!Double.isNaN(props.rho_o_sc)) {
         rho_o_sc = props.rho_o_sc;
       }
@@ -72,9 +106,9 @@ public class BlackOilConverter {
       }
     }
 
+    // Reuse the flashes already done above rather than repeating them per pressure.
     for (int i = P.length - 1; i >= 0; i--) {
-      PerPressureProps props = evalAtPressure(eosFluid, Tref, P[i], Pstd, Tstd);
-      if (props.hasFreeGas) {
+      if (propsByPressure.get(i).hasFreeGas) {
         bubblePoint = P[i];
         break;
       }
@@ -82,6 +116,17 @@ public class BlackOilConverter {
     if (Double.isNaN(bubblePoint)) {
       bubblePoint = P[0];
     }
+
+    double saturationPressure = Double.NaN;
+    for (int i = P.length - 1; i >= 0; i--) {
+      PerPressureProps props = propsByPressure.get(i);
+      if (props.hasFreeGas && props.hasFreeOil) {
+        saturationPressure = P[i];
+        break;
+      }
+    }
+    PerPressureProps atTop = propsByPressure.get(P.length - 1);
+    boolean retrograde = !Double.isNaN(saturationPressure) && atTop.hasFreeGas && !atTop.hasFreeOil;
 
     double rsAtPb = interpolateRsAt(recs, bubblePoint);
     for (int i = 0; i < recs.size(); i++) {
@@ -128,6 +173,8 @@ public class BlackOilConverter {
     out.rho_g_sc = rho_g_sc;
     out.rho_w_sc = rho_w_sc;
     out.bubblePoint = bubblePoint;
+    out.saturationPressure = saturationPressure;
+    out.retrogradeCondensate = retrograde;
     return out;
   }
 
@@ -147,6 +194,7 @@ public class BlackOilConverter {
       f.setTemperature(Tstd);
       ThermodynamicOperations ops = new ThermodynamicOperations(f);
       ops.TPflash();
+      f.initProperties();
 
       StdTotals s = new StdTotals();
       PhaseInterface oil = findOilPhase(f);
@@ -156,17 +204,17 @@ public class BlackOilConverter {
       if (oil != null) {
         double V = phaseVolume(oil);
         s.O_std = V;
-        s.rho_o_sc = oil.getDensity();
+        s.rho_o_sc = phaseDensity(oil);
       }
       if (gas != null) {
         double V = phaseVolume(gas);
         s.G_std = V;
-        s.rho_g_sc = gas.getDensity();
+        s.rho_g_sc = phaseDensity(gas);
       }
       if (wat != null) {
         double V = phaseVolume(wat);
         s.W_std = V;
-        s.rho_w_sc = wat.getDensity();
+        s.rho_w_sc = phaseDensity(wat);
       }
       return s;
     } catch (Exception e) {
@@ -184,6 +232,7 @@ public class BlackOilConverter {
     double Bw = Double.NaN;
     double mu_w = Double.NaN;
     boolean hasFreeGas = false;
+    boolean hasFreeOil = false;
     double rho_o_sc = Double.NaN;
     double rho_g_sc = Double.NaN;
     double rho_w_sc = Double.NaN;
@@ -205,6 +254,7 @@ public class BlackOilConverter {
       PhaseInterface wat = findWaterPhase(f);
 
       if (oil != null) {
+        out.hasFreeOil = true;
         SystemInterface oilComp = phaseAsStandaloneSystem(base, oil, Tref, p);
         ThermodynamicOperations oilResOps = new ThermodynamicOperations(oilComp);
         oilResOps.TPflash();
@@ -218,6 +268,7 @@ public class BlackOilConverter {
         oilStd.setTemperature(Tstd);
         ThermodynamicOperations oilStdOps = new ThermodynamicOperations(oilStd);
         oilStdOps.TPflash();
+        oilStd.initProperties();
         PhaseInterface oilStdOil = findOilPhase(oilStd);
         PhaseInterface oilStdGas = findGasPhase(oilStd);
 
@@ -229,10 +280,10 @@ public class BlackOilConverter {
         out.Rs = (V_std_oil > 0.0) ? (V_std_gas / V_std_oil) : 0.0;
 
         if (oilStdOil != null) {
-          out.rho_o_sc = oilStdOil.getDensity();
+          out.rho_o_sc = phaseDensity(oilStdOil);
         }
         if (oilStdGas != null) {
-          out.rho_g_sc = oilStdGas.getDensity();
+          out.rho_g_sc = phaseDensity(oilStdGas);
         }
       }
 
@@ -252,6 +303,7 @@ public class BlackOilConverter {
         gasStd.setTemperature(Tstd);
         ThermodynamicOperations gasStdOps = new ThermodynamicOperations(gasStd);
         gasStdOps.TPflash();
+        gasStd.initProperties();
         PhaseInterface gasStdGas = findGasPhase(gasStd);
         PhaseInterface gasStdOil = findOilPhase(gasStd);
         double V_std_gas = (gasStdGas != null) ? phaseVolume(gasStdGas) : 0.0;
@@ -262,10 +314,10 @@ public class BlackOilConverter {
         out.Rv = (V_std_gas > 0.0) ? (V_std_oil / V_std_gas) : 0.0;
 
         if (gasStdGas != null) {
-          out.rho_g_sc = gasStdGas.getDensity();
+          out.rho_g_sc = phaseDensity(gasStdGas);
         }
         if (gasStdOil != null && Double.isNaN(out.rho_o_sc)) {
-          out.rho_o_sc = gasStdOil.getDensity();
+          out.rho_o_sc = phaseDensity(gasStdOil);
         }
       }
 
@@ -275,7 +327,7 @@ public class BlackOilConverter {
         wOps.TPflash();
         wRes.initProperties();
         PhaseInterface wPhase = findWaterPhase(wRes);
-        double rho_w_res = (wPhase != null) ? wPhase.getDensity() : Double.NaN;
+        double rho_w_res = (wPhase != null) ? phaseDensity(wPhase) : Double.NaN;
         double mu_w = (wPhase != null) ? wPhase.getViscosity() : Double.NaN;
 
         SystemInterface wStd = wRes.clone();
@@ -283,8 +335,9 @@ public class BlackOilConverter {
         wStd.setTemperature(Tstd);
         ThermodynamicOperations wStdOps = new ThermodynamicOperations(wStd);
         wStdOps.TPflash();
+        wStd.initProperties();
         PhaseInterface wStdPhase = findWaterPhase(wStd);
-        double rho_w_std = (wStdPhase != null) ? wStdPhase.getDensity() : Double.NaN;
+        double rho_w_std = (wStdPhase != null) ? phaseDensity(wStdPhase) : Double.NaN;
 
         if (!Double.isNaN(rho_w_res) && !Double.isNaN(rho_w_std) && rho_w_res > 0) {
           out.Bw = rho_w_std / rho_w_res;
@@ -383,20 +436,52 @@ public class BlackOilConverter {
   }
 
   private static double totalVolume(SystemInterface s) {
+    try {
+      double V = s.getCorrectedVolume();
+      if (V > 0.0 && Double.isFinite(V)) {
+        return V;
+      }
+    } catch (Throwable ignored) {
+    }
     return s.getVolume();
   }
 
+  /**
+   * Volume-shift corrected phase volume in m3. The uncorrected EOS volume must not be used here: for a fluid with
+   * Peneloux volume translation the shift differs between the reservoir and stock-tank compositions, so it does not
+   * cancel in the Bo, Bg and Rs ratios.
+   *
+   * @param p the phase
+   * @return the corrected phase volume in m3, or NaN if it cannot be evaluated
+   */
   private static double phaseVolume(PhaseInterface p) {
     try {
-      double V = p.getVolume();
+      double V = p.getCorrectedVolume();
       if (V > 0.0 && Double.isFinite(V)) {
         return V;
       }
     } catch (Throwable ignored) {
     }
     double mass = p.getMass();
-    double rho = p.getDensity();
+    double rho = phaseDensity(p);
     return (rho > 0) ? (mass / rho) : Double.NaN;
+  }
+
+  /**
+   * Volume-shift corrected mass density of a phase in kg/m3.
+   *
+   * @param p the phase
+   * @return the corrected density in kg/m3, or the uncorrected EOS density if the physical properties are unavailable
+   */
+  private static double phaseDensity(PhaseInterface p) {
+    try {
+      double rho = p.getDensity("kg/m3");
+      if (rho > 0.0 && Double.isFinite(rho)) {
+        return rho;
+      }
+    } catch (Throwable ignored) {
+    }
+    return p.getDensity();
   }
 
   private static SystemInterface phaseAsStandaloneSystem(SystemInterface base, PhaseInterface phase, double T, double P)
@@ -424,11 +509,15 @@ public class BlackOilConverter {
     for (int i = 0; i < z.length; i++) {
       z[i] /= sum;
     }
-    sys.setMolarComposition(z);
-    try {
-      sys.setTotalNumberOfMoles(1.0);
-    } catch (Throwable ignored) {
+    // Rebuilding from an emptied fluid clears the stale phase and K-value state left by
+    // the parent flash; setMolarComposition() keeps it and the next flash can converge to
+    // the trivial single-phase solution, silently reporting Rs = 0 for a live oil.
+    sys.setEmptyFluid();
+    for (int i = 0; i < nc; i++) {
+      sys.addComponent(i, z[i]);
     }
+    sys.setTemperature(T);
+    sys.setPressure(P);
     return sys;
   }
 }

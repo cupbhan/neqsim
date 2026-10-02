@@ -57,7 +57,7 @@ public final class FieldFluidRunner {
   private static final int DEFAULT_PHASE_MAP_TEMPERATURE_POINTS = 41;
   private static final int DEFAULT_PHASE_MAP_PRESSURE_POINTS = 25;
   private static final int PHASE_MAP_BISECTION_ITERATIONS = 8;
-  private static final String[] REACTIVE_SPECIES = new String[] { "NH4+", "HCO3-", "CO3--", "H3O+", "OH-" };
+  private static final String[] REACTIVE_SPECIES = new String[] {"NH4+", "HCO3-", "CO3--", "H3O+", "OH-"};
   /**
    * Highest pressure the envelope continuation may be extended to when a branch is still climbing at the requested
    * ceiling. The phase-map pressure range is a plotting window and must not silently truncate the envelope, but a cubic
@@ -221,8 +221,13 @@ public final class FieldFluidRunner {
               row.addProperty("curve",
                   normalizedModel(requestedModel, reactive).toLowerCase(Locale.ROOT).replace('-', '_') + "-feed-dew");
               boundary.add(row);
+            } else {
+              rejectedBoundaryPoints++;
+              boundaryWarnings.add("Boundary point at " + pointTemperatureC
+                  + " C was rejected: pressure is non-finite or outside the engineering range");
             }
           } catch (Exception error) {
+            rejectedBoundaryPoints++;
             boundaryWarnings.add("Boundary point at " + pointTemperatureC + " C failed: " + error.getMessage());
           }
         }
@@ -1180,7 +1185,7 @@ public final class FieldFluidRunner {
     int pressurePointCount = states[0].length;
     boolean[][] visited = new boolean[temperaturePointCount][pressurePointCount];
     List<List<int[]>> components = new ArrayList<List<int[]>>();
-    int[][] neighborOffsets = new int[][] { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } };
+    int[][] neighborOffsets = new int[][] {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
     for (int temperatureIndex = 0; temperatureIndex < temperaturePointCount; temperatureIndex++) {
       for (int pressureIndex = 0; pressureIndex < pressurePointCount; pressureIndex++) {
         if (visited[temperatureIndex][pressureIndex] || !states[temperatureIndex][pressureIndex].hydrocarbonTwoPhase) {
@@ -1188,7 +1193,7 @@ public final class FieldFluidRunner {
         }
         List<int[]> component = new ArrayList<int[]>();
         ArrayDeque<int[]> queue = new ArrayDeque<int[]>();
-        queue.add(new int[] { temperatureIndex, pressureIndex });
+        queue.add(new int[] {temperatureIndex, pressureIndex});
         visited[temperatureIndex][pressureIndex] = true;
         while (!queue.isEmpty()) {
           int[] current = queue.removeFirst();
@@ -1202,7 +1207,7 @@ public final class FieldFluidRunner {
               continue;
             }
             visited[nextTemperatureIndex][nextPressureIndex] = true;
-            queue.addLast(new int[] { nextTemperatureIndex, nextPressureIndex });
+            queue.addLast(new int[] {nextTemperatureIndex, nextPressureIndex});
           }
         }
         components.add(component);

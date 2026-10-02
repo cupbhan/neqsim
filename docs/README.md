@@ -11,26 +11,34 @@ description: Comprehensive Java library for thermodynamic, physical property, an
 ## Quick Start
 
 ```java
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import neqsim.thermo.system.SystemInterface;
 import neqsim.thermo.system.SystemSrkEos;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
 
-// Create a natural gas fluid
-SystemInterface gas = new SystemSrkEos(298.15, 50.0);
-gas.addComponent("methane", 0.90);
-gas.addComponent("ethane", 0.05);
-gas.addComponent("propane", 0.03);
-gas.addComponent("CO2", 0.02);
-gas.setMixingRule("classic");
+public final class NeqSimQuickStart {
+  private static final Logger logger = LogManager.getLogger(NeqSimQuickStart.class);
 
-// Perform flash calculation
-ThermodynamicOperations ops = new ThermodynamicOperations(gas);
-ops.TPflash();
-gas.initProperties();
+  private NeqSimQuickStart() {}
 
-// Get properties
-System.out.println("Density: " + gas.getDensity("kg/m3") + " kg/m³");
-System.out.println("Compressibility: " + gas.getZ());
+  public static void main(String[] args) {
+    SystemInterface gas = new SystemSrkEos(298.15, 50.0);
+    gas.addComponent("methane", 0.90);
+    gas.addComponent("ethane", 0.05);
+    gas.addComponent("propane", 0.03);
+    gas.addComponent("CO2", 0.02);
+    gas.setMixingRule("classic");
+
+    ThermodynamicOperations operations = new ThermodynamicOperations(gas);
+    operations.TPflash();
+    gas.initProperties();
+
+    logger.info("Density: {} kg/m3", gas.getDensity("kg/m3"));
+    logger.info("Compressibility: {}", gas.getZ());
+  }
+}
 ```
 
 ---
@@ -47,9 +55,11 @@ System.out.println("Compressibility: " + gas.getZ());
 
 ### Process Simulation
 
-| Package | Documentation | Description |
+| Package / topic | Documentation | Description |
 |---------|---------------|-------------|
 | `neqsim.process` | [process/](process/) | Process equipment, unit operations, controllers, process systems, safety systems |
+| JSON builder input | [process/json_process_models_and_systems.md](process/json_process_models_and_systems.md) | Build hand-written ProcessSystem and ProcessModel JSON with validation, stream wiring, and supported ports |
+| JSON model export | [process/process_json_export_and_e300_fluids.md](process/process_json_export_and_e300_fluids.md) | Export live models to portable JSON, including named and E300-equivalent fluids |
 | `neqsim.fluidmechanics` | [fluidmechanics/](fluidmechanics/) | Pipeline flow, pressure drop, two-phase flow, flow nodes |
 
 ### Engineering

@@ -1,9 +1,10 @@
 ---
 title: Valve Equipment
 description: >-
-  Verified NeqSim examples for throttling valves, valve flow coefficients,
-  characteristics, mechanical design, and dynamic travel.
-keywords: "valve, throttling valve, control valve, Joule-Thomson, Cv, Kv, pressure drop, choke, mechanical design"
+  Verified NeqSim examples for throttling valves, negative differential
+  pressure handling, valve flow coefficients, characteristics, mechanical
+  design, and dynamic travel.
+keywords: "valve, throttling valve, control valve, Joule-Thomson, Cv, Kv, pressure drop, negative differential pressure, choke, mechanical design"
 ---
 
 NeqSim represents pressure letdown and control-valve calculations with classes in
@@ -79,6 +80,37 @@ The outlet temperature is calculated by an isenthalpic flash. The sign and
 magnitude of the Joule–Thomson temperature change depend on the fluid,
 temperature, pressure, and thermodynamic model.
 
+## Requested outlet pressure above the inlet
+
+A throttling valve is a pressure-letdown device: it does not add shaft work or
+compress the fluid. `ThrottlingValve` nevertheless accepts a specified outlet
+pressure above the inlet by default. The `acceptNegativeDP` flag controls how
+that requested **thermodynamic pressure state** is handled; it does not enable a
+reverse-flow calculation.
+
+| Requested pressure | `acceptNegativeDP` | Outlet thermodynamic pressure | Hydraulic driving differential |
+|---|---:|---|---|
+| `Pout <= Pin` | either value | Requested `Pout` | `Pin - Pout` |
+| `Pout > Pin` | `false` | Clamped to `Pin` | Zero |
+| `Pout > Pin` | `true` (default) | Requested `Pout` is retained | Zero |
+
+Use `setAcceptNegativeDP(false)` for a one-way pressure-letdown model that
+must not report an outlet pressure above its inlet:
+
+```java
+ThrottlingValve valve = new ThrottlingValve("PV-100", inlet);
+valve.setOutletPressure(85.0, "bara");
+valve.setAcceptNegativeDP(false);
+valve.run();
+```
+
+With the flag set to `true`, a higher requested outlet pressure can represent
+a boundary condition owned by another model. NeqSim retains that pressure for
+the outlet thermodynamic state, but the valve hydraulic calculation clips the
+driving differential to zero. This setting does **not** calculate compressor
+work, valve reverse flow, or a bidirectional network solution. Model those
+effects with the appropriate equipment or network formulation.
+
 ## Cv, Kv, and valve opening
 
 `Cv` uses the US convention and `Kv` the SI convention. NeqSim stores the
@@ -98,7 +130,37 @@ Setting an outlet pressure and calling `run()` performs a specified-pressure
 letdown. To solve outlet pressure from the inlet flow, coefficient, and opening,
 set the Cv/Kv and call `setIsCalcOutPressure(true)` before running the valve.
 The result depends on the selected gas/liquid sizing behavior and valid inlet
-physical properties.
+physical properties. The legacy `default` sizing strategy leaves choked-flow
+capacity limiting disabled, which keeps the forward flow and reverse pressure
+calculations continuous and mutually invertible. The named `IEC 60534`,
+`IEC 60534 full`, and `prod choke` strategies enable the limit by default. Set
+the intended behavior explicitly after selecting the sizing strategy when the
+service and configured $x_T$ require it:
+
+```java
+valve.setAllowChoked(true);
+```
+
+When capacity limiting is enabled and the requested flow reaches the choked
+limit, downstream pressure is no longer uniquely determined by flow and Kv
+alone.
+
+Initialize the inlet at the design conditions (for example, `inlet.run()`)
+before calling `autoSize(safetyFactor, designOpeningPercent)`. Sizing preserves
+the inlet flow, phase split, density, compressibility factor and heat-capacity
+ratio. In particular, it must not reset an already flashed rich-gas inlet while
+restoring an unchanged flow rate. A Cv copied with `setCv(sizedValve.getCv())`
+then reproduces the same forward flow when the initialized inlet, opening,
+sizing method, gas/liquid selection and correction settings are the same.
+
+`calculateOutletPressure(adjustedKv)` and `getOutletPressure()` return **bara**.
+Internally calculated absolute pressures are converted to the configured unit
+before applying them, including when the original setpoint used `barg` or
+`kPa`. This applies to both steady-state and transient calculations and avoids
+adding atmospheric pressure twice. Use `getOutletStream().getPressure(unit)`
+to read the resulting stream pressure in another unit. The one-argument
+`setOutletPressure(value)` continues to use the previously configured unit;
+use the two-argument setter when supplying a value in a different unit.
 
 ## Valve characteristic and mechanical design
 
@@ -175,7 +237,7 @@ For blowdown activation logic, use `BlowdownValve`.
 
 For every valve calculation, verify:
 
-- inlet pressure exceeds outlet pressure unless reverse flow is intentionally allowed;
+- the requested outlet pressure and `acceptNegativeDP` setting match the intended pressure-boundary model;
 - mass flow is conserved;
 - a normal throttling calculation preserves specific enthalpy within numerical tolerance;
 - temperature and phase changes are physically plausible for the selected fluid model;

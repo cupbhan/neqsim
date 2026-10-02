@@ -116,11 +116,54 @@ T_jt = float(valve.getOutletStream().getTemperature('C'))  # Correct JT temperat
 | Step | Action | Why It Helps |
 |------|--------|-------------|
 | 1 | Check if `fluid.setMultiPhaseCheck(true)` was called | Without this, solver may miss a phase split |
-| 2 | For CO2-rich systems near critical, check actual density — phase label may be misleading | CO2 near Tc=304K and Pc=74bar has ambiguous phase identity |
-| 3 | Use `fluid.getPhase(0)` / `getPhase(1)` instead of `getPhase("gas")` if labels are unreliable | Phase index is always consistent even if label is wrong |
-| 4 | Run `ops.calcPTphaseEnvelope()` to visualize phase boundaries | Shows whether operating point is in 1-phase or 2-phase region |
-| 5 | For CO2 injection wells, use `CO2FlowCorrections.isDensePhase(system)` to check T/Tc and P/Pc | Distinguishes dense phase from conventional gas/liquid |
-| 6 | For CO2-rich streams, use `CO2FlowCorrections.getReducedTemperature(system)` and `getReducedPressure(system)` | Quantifies proximity to critical point |
+| 2 | **If the fluid uses `addTBPfraction` / `addPlusFraction`, verify molar mass was passed in kg/mol, not g/mol** | See "Silent g/mol TBP unit error" below — the single most common cause of a bogus one-phase result |
+| 3 | For CO2-rich systems near critical, check actual density — phase label may be misleading | CO2 near Tc=304K and Pc=74bar has ambiguous phase identity |
+| 4 | Use `String.valueOf(phase.getType())` (`"GAS"` / `"OIL"` / `"AQUEOUS"`) rather than `getPhaseTypeName()` | `getPhaseTypeName()` can report `"gas"` for a liquid root; `getType()` is the reliable discriminator |
+| 5 | Use `fluid.getPhase(0)` / `getPhase(1)` instead of `getPhase("gas")` if labels are unreliable | Phase index is always consistent even if label is wrong |
+| 6 | Run `ops.calcPTphaseEnvelope()` to visualize phase boundaries | Shows whether operating point is in 1-phase or 2-phase region |
+| 7 | For CO2 injection wells, use `CO2FlowCorrections.isDensePhase(system)` to check T/Tc and P/Pc | Distinguishes dense phase from conventional gas/liquid |
+| 8 | For CO2-rich streams, use `CO2FlowCorrections.getReducedTemperature(system)` and `getReducedPressure(system)` | Quantifies proximity to critical point |
+
+### Silent g/mol TBP unit error
+
+`addTBPfraction(name, moles, molarMass, density)` and `addPlusFraction(...)`
+expect molar mass in **kg/mol**. Passing g/mol throws no exception — the
+characterization silently produces nonsense pseudo-component properties and the
+flash collapses to one phase.
+
+**Diagnostic tell:** `TPflash()` at standard conditions (15 °C, 1.01325 bara)
+returns `getNumberOfPhases() == 1` with `getType() == GAS` but a density of
+700–800 kg/m3. A gas at 1 atm cannot exceed a few kg/m3, so a "gas" phase with
+liquid density means the pseudo-components are broken, not that the fluid is
+single-phase.
+
+**Confirm** by printing the pseudo-component properties — the broken case shows
+`molarMass` ~1000x too large, `Tc` in the thousands of K, and `acentricFactor`
+pinned at -0.99:
+
+```java
+for (int i = 0; i < fluid.getNumberOfComponents(); i++) {
+  ComponentInterface c = fluid.getComponent(i);
+  logger.info("{} MW={} g/mol Tc={} K Pc={} bara omega={}", c.getName(),
+      c.getMolarMass() * 1000.0, c.getTC(), c.getPC(), c.getAcentricFactor());
+}
+```
+
+**Fix:** divide by 1000 at the call site —
+`fluid.addTBPfraction("C10-C12", 0.054, 150.0 / 1000.0, 0.790);`
+
+## Pipe Outlet Temperature Equals Ambient
+
+**Symptom:** A `PipeBeggsAndBrills` tubing string or flowline always arrives at the
+ambient / formation temperature, no matter the length, rate or insulation. Hydrate
+margins, cooldown times and arrival temperatures all look pessimistic and insensitive.
+
+| Step | Action | Why It Helps |
+|------|--------|-------------|
+| 1 | Call `pipe.setUseOverallHeatTransferCoefficient(true)` and `pipe.setHeatTransferCoefficient(U)` | Without it the pipe behaves as if `U` were infinite and equilibrates to ambient |
+| 2 | Use screening `U` values: ~15 W/m²K cased/cemented well, ~20 W/m²K uninsulated subsea flowline, ~5 W/m²K wet-insulated | Gives physical wellhead and arrival temperatures |
+| 3 | Do **not** rely on `setAdiabatic(true)` | It currently leaves the outlet temperature unchanged |
+| 4 | Sanity-check the wellhead temperature against expectation before using it downstream | A gas well lifting from 62 °C over 1040 m should arrive near 50 °C, not 5 °C |
 
 ## CO2 Injection Well Issues
 
@@ -289,6 +332,34 @@ List<StreamInterface> out = heatEx.getOutletStreams(); // expect all products
 > `HeatExchanger` always overrode both. Apply the same override when adding new
 > multi-port equipment.
 
+### "Converged: YES" while a unit holds NaN
+
+`runUntilConverged()` can return `true` for a plant whose equipment carries
+`NaN` results. The boundary gate compares stream values; a unit whose internal
+solve produced `NaN` can still present a self-consistent (nonsense) outlet, so
+the gate is satisfied. An older build that reports `converged=false` may hold
+the **better** numbers.
+
+Therefore, when comparing two NeqSim versions or bisecting a regression, never
+classify a run by the convergence flag. Classify on physical finiteness of the
+units you care about:
+
+```python
+bad = (not math.isfinite(eta) or not math.isfinite(power)
+       or outlet_temperature_K < 100.0)   # absolute floor, not a tolerance
+```
+
+`TurboExpanderCompressor` is a worked example of how one `NaN` survives:
+`Math.max(x, 1e-6)` **returns NaN when x is NaN**, and `NaN` fails every
+comparison, so `if (N > N_max)` / `if (N < N_min)` speed clamps in the
+Newton speed-matching loop never fire. The `NaN` then reaches efficiency,
+power, speed and the outlet flash. Guard with `Double.isNaN(...)` explicitly —
+`Math.max`/`Math.min` clamps and `>`/`<` bound checks are not guards.
+
+> Also check the right object: a standalone `Expander` built only for reporting
+> is not the unit the flowsheet solves. Read the coupled unit actually added to
+> the `ProcessSystem`.
+
 ## Process Equipment Errors
 
 ### Compressor: Negative or Unreasonable Power
@@ -343,6 +414,84 @@ List<StreamInterface> out = heatEx.getOutletStreams(); // expect all products
 | `ClassCastException` in equipment | Wrong stream type connection | Verify equipment constructors take `StreamInterface` |
 | `java.sql.SQLException` | Component not in database | Check spelling, verify against COMP.csv |
 | `StackOverflowError` in recycle | Infinite loop in process topology | Check for circular references without a Recycle unit |
+| `IllegalAccessError` / `NoSuchMethodError` between two NeqSim classes in the **same** package | Two `neqsim-*.jar` versions on one classpath | See "Stale or Duplicate Runtime JAR" below |
+| `Java package 'neqsim.x.y' has no attribute 'Z'` for a class that exists in `src/` | Installed JAR is older than the repo source | See "Stale or Duplicate Runtime JAR" below |
+
+## No JVM Found (JPype Cannot Start Java)
+
+**Symptom:** `JVMNotFoundException`, "No JVM shared library file (jvm.dll) found",
+or `import neqsim` failing before any calculation runs.
+
+This is a *discovery* failure, not a missing installation. On managed corporate
+machines Java is routinely installed with no `java` on PATH and no `JAVA_HOME`,
+and it lands in places a naive scan of `C:\Program Files\Java` misses: the user
+profile, `LOCALAPPDATA\Programs`, the Windows registry, a JetBrains `jbr`, or
+the JRE shipped inside the VS Code Java extension
+(`~/.vscode/extensions/redhat.java-*/jre/*`).
+
+Recovery, in order:
+
+1. **Was this even a code task?** A single flash/property/sizing question needs
+   no local JVM at all — use the curated `mcp_neqsim_*` tool (see
+   `neqsim-api-patterns` § "MCP server vs. Python/Java API").
+2. **Find the installed Java** instead of hunting by hand:
+   ```powershell
+   python devtools/java_locator.py     # source checkout: usable Javas, best first
+   neqsim doctor                       # plugin / pip install: names the found Java
+   ```
+3. **Make it usable for this process** — no admin, no persisted env change:
+   ```python
+   import neqsim_dev_setup, sys, pathlib
+   sys.path.insert(0, str(pathlib.Path(neqsim_dev_setup.__file__).parent))
+   from java_locator import ensure_java_home
+   ensure_java_home()                  # sets JAVA_HOME + PATH in-process
+   import neqsim
+   ```
+   The `sys.path` line is needed because an editable devtools install resolves
+   modules through a map frozen at install time. `neqsim_dev_setup.neqsim_init(...)`
+   already does all of this, so notebooks and NeqSim Runner jobs are covered.
+4. **Persist it** for Maven and future terminals (user scope, no admin):
+   ```powershell
+   [Environment]::SetEnvironmentVariable('JAVA_HOME','<home from step 2>','User')
+   ```
+5. **Only if the locator finds nothing**, install Java — a portable Temurin JDK
+   unpacked into the user profile needs no admin rights. `neqsim doctor` prints
+   this remedy with the exact commands.
+
+A JRE is enough to *run* NeqSim through JPype; `mvnw` compilation needs a full
+JDK (`bin/javac`). The locator ranks JDKs above JREs for this reason.
+
+## Stale or Duplicate Runtime JAR
+
+The Python package adds its `lib/*` folder to the classpath as a flat glob, so a
+JAR left behind by an earlier install is loaded **alongside** the current one.
+Classes then resolve across two versions of the same package.
+
+**Symptom:** an access or linkage error between two classes that are provably in
+the same package and legal in source, e.g.
+`IllegalAccessError: class ...ProcessModelOperatingActionSetEvaluator tried to
+access private method ...HydraulicConstraintBinding.<init>(...)`.
+
+Do **not** go looking for a Java access-modifier bug. Check the JAR count first:
+
+```powershell
+Get-ChildItem <venv>\Lib\site-packages\neqsim\lib\*.jar
+python -c "import importlib.metadata as m; print(m.version('neqsim'))"
+```
+
+Keep only the JAR matching the installed package version. `python
+devtools/neqsim_doctor.py` reports this as "Single NeqSim JAR on runtime
+classpath".
+
+**Related symptom — version skew, not a missing class:** `has no attribute 'X'`
+for a class that exists under `src/main/java/` means the released JAR predates
+`<revision>` in `pom.xml`. Point the run at workspace classes instead:
+`NEQSIM_TEST_CLASSPATH=target/classes` plus dependencies, or use the
+`devtools/neqsim_dev_setup.py` bootstrap.
+
+Replacing a JAR under a **live** JVM (notebook kernel) is a third variant: the
+copy succeeds but any class not already loaded fails to resolve. Restart the
+kernel; a JVM cannot reload a JAR in-process.
 
 ## Phase Envelope Branch Labels Swapped
 

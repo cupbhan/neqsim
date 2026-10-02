@@ -18,6 +18,29 @@ import neqsim.thermo.util.readwrite.JsonFluidReadWrite;
 /** Tests explicit diagnostics from the multiphase phase-fraction solver. */
 class TPmultiflashSolveStatusTest {
 
+  /** Verifies that the personal status gate accepts an upstream recovery only at a balanced equilibrium. */
+  @Test
+  void acceptsValidatedColdWaterEndpointRecovery() {
+    SystemInterface system = new SystemSrkEos(232.0, 92.0);
+    String[] names = {"CO2", "methane", "ethane", "nC10", "water"};
+    double[] composition = {0.74, 0.15, 0.05, 0.01, 0.05};
+    for (int index = 0; index < names.length; index++) {
+      system.addComponent(names[index], composition[index]);
+    }
+    system.setMixingRule(2);
+    system.setMultiPhaseCheck(true);
+    TPflash operation = new TPflash(system);
+    operation.run();
+    system.init(1);
+
+    assertTrue(operation.isLastMultiphaseSolveAccepted(), operation.getLastMultiphaseSolveMessage());
+    assertEquals(2, system.getNumberOfPhases());
+    assertTrue(system.hasPhaseType(PhaseType.OIL));
+    assertTrue(system.hasPhaseType(PhaseType.AQUEOUS));
+    assertTrue(massBalanceResidual(system) < 1.0e-10);
+    assertTrue(fugacityResidual(system) < 1.0e-8);
+  }
+
   @Test
   void propagatesValidatedMultiphaseStatusThroughPublicTpFlash() throws Exception {
     SystemInterface system = buildFieldSystem();
@@ -46,8 +69,8 @@ class TPmultiflashSolveStatusTest {
 
   @Test
   void repairsWaterRichSplitBeforeStabilityAnalysis() throws Exception {
-    double[][] states = { { 215.0, 280.0 }, { 220.0, 300.0 }, { 225.0, 300.0 }, { 230.0, 300.0 }, { 235.0, 300.0 },
-        { 245.0, 300.0 }, { 250.0, 300.0 } };
+    double[][] states = {{215.0, 280.0}, {220.0, 300.0}, {225.0, 300.0}, {230.0, 300.0}, {235.0, 300.0}, {245.0, 300.0},
+        {250.0, 300.0}};
 
     for (double[] state : states) {
       SystemInterface system = buildFieldSystem(state[0], state[1]);
@@ -82,7 +105,7 @@ class TPmultiflashSolveStatusTest {
 
   @Test
   void preservesWaterSubcriticalPressureStabilityPath() throws Exception {
-    for (double temperatureC : new double[] { 320.0, 325.0 }) {
+    for (double temperatureC : new double[] {320.0, 325.0}) {
       SystemInterface system = buildFieldSystem(temperatureC, 200.0);
       TPflash operation = new TPflash(system);
       operation.run();

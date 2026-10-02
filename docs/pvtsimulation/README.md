@@ -33,12 +33,17 @@ and bara.
 
 ```java
 import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import neqsim.pvtsimulation.simulation.MultiStageSeparatorTest;
 import neqsim.pvtsimulation.simulation.MultiStageSeparatorTest.SeparatorStageResult;
 import neqsim.thermo.system.SystemInterface;
 import neqsim.thermo.system.SystemSrkEos;
 
 public final class PvtSeparatorQuickStart {
+  private static final Logger logger =
+      LogManager.getLogger(PvtSeparatorQuickStart.class);
+
   private PvtSeparatorQuickStart() {}
 
   public static void main(String[] args) {
@@ -67,16 +72,16 @@ public final class PvtSeparatorQuickStart {
 
     List<SeparatorStageResult> stages = separatorTest.getStageResults();
     for (SeparatorStageResult stage : stages) {
-      System.out.printf(
-          "%s: %.3f bara, %.2f C, cumulative GOR %.3f Sm3/Sm3%n",
+      logger.info(
+          "{}: {} bara, {} C, cumulative GOR {} Sm3/Sm3",
           stage.getStageName(), stage.getPressure(), stage.getTemperature(),
           stage.getCumulativeGOR());
     }
 
-    System.out.printf("Total GOR: %.3f Sm3/Sm3%n", separatorTest.getTotalGOR());
-    System.out.printf("Oil FVF: %.5f m3/Sm3%n", separatorTest.getBo());
-    System.out.printf(
-        "Stock-tank density: %.2f kg/m3%n",
+    logger.info("Total GOR: {} Sm3/Sm3", separatorTest.getTotalGOR());
+    logger.info("Oil FVF: {} m3/Sm3", separatorTest.getBo());
+    logger.info(
+        "Stock-tank density: {} kg/m3",
         separatorTest.getStockTankOilDensity());
   }
 }
@@ -105,12 +110,12 @@ Javadocs before building an automated regression workflow.
 
 ## Related documentation
 
-- [PVT laboratory-test guide](pvt_lab_tests.md)
-- [Phase-envelope guide](phase_envelope_guide.md)
-- [PVT and fluid characterization](../thermo/pvt_fluid_characterization.md)
-- [Eclipse E300 fluid import](eclipse_e300_fluid_import.md)
-- [NeqSim JSON fluid format](json_fluid_format.md)
-- [Black-oil package](../blackoil/README.md)
-- [Reservoir material balance](reservoir_material_balance.md)
-- [Relative-permeability tables](relative_permeability.md)
-- [Flow-assurance screening](flowassurance/README.md)
+- [PVT laboratory-test guide](pvt_lab_tests)
+- [Phase-envelope guide](phase_envelope_guide)
+- [PVT and fluid characterization](../thermo/pvt_fluid_characterization)
+- [Eclipse E300 fluid import](eclipse_e300_fluid_import)
+- [NeqSim JSON fluid format](json_fluid_format)
+- [Black-oil package](../blackoil/README)
+- [Reservoir material balance](reservoir_material_balance)
+- [Relative-permeability tables](relative_permeability)
+- [Flow-assurance screening](flowassurance/README)

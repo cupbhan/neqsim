@@ -59,17 +59,17 @@ public final class HeavyOilMultimediaFluid {
 
   private static final String RESOURCE_ROOT = "/neqsim/thermo/fluid/";
 
-  private static final String[] HEAVY_COMPONENTS = { "C7", "C8", "C9", "C10-C12", "C13-C15", "C16-C18", "C19-C22",
-      "C23-C26", "C27-C31", "C32-C38", "C39-C49", "C50-C80" };
+  private static final String[] HEAVY_COMPONENTS = {"C7", "C8", "C9", "C10-C12", "C13-C15", "C16-C18", "C19-C22",
+      "C23-C26", "C27-C31", "C32-C38", "C39-C49", "C50-C80"};
 
   private static final double[] CO2_WATER_KNOTS_K = toKelvin(20.0, 203.0, 220.0, 222.0, 250.0);
-  private static final double[] CO2_WATER_VALUES = { 0.10, 0.10, 0.143, 0.10, 0.10 };
+  private static final double[] CO2_WATER_VALUES = {0.10, 0.10, 0.143, 0.10, 0.10};
   private static final double[] CO2_OTHER_KNOTS_K = toKelvin(20.0, 180.0, 200.0, 203.0, 220.0, 222.0, 250.0);
-  private static final double[] CO2_OTHER_VALUES = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+  private static final double[] CO2_OTHER_VALUES = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   private static final double[] N2_WATER_KNOTS_K = toKelvin(20.0, 50.0, 80.0, 150.0, 220.0, 250.0);
-  private static final double[] N2_WATER_VALUES = { -1.50, -1.50, -1.60, -1.90, -1.90, -2.20 };
+  private static final double[] N2_WATER_VALUES = {-1.50, -1.50, -1.60, -1.90, -1.90, -2.20};
   private static final double[] N2_HEAVY_KNOTS_K = toKelvin(20.0, 50.0, 80.0, 150.0, 220.0, 250.0);
-  private static final double[] N2_HEAVY_VALUES = { -0.10, -0.225, -0.10, -0.12, -0.40, -0.40 };
+  private static final double[] N2_HEAVY_VALUES = {-0.10, -0.225, -0.10, -0.12, -0.40, -0.40};
 
   /** Supported, independently validated NH3 dose anchors. */
   public enum Nh3Dose {

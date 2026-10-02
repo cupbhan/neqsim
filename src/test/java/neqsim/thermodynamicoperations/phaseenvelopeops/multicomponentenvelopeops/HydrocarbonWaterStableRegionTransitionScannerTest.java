@@ -21,7 +21,7 @@ class HydrocarbonWaterStableRegionTransitionScannerTest extends NeqSimTest {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
     HydrocarbonWaterStableRegionTransitionScanner scanner = new HydrocarbonWaterStableRegionTransitionScanner(fluid);
     assertThrows(IllegalArgumentException.class, () -> scanner.setNumericalControls(0, 1.0e-4, 1.0e-9));
-    assertThrows(IllegalArgumentException.class, () -> scanner.scan(new double[] { 300.0 }, new double[] { 50.0 }));
+    assertThrows(IllegalArgumentException.class, () -> scanner.scan(new double[] {300.0}, new double[] {50.0}));
   }
 
   @Test
@@ -30,11 +30,11 @@ class HydrocarbonWaterStableRegionTransitionScannerTest extends NeqSimTest {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
     double originalTemperature = fluid.getTemperature();
     double originalPressure = fluid.getPressure();
-    double[] temperatures = new double[] { 196.75, 213.15, 233.15, 253.15, 273.15, 298.15, 323.15, 348.15, 373.15,
-        398.15, 423.15, 448.15, 473.15, 498.15, 523.15, 548.15, 573.15, 623.15, 673.15, 723.15, 753.15 };
+    double[] temperatures = new double[] {196.75, 213.15, 233.15, 253.15, 273.15, 298.15, 323.15, 348.15, 373.15,
+        398.15, 423.15, 448.15, 473.15, 498.15, 523.15, 548.15, 573.15, 623.15, 673.15, 723.15, 753.15};
 
     HydrocarbonWaterStableRegionTransitionScanner.Result result = new HydrocarbonWaterStableRegionTransitionScanner(
-        fluid).setNumericalControls(80, 1.0e-4, 1.0e-9).scan(temperatures, new double[] { 50.0 });
+        fluid).setNumericalControls(80, 1.0e-4, 1.0e-9).scan(temperatures, new double[] {50.0});
 
     for (HydrocarbonWaterStableRegionTransitionScanner.StableState state : result.getStates()) {
       System.out.printf("Fluid 2 stable state T=%.6f K P=%.3f bara region=%s rawPhases=%d%n", state.getTemperatureK(),
@@ -87,12 +87,12 @@ class HydrocarbonWaterStableRegionTransitionScannerTest extends NeqSimTest {
   @Tag("slow")
   void fluidTwoBuildsGloballyStableGoToGowAnchorsAcrossPressureLevels() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
-    double[] temperatures = new double[] { 196.75, 233.15, 273.15, 323.15, 373.15, 423.15, 473.15, 498.15, 523.15,
-        548.15, 573.15, 623.15, 673.15, 723.15, 753.15 };
+    double[] temperatures = new double[] {196.75, 233.15, 273.15, 323.15, 373.15, 423.15, 473.15, 498.15, 523.15,
+        548.15, 573.15, 623.15, 673.15, 723.15, 753.15};
 
     HydrocarbonWaterBoundaryAnchorDiscoverer.StableDiscoveryResult stable = new HydrocarbonWaterBoundaryAnchorDiscoverer(
         fluid).setCorrectionControls(32, 80, 1.0e-5, 1.0e-8)
-        .discoverFromStableRegionTransitions(temperatures, new double[] { 40.0, 50.0, 60.0 });
+        .discoverFromStableRegionTransitions(temperatures, new double[] {40.0, 50.0, 60.0});
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result discovery = stable.getDiscovery();
 
     for (HydrocarbonWaterStableRegionTransitionScanner.TransitionBracket bracket : stable.getStableRegionScan()
@@ -152,10 +152,10 @@ class HydrocarbonWaterStableRegionTransitionScannerTest extends NeqSimTest {
   @Tag("slow")
   void fluidTwoPreservesBroadPressureStableTopologyInventory() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
-    double[] temperatures = new double[] { 196.75, 233.15, 273.15, 323.15, 373.15, 423.15, 473.15, 498.15, 523.15,
-        548.15, 573.15, 623.15, 673.15, 723.15, 753.15 };
-    double[] pressures = new double[] { 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 60.0, 100.0, 150.0, 200.0, 250.0, 300.0,
-        400.0, 500.0 };
+    double[] temperatures = new double[] {196.75, 233.15, 273.15, 323.15, 373.15, 423.15, 473.15, 498.15, 523.15,
+        548.15, 573.15, 623.15, 673.15, 723.15, 753.15};
+    double[] pressures = new double[] {0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 60.0, 100.0, 150.0, 200.0, 250.0, 300.0,
+        400.0, 500.0};
 
     HydrocarbonWaterBoundaryAnchorDiscoverer.StableDiscoveryResult stable = new HydrocarbonWaterBoundaryAnchorDiscoverer(
         fluid).setCorrectionControls(32, 80, 1.0e-5, 1.0e-8)
@@ -195,9 +195,9 @@ class HydrocarbonWaterStableRegionTransitionScannerTest extends NeqSimTest {
   @Tag("slow")
   void fluidTwoLongStableGoToGowContinuationReportsBothTerminations() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
-    double[] temperatures = new double[] { 196.75, 233.15, 273.15, 323.15, 373.15, 423.15, 473.15, 498.15, 523.15,
-        548.15, 573.15, 623.15, 673.15, 723.15, 753.15 };
-    double[] pressures = new double[] { 0.5, 1.0, 2.0, 5.0, 100.0, 150.0, 200.0, 250.0 };
+    double[] temperatures = new double[] {196.75, 233.15, 273.15, 323.15, 373.15, 423.15, 473.15, 498.15, 523.15,
+        548.15, 573.15, 623.15, 673.15, 723.15, 753.15};
+    double[] pressures = new double[] {0.5, 1.0, 2.0, 5.0, 100.0, 150.0, 200.0, 250.0};
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result discovery = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
         .setCorrectionControls(32, 80, 1.0e-5, 1.0e-8).discoverFromStableRegionTransitions(temperatures, pressures)
         .getDiscovery();
@@ -243,7 +243,7 @@ class HydrocarbonWaterStableRegionTransitionScannerTest extends NeqSimTest {
         distance(last.getPhaseZeroComposition(), last.getIncipientComposition()),
         distance(last.getPhaseOneComposition(), last.getIncipientComposition()));
     int physicalCriticalEndpoints = 0;
-    for (CandidatePhase criticalPhase : new CandidatePhase[] { CandidatePhase.GAS, CandidatePhase.OIL }) {
+    for (CandidatePhase criticalPhase : new CandidatePhase[] {CandidatePhase.GAS, CandidatePhase.OIL}) {
       HydrocarbonWaterCriticalEndpointSolver.Result critical = new HydrocarbonWaterCriticalEndpointSolver(fluid,
           last.getRetainedPhaseZero(), last.getRetainedPhaseOne(), last.getIncipientPhase(), criticalPhase)
           .setNumericalControls(24, 1.0e-6, 1.0e-9, 1.0e-3, 2.0e-4, 1.0e-7, 1.0e-4).solve(last);
@@ -278,10 +278,10 @@ class HydrocarbonWaterStableRegionTransitionScannerTest extends NeqSimTest {
   @Tag("slow")
   void fluidTwoRefinesHighPressureRetainedOilSpinodal() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
-    double[] temperatures = new double[] { 423.15, 448.15, 473.15, 493.15, 503.15, 508.15, 513.15, 523.15, 548.15,
-        573.15 };
-    double[] pressures = new double[] { 50.0, 100.0, 150.0, 200.0, 225.0, 240.0, 250.0, 260.0, 270.0, 275.0, 280.0,
-        282.0, 284.0, 285.0, 287.0, 290.0, 295.0, 300.0 };
+    double[] temperatures = new double[] {423.15, 448.15, 473.15, 493.15, 503.15, 508.15, 513.15, 523.15, 548.15,
+        573.15};
+    double[] pressures = new double[] {50.0, 100.0, 150.0, 200.0, 225.0, 240.0, 250.0, 260.0, 270.0, 275.0, 280.0,
+        282.0, 284.0, 285.0, 287.0, 290.0, 295.0, 300.0};
     HydrocarbonWaterBoundaryAnchorDiscoverer.StableDiscoveryResult stable = new HydrocarbonWaterBoundaryAnchorDiscoverer(
         fluid).setCorrectionControls(32, 80, 1.0e-5, 1.0e-8)
         .discoverFromStableRegionTransitions(temperatures, pressures);
@@ -499,7 +499,7 @@ class HydrocarbonWaterStableRegionTransitionScannerTest extends NeqSimTest {
     TwoToThreePhaseBoundaryPointSolver.Result coalescenceCandidate = switched.getCorrections().get(0)
         .getClassifications().get(0).getBoundaryRoot();
     int retainedPairEndpoints = 0;
-    for (CandidatePhase criticalPhase : new CandidatePhase[] { CandidatePhase.GAS, CandidatePhase.OIL }) {
+    for (CandidatePhase criticalPhase : new CandidatePhase[] {CandidatePhase.GAS, CandidatePhase.OIL}) {
       HydrocarbonWaterRetainedPairCriticalEndpointSolver.Result endpoint = new HydrocarbonWaterRetainedPairCriticalEndpointSolver(
           fluid, coalescenceCandidate.getRetainedPhaseZero(), coalescenceCandidate.getRetainedPhaseOne(),
           coalescenceCandidate.getIncipientPhase(), criticalPhase)
@@ -520,9 +520,9 @@ class HydrocarbonWaterStableRegionTransitionScannerTest extends NeqSimTest {
   @Tag("slow")
   void fluidTwoInventoriesHighPressureStableRegionsForBranchSwitching() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
-    double[] temperatures = new double[] { 423.15, 448.15, 473.15, 493.15, 503.15, 508.15, 513.15, 523.15, 548.15,
-        573.15, 623.15, 673.15, 723.15, 753.15 };
-    double[] pressures = new double[] { 250.0, 275.0, 285.0, 300.0, 325.0, 350.0, 400.0, 500.0 };
+    double[] temperatures = new double[] {423.15, 448.15, 473.15, 493.15, 503.15, 508.15, 513.15, 523.15, 548.15,
+        573.15, 623.15, 673.15, 723.15, 753.15};
+    double[] pressures = new double[] {250.0, 275.0, 285.0, 300.0, 325.0, 350.0, 400.0, 500.0};
     HydrocarbonWaterStableRegionTransitionScanner.Result result = new HydrocarbonWaterStableRegionTransitionScanner(
         fluid).setNumericalControls(80, 1.0e-4, 1.0e-9).scan(temperatures, pressures);
 

@@ -75,11 +75,11 @@ public final class HydrocarbonWaterRetainedPairCriticalEndpointSolver {
   /** Solves from a corrected boundary root whose retained phases are approaching coalescence. */
   public Result solve(TwoToThreePhaseBoundaryPointSolver.Result initial) {
     validateInitial(initial);
-    double[] variables = new double[] { Math.log(initial.getTemperatureK()), Math.log(initial.getPressureBara()) };
-    double[] lowerBounds = new double[] { Math.log(Math.max(50.0, 0.8 * initial.getTemperatureK())),
-        Math.log(Math.max(1.0e-6, 0.5 * initial.getPressureBara())) };
-    double[] upperBounds = new double[] { Math.log(Math.min(2500.0, 1.2 * initial.getTemperatureK())),
-        Math.log(Math.min(1.0e6, 1.5 * initial.getPressureBara())) };
+    double[] variables = new double[] {Math.log(initial.getTemperatureK()), Math.log(initial.getPressureBara())};
+    double[] lowerBounds = new double[] {Math.log(Math.max(50.0, 0.8 * initial.getTemperatureK())),
+        Math.log(Math.max(1.0e-6, 0.5 * initial.getPressureBara()))};
+    double[] upperBounds = new double[] {Math.log(Math.min(2500.0, 1.2 * initial.getTemperatureK())),
+        Math.log(Math.min(1.0e6, 1.5 * initial.getPressureBara()))};
     Evaluation evaluation;
     try {
       evaluation = evaluate(variables);
@@ -205,8 +205,7 @@ public final class HydrocarbonWaterRetainedPairCriticalEndpointSolver {
         overall);
     IncipientPhaseCurvatureAnalyzer.Result criticality = new IncipientPhaseCurvatureAnalyzer(template, criticalPhase,
         criticalPhase).setFiniteDifferenceStep(curvatureFiniteDifferenceStep).analyze(homogeneous);
-    double[] residual = new double[] { criticality.getMinimumEigenvalue(),
-        criticality.getThirdDirectionalDerivative() };
+    double[] residual = new double[] {criticality.getMinimumEigenvalue(), criticality.getThirdDirectionalDerivative()};
     double maximumResidual = Math.max(Math.abs(residual[0]), Math.abs(residual[1]));
     if (!Double.isFinite(maximumResidual)) {
       throw new IllegalStateException("retained-pair criticality residual is non-finite");
@@ -257,7 +256,7 @@ public final class HydrocarbonWaterRetainedPairCriticalEndpointSolver {
 
   private static void limitCorrection(Matrix correction) {
     double scale = 1.0;
-    double[] maximum = new double[] { 0.08, 0.15 };
+    double[] maximum = new double[] {0.08, 0.15};
     for (int index = 0; index < 2; index++) {
       double magnitude = Math.abs(correction.get(index, 0));
       if (magnitude > maximum[index]) {

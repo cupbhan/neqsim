@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import neqsim.process.equipment.ProcessEquipmentInterface;
 import neqsim.process.equipment.compressor.Compressor;
@@ -16,6 +17,7 @@ import neqsim.process.processmodel.ProcessModel;
 import neqsim.process.processmodel.ProcessSystem;
 
 /** Tests the integrated Norwegian oil-field lifecycle workflow. */
+@Tag("slow")
 class NorwegianOilFieldLifecycleTest extends neqsim.NeqSimTest {
 
   @Test
@@ -59,7 +61,7 @@ class NorwegianOilFieldLifecycleTest extends neqsim.NeqSimTest {
   void facilityOperatingLimitEndsLifecycleGracefully() {
     FieldLifecycleConcept concept = NorwegianOilFieldCase.createCase("operating-limit regression", 0.85, 5.0e6, 2.0,
         0.0);
-    int[] facilityOperationCount = new int[] { 0 };
+    int[] facilityOperationCount = new int[] {0};
     FieldLifecycleSimulator simulator = new FieldLifecycleSimulator(() -> {
       if (facilityOperationCount[0]++ > 0) {
         throw new IllegalStateException("simulated facility operating limit");

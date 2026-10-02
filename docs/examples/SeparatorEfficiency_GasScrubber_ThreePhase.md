@@ -1,12 +1,10 @@
 ---
 layout: default
-title: "SeparatorEfficiency GasScrubber ThreePhase"
-description: "Jupyter notebook tutorial for NeqSim"
+title: "Separator & Gas Scrubber Separation Efficiency"
+description: "Notebook for Separator & Gas Scrubber Separation Efficiency, including NeqSim Python examples and workflow context."
 parent: Examples
 nav_order: 1
 ---
-
-# SeparatorEfficiency GasScrubber ThreePhase
 
 > **Note:** This is an auto-generated Markdown version of the Jupyter notebook
 > [`SeparatorEfficiency_GasScrubber_ThreePhase.ipynb`](https://github.com/equinor/neqsim/blob/master/docs/examples/SeparatorEfficiency_GasScrubber_ThreePhase.ipynb).
@@ -14,8 +12,6 @@ nav_order: 1
 > or [open in Google Colab](https://colab.research.google.com/github/equinor/neqsim/blob/master/docs/examples/SeparatorEfficiency_GasScrubber_ThreePhase.ipynb).
 
 ---
-
-# Separator & Gas Scrubber Separation Efficiency
 
 This notebook demonstrates the **separation-efficiency report** for a
 **two-phase gas scrubber** and a **three-phase separator** in NeqSim.
@@ -225,6 +221,8 @@ plt.tight_layout()
 plt.show()
 ```
 
+![Result figure from cell 6](figures/SeparatorEfficiency_GasScrubber_ThreePhase_cell_6_output_1.png)
+
 **Interpretation.** If the operating K sits inside the green band, the mist mat is
 in its good performance range. Near / above `Kmax` the mat starts to flood and
 re-entrain captured liquid; well below `Kmin` the gas load is too low for effective
@@ -319,6 +317,8 @@ plt.tight_layout()
 plt.show()
 ```
 
+![Result figure from cell 9](figures/SeparatorEfficiency_GasScrubber_ThreePhase_cell_9_output_1.png)
+
 The three-phase report additionally carries the **liquid-liquid** fractions
 `oilInWaterFraction` (oil in produced water) and `waterInOilFraction` (BS&W in
 oil), computed from oil/water droplet settling in the vessel.
@@ -363,6 +363,8 @@ plt.tight_layout()
 plt.show()
 ```
 
+![Result figure from cell 11](figures/SeparatorEfficiency_GasScrubber_ThreePhase_cell_11_output_1.png)
+
 ## Summary
 
 - `calculateSeparationEfficiency()` gives a **whole-separator / scrubber**
@@ -378,5 +380,3 @@ plt.show()
 
 See `docs/process/equipment/separators.md` (Separation Efficiency Report) and
 `docs/process/equipment/separator-entrainment-modeling.md`.
-
-

@@ -461,9 +461,10 @@ final class ColumnSolverFactory {
       boolean exactReuseExpected = !isAutoCandidateProbeMode() && column.willReuseNaphtaliSandholmWarmState();
       DistillationColumn warmStartCandidate = isAutoCandidateProbeMode() || exactReuseExpected ? null
           : createDampedFallbackCandidate(column);
-      DistillationColumn fallbackCandidate = shouldPrepareAcceleratedFallback() && !exactReuseExpected
-          ? createDampedFallbackCandidate(column)
-          : null;
+      // The same untouched copy guards both validation and coordinated fallback. A rejected
+      // simultaneous solve may have mutated live trays and product caches, so starting damped
+      // substitution from the live column can duplicate retained feed inventory.
+      DistillationColumn fallbackCandidate = warmStartCandidate;
       boolean accepted = false;
       boolean fallbackApplied = false;
       try {
@@ -480,13 +481,17 @@ final class ColumnSolverFactory {
             "Naphtali-Sandholm required guarded feed-flash product fallback", null);
         fallbackApplied = true;
       }
-      if (!fallbackApplied && !accepted && !isAutoCandidateProbeMode() && !column.solved()) {
+      // Preserve the established no-side-draw direct-acceptance contract unless the applied
+      // products specifically miss the active mass-balance gate.
+      boolean massBalanceGateFailed = !Double.isFinite(column.getLastMassResidual())
+          || column.getLastMassResidual() > column.getMassBalanceTolerance();
+      if (!fallbackApplied && !isAutoCandidateProbeMode() && !column.solved() && (!accepted || massBalanceGateFailed)) {
         applyDampedFallback(column, fallbackCandidate, id, "Naphtali-Sandholm did not satisfy convergence criteria",
             null);
         fallbackApplied = true;
       }
       if (!fallbackApplied && accepted && !isAutoCandidateProbeMode() && column.getLastIterationCount() <= 0
-          && !column.wasNaphtaliSandholmWarmStateReused()
+          && !column.wasNaphtaliSandholmWarmStateReused() && !column.wasSequentialWarmStateReused()
           && validateNaphtaliWarmStartProductSplit(column, warmStartCandidate, id)) {
         fallbackApplied = true;
       }
@@ -593,36 +598,36 @@ final class ColumnSolverFactory {
    */
   private static DistillationColumn.SolverType[] selectCandidateSolvers(DistillationColumn column) {
     if (column.isReactive()) {
-      return new DistillationColumn.SolverType[] { DistillationColumn.SolverType.NAPHTALI_SANDHOLM,
-          DistillationColumn.SolverType.MESH_RESIDUAL, DistillationColumn.SolverType.DAMPED_SUBSTITUTION };
+      return new DistillationColumn.SolverType[] {DistillationColumn.SolverType.NAPHTALI_SANDHOLM,
+          DistillationColumn.SolverType.MESH_RESIDUAL, DistillationColumn.SolverType.DAMPED_SUBSTITUTION};
     }
     if (hasAdjustableProductSpecification(column)) {
       if (column.numberOfTrays >= 12) {
-        return new DistillationColumn.SolverType[] { DistillationColumn.SolverType.MATRIX_INSIDE_OUT,
+        return new DistillationColumn.SolverType[] {DistillationColumn.SolverType.MATRIX_INSIDE_OUT,
             DistillationColumn.SolverType.NAPHTALI_SANDHOLM, DistillationColumn.SolverType.MESH_RESIDUAL,
-            DistillationColumn.SolverType.DAMPED_SUBSTITUTION };
+            DistillationColumn.SolverType.DAMPED_SUBSTITUTION};
       }
-      return new DistillationColumn.SolverType[] { DistillationColumn.SolverType.INSIDE_OUT,
+      return new DistillationColumn.SolverType[] {DistillationColumn.SolverType.INSIDE_OUT,
           DistillationColumn.SolverType.NAPHTALI_SANDHOLM, DistillationColumn.SolverType.MESH_RESIDUAL,
-          DistillationColumn.SolverType.DAMPED_SUBSTITUTION };
+          DistillationColumn.SolverType.DAMPED_SUBSTITUTION};
     }
     if (column.hasCondenser && column.hasReboiler) {
       if (column.numberOfTrays >= 12) {
-        return new DistillationColumn.SolverType[] { DistillationColumn.SolverType.MATRIX_INSIDE_OUT,
+        return new DistillationColumn.SolverType[] {DistillationColumn.SolverType.MATRIX_INSIDE_OUT,
             DistillationColumn.SolverType.INSIDE_OUT, DistillationColumn.SolverType.MESH_RESIDUAL,
-            DistillationColumn.SolverType.DAMPED_SUBSTITUTION };
+            DistillationColumn.SolverType.DAMPED_SUBSTITUTION};
       }
       if (column.numberOfTrays >= 6) {
-        return new DistillationColumn.SolverType[] { DistillationColumn.SolverType.INSIDE_OUT,
-            DistillationColumn.SolverType.MESH_RESIDUAL, DistillationColumn.SolverType.DAMPED_SUBSTITUTION };
+        return new DistillationColumn.SolverType[] {DistillationColumn.SolverType.INSIDE_OUT,
+            DistillationColumn.SolverType.MESH_RESIDUAL, DistillationColumn.SolverType.DAMPED_SUBSTITUTION};
       }
     }
     if (!column.hasCondenser || !column.hasReboiler) {
-      return new DistillationColumn.SolverType[] { DistillationColumn.SolverType.DAMPED_SUBSTITUTION,
-          DistillationColumn.SolverType.SUM_RATES, DistillationColumn.SolverType.DIRECT_SUBSTITUTION };
+      return new DistillationColumn.SolverType[] {DistillationColumn.SolverType.DAMPED_SUBSTITUTION,
+          DistillationColumn.SolverType.SUM_RATES, DistillationColumn.SolverType.DIRECT_SUBSTITUTION};
     }
-    return new DistillationColumn.SolverType[] { DistillationColumn.SolverType.DAMPED_SUBSTITUTION,
-        DistillationColumn.SolverType.DIRECT_SUBSTITUTION };
+    return new DistillationColumn.SolverType[] {DistillationColumn.SolverType.DAMPED_SUBSTITUTION,
+        DistillationColumn.SolverType.DIRECT_SUBSTITUTION};
   }
 
   /**

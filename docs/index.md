@@ -15,6 +15,7 @@ description: "Industrial Agentic Engineering with NeqSim — AI Agents for Engin
 
 <div class="cta-buttons" style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; margin: 2rem 0;">
   <a href="wiki/getting_started.html" class="cta-button primary" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; background: #159957; color: white;">🚀 Get Started</a>
+  <a href="search/" class="cta-button secondary" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; background: #fff; color: #24292e; border: 2px solid #e1e4e8;">🔎 Search Documentation</a>
   <a href="https://github.com/equinor/neqsim" class="cta-button secondary" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; background: #fff; color: #24292e; border: 2px solid #e1e4e8;">⭐ Star on GitHub</a>
   <a href="REFERENCE_MANUAL_INDEX.html" class="cta-button secondary" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; background: #fff; color: #24292e; border: 2px solid #e1e4e8;">📖 Reference Manual Index</a>
   <a href="https://equinor.github.io/neqsim/javadoc/index.html" class="cta-button secondary" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; background: #fff; color: #24292e; border: 2px solid #e1e4e8;">📘 JavaDoc API</a>
@@ -42,7 +43,9 @@ description: "Industrial Agentic Engineering with NeqSim — AI Agents for Engin
 <ul style="list-style: none; padding: 0; margin: 0;">
 <li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="thermo/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Thermo Package</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Equations of state, mixing rules, fluids</span></li>
 <li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="thermodynamicoperations/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Thermodynamic Operations</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Flash calculations, phase envelopes</span></li>
-<li style="padding: 0.5rem 0;"><a href="physical_properties/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Physical Properties</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Viscosity, conductivity, diffusivity</span></li>
+<li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="physical_properties/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Physical Properties</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Viscosity, conductivity, diffusivity</span></li>
+<li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="chemicalreactions/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Chemical Reactions</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Chemical equilibrium and reaction kinetics</span></li>
+<li style="padding: 0.5rem 0;"><a href="chemicalreactions/co2_impurity_kinetics_guide.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Experimental CO₂ Impurity Kinetic Reactor</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Balanced trace-reaction network, reactor usage, safeguards, and limitations</span></li>
 </ul>
 </div>
 
@@ -50,6 +53,8 @@ description: "Industrial Agentic Engineering with NeqSim — AI Agents for Engin
 <h3 style="margin-top: 0; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid #ff9800; color: #24292e; font-size: 1.25rem;">🏭 Process Simulation</h3>
 <ul style="list-style: none; padding: 0; margin: 0;">
 <li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="process/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Process Equipment</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Separators, compressors, heat exchangers</span></li>
+<li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="process/json_process_models_and_systems.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Build Processes from JSON</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Schema, stream wiring, validation, and supported equipment</span></li>
+<li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="process/process_json_export_and_e300_fluids.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Export Processes to JSON</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Portable ProcessSystem and ProcessModel artifacts, including E300-equivalent fluids</span></li>
 <li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="fluidmechanics/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Fluid Mechanics</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Pipeline flow, pressure drop</span></li>
 <li style="padding: 0.5rem 0;"><a href="safety/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Safety Systems</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Relief valves, flare systems</span></li>
 </ul>
@@ -70,6 +75,7 @@ description: "Industrial Agentic Engineering with NeqSim — AI Agents for Engin
 <ul style="list-style: none; padding: 0; margin: 0;">
 <li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="pvtsimulation/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>PVT Simulation</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Reservoir fluid characterization</span></li>
 <li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="blackoil/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Black Oil Models</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Simplified correlations</span></li>
+<li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="statistics/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Statistics &amp; Parameter Fitting</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Parameter estimation, Monte Carlo simulation, and data analysis</span></li>
 <li style="padding: 0.5rem 0;"><a href="fielddevelopment/README.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Field Development</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Integrated workflows</span></li>
 </ul>
 </div>
@@ -78,7 +84,7 @@ description: "Industrial Agentic Engineering with NeqSim — AI Agents for Engin
 <h3 style="margin-top: 0; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid #e53935; color: #24292e; font-size: 1.25rem;">⚠️ Risk & Reliability</h3>
 <ul style="list-style: none; padding: 0; margin: 0;">
 <li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="risk/index.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Risk Simulation</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Equipment failure, Monte Carlo analysis</span></li>
-<li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="risk/sis-integration.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>SIS/SIF Integration</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">IEC 61508/61511, LOPA, SIL verification</span></li>
+<li style="padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0;"><a href="risk/sis-integration.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>SIS/SIF Integration</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">PFD and LOPA screening; independent assessment required</span></li>
 <li style="padding: 0.5rem 0;"><a href="risk/bowtie-analysis.html" style="color: #155799; text-decoration: none; font-weight: 500;"><strong>Bow-Tie Analysis</strong></a><br><span style="color: #6a737d; font-size: 0.9rem;">Barrier analysis, threat visualization</span></li>
 </ul>
 </div>
@@ -116,26 +122,34 @@ description: "Industrial Agentic Engineering with NeqSim — AI Agents for Engin
 ## ⚡ Quick Start Example
 
 ```java
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import neqsim.thermo.system.SystemInterface;
 import neqsim.thermo.system.SystemSrkEos;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
 
-// Create a natural gas fluid
-SystemInterface gas = new SystemSrkEos(298.15, 50.0);
-gas.addComponent("methane", 0.90);
-gas.addComponent("ethane", 0.05);
-gas.addComponent("propane", 0.03);
-gas.addComponent("CO2", 0.02);
-gas.setMixingRule("classic");
+public final class NeqSimQuickStart {
+  private static final Logger logger = LogManager.getLogger(NeqSimQuickStart.class);
 
-// Perform flash calculation
-ThermodynamicOperations ops = new ThermodynamicOperations(gas);
-ops.TPflash();
-gas.initProperties();
+  private NeqSimQuickStart() {}
 
-// Get properties
-System.out.println("Density: " + gas.getDensity("kg/m3") + " kg/m³");
-System.out.println("Compressibility: " + gas.getZ());
+  public static void main(String[] args) {
+    SystemInterface gas = new SystemSrkEos(298.15, 50.0);
+    gas.addComponent("methane", 0.90);
+    gas.addComponent("ethane", 0.05);
+    gas.addComponent("propane", 0.03);
+    gas.addComponent("CO2", 0.02);
+    gas.setMixingRule("classic");
+
+    ThermodynamicOperations operations = new ThermodynamicOperations(gas);
+    operations.TPflash();
+    gas.initProperties();
+
+    logger.info("Density: {} kg/m3", gas.getDensity("kg/m3"));
+    logger.info("Compressibility: {}", gas.getZ());
+  }
+}
 ```
 
 <hr class="section-divider" style="border: none; height: 2px; background: linear-gradient(to right, transparent, #159957, transparent); margin: 2rem 0;">
@@ -240,16 +254,16 @@ System.out.println("Compressibility: " + gas.getZ());
 NeqSim is also available for Python through [**neqsim-python**](https://github.com/equinor/neqsim-python):
 
 ```python
-from neqsim.thermo import TPflash, fluid
+from neqsim import jneqsim
 
 # Create and flash a natural gas
-gas = fluid("srk")
+gas = jneqsim.thermo.system.SystemSrkEos(298.15, 50.0)
 gas.addComponent("methane", 0.9)
 gas.addComponent("ethane", 0.1)
-gas.setTemperature(298.15, "K")
-gas.setPressure(50.0, "bara")
+gas.setMixingRule("classic")
 
-TPflash(gas)
+operations = jneqsim.thermodynamicoperations.ThermodynamicOperations(gas)
+operations.TPflash()
 gas.initProperties()
 print(f"Gas density: {gas.getDensity('kg/m3'):.2f} kg/m³")
 ```

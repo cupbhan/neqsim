@@ -8,8 +8,10 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
@@ -40,11 +42,16 @@ import neqsim.process.controllerdevice.ControllerDeviceInterface;
 import neqsim.process.dynamics.EventScheduler;
 import neqsim.process.dynamics.ExplicitEulerIntegrator;
 import neqsim.process.dynamics.IntegratorStrategy;
+import neqsim.process.dynamics.TransientStateParticipant;
+import neqsim.process.dynamics.TransientStepTransaction;
+import neqsim.process.dynamics.TransientTransactionCoverage;
 import neqsim.process.equipment.EquipmentEnum;
 import neqsim.process.equipment.EquipmentFactory;
 import neqsim.process.equipment.ProcessEquipmentBaseClass;
 import neqsim.process.equipment.ProcessEquipmentInterface;
+import neqsim.process.equipment.capacity.EquipmentDesignData;
 import neqsim.process.equipment.compressor.Compressor;
+import neqsim.process.equipment.compressor.RecycleFlowCoordinator;
 import neqsim.process.equipment.distillation.DistillationColumn;
 import neqsim.process.equipment.ejector.Ejector;
 import neqsim.process.equipment.expander.TurboExpanderCompressor;
@@ -214,9 +221,16 @@ public class ProcessSystem extends SimulationBaseClass {
    */
   private transient EventScheduler eventScheduler = null;
 
+  /** Active identity-preserving transient transaction, or {@code null} outside a trial step. */
+  private transient ProcessSystemStepTransaction activeTransientStepTransaction = null;
+
   // Graph-based execution fields
   /** Cached process graph for topology analysis. */
   private transient ProcessGraph cachedGraph = null;
+  /** Whether run() closes implicit feedback loops with generated recycles. */
+  private boolean autoRecycles = false;
+  /** Re-entrancy guard so the seeding run inside makeRecycles() does not trigger insertion again. */
+  private transient boolean autoRecycleInProgress = false;
   /** Flag indicating if the cached graph needs to be rebuilt. */
   private boolean graphDirty = true;
   /** Monotonic version for topology-derived cache invalidation in parent ProcessModels. */
@@ -233,6 +247,10 @@ public class ProcessSystem extends SimulationBaseClass {
   private transient Boolean cachedHasAdjusters = null;
   /** Cached result of hasRecycles() - null means not yet computed. */
   private transient Boolean cachedHasRecycles = null;
+  /** Topology-derived units eligible for automatic low-flow tuning. */
+  private transient volatile List<ProcessEquipmentBaseClass> cachedAutoLowFlowUnits = null;
+  /** Topology-derived recycle subset shared by automatic recycle tuning passes. */
+  private transient volatile List<Recycle> cachedAutoTuningRecycles = null;
   /** Cached result of hasCalculators() - null means not yet computed. */
   private transient Boolean cachedHasCalculators = null;
   /** Cached result of hasMultiInputEquipment() - null means not yet computed. */
@@ -249,8 +267,8 @@ public class ProcessSystem extends SimulationBaseClass {
    * Whether to use optimized execution (parallel/hybrid) by default when run() is called. When true, run() delegates to
    * runOptimized() which automatically selects the best strategy. When false, run() uses sequential execution in
    * insertion order (legacy behavior). Default is true for optimal performance - runOptimized() automatically falls
-   * back to sequential execution for processes with multi-input equipment (mixers, heat exchangers, etc.) to preserve
-   * correct mass balance.
+   * back to level-based execution when a feed-forward topology is too small or too narrow to amortize dataflow
+   * scheduling.
    */
   private boolean useOptimizedExecution = true;
 
@@ -1453,8 +1471,9 @@ public class ProcessSystem extends SimulationBaseClass {
    * This method automatically selects the best execution mode:
    * </p>
    * <ul>
-   * <li>For processes WITHOUT recycles: uses parallel execution for maximum speed</li>
-   * <li>For processes WITH recycles: uses graph-based execution with optimized ordering</li>
+   * <li>For acyclic processes: uses dependency-aware parallel execution</li>
+   * <li>For processes with explicit recycles: uses hybrid iterative execution</li>
+   * <li>For feedback loops without explicit recycles: iterates sequentially to stable outlet states</li>
    * </ul>
    *
    * <p>
@@ -1475,10 +1494,10 @@ public class ProcessSystem extends SimulationBaseClass {
    * <ul>
    * <li>For processes with adjusters: sequential execution (adjusters modify upstream variables and read downstream
    * targets, creating implicit feedback loops)</li>
-   * <li>For processes with recycles (no adjusters): sequential execution for full convergence</li>
-   * <li>For processes with multi-input equipment (Mixer, Manifold, HeatExchanger, etc.): sequential execution to ensure
-   * correct mass balance</li>
-   * <li>For simple feed-forward processes: parallel execution for maximum speed</li>
+   * <li>For processes with recycles (no adjusters): hybrid feed-forward parallelism and iterative convergence</li>
+   * <li>For cyclic topology without explicit recycles: sequential outlet-state convergence</li>
+   * <li>For feed-forward processes, including multi-input equipment: dependency-aware dataflow for sufficiently wide
+   * topologies, otherwise level-based parallel execution</li>
    * </ul>
    *
    * @param id calculation identifier for tracking
@@ -1496,6 +1515,11 @@ public class ProcessSystem extends SimulationBaseClass {
         // that iterative coupling, so adjuster-containing systems must run
         // sequentially to ensure correct evaluation order.
         runSequential(id);
+      } else if (hasRecycleFlowCoordinators()) {
+        // A recycle flow coordinator reads a valve result and writes the associated
+        // splitter specification. That signal dependency is not represented by stream
+        // connectivity, so preserving flowsheet insertion order is required.
+        runSequential(id);
       } else if (hasRecycles()) {
         // Process has Recycle units. runHybrid() parallelises feed-forward levels
         // before the first recycle level, then runs the iterative section in
@@ -1509,26 +1533,19 @@ public class ProcessSystem extends SimulationBaseClass {
           logger.warn("Hybrid execution interrupted, falling back to sequential");
           runSequential(id);
         }
-      } else if (hasMultiInputEquipment()) {
-        // Process has multi-input equipment (Mixer, HeatExchanger, etc.) but no
-        // recycles or adjusters. The graph correctly places multi-input equipment
-        // at levels after all their input producers, so parallel execution of
-        // independent units at earlier levels is safe. Use runParallel which
-        // respects the topological order and Union-Find grouping.
-        try {
-          runParallel(id);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          logger.warn("Parallel execution interrupted, falling back to sequential");
-          runSequential(id);
-        }
+      } else if (hasImplicitRecycleLoops()) {
+        // Recuperators can form thermal feedback through downstream equipment without
+        // an explicit Recycle. A single pass over a graph tear leaves stale products.
+        runSequential(id);
       } else {
-        // Feed-forward process with single-input equipment only. For larger,
-        // genuinely wide flowsheets use dataflow scheduling (no level barriers,
-        // units fire as soon as predecessors complete). Serial plans cannot
-        // benefit from futures, and small trees do not amortize their overhead.
+        // Feed-forward process. For larger, genuinely wide flowsheets use dataflow
+        // scheduling (no level barriers, units fire as soon as predecessors
+        // complete). Multi-input equipment is safe because the dataflow plan uses
+        // the same predecessor graph and shared-input grouping as runParallel().
+        // Serial plans cannot benefit from futures, and small trees do not
+        // amortize their overhead.
         try {
-          if (unitOperations.size() >= DATAFLOW_UNIT_THRESHOLD && getCachedDataflowPlan().hasParallelTasks) {
+          if (shouldUseDataflowExecution()) {
             runDataflow(id);
           } else {
             runParallel(id);
@@ -1542,6 +1559,15 @@ public class ProcessSystem extends SimulationBaseClass {
     } finally {
       exitRunScope();
     }
+  }
+
+  /**
+   * Returns whether this feed-forward process is wide enough to amortize dataflow scheduling.
+   *
+   * @return true when the cached plan contains useful parallel tasks and meets the size threshold
+   */
+  private boolean shouldUseDataflowExecution() {
+    return unitOperations.size() >= DATAFLOW_UNIT_THRESHOLD && getCachedDataflowPlan().hasParallelTasks;
   }
 
   /**
@@ -1651,12 +1677,228 @@ public class ProcessSystem extends SimulationBaseClass {
   }
 
   /**
+   * Closes every feedback loop that has no {@link Recycle} with an automatically inserted one.
+   *
+   * <p>
+   * Loops are found as strongly connected components of the flowsheet graph. For each one the inlet with the smallest
+   * recycle ratio is swapped for a tear stream seeded from the current loop stream, and a {@code Recycle} tuned for
+   * fast and stable convergence is registered to close it. The flowsheet is run once first when its streams have no
+   * fluid yet, so the tear streams start from a physical state; calling this again is a no-op for loops that are
+   * already closed.
+   * </p>
+   *
+   * @return the recycles created
+   */
+  public List<Recycle> makeRecycles() {
+    return makeRecycles(AutoRecycleBuilder.DEFAULT_TOLERANCE);
+  }
+
+  /**
+   * Closes every feedback loop that has no {@link Recycle} with an automatically inserted one.
+   *
+   * @param tolerance relative tear tolerance for the created recycles, must be positive
+   * @return the recycles created
+   */
+  public List<Recycle> makeRecycles(double tolerance) {
+    if (autoRecycleInProgress) {
+      return new ArrayList<Recycle>();
+    }
+    autoRecycleInProgress = true;
+    try {
+      if (needsSeedRun()) {
+        run();
+      }
+      return AutoRecycleBuilder.insertRecycles(this, tolerance);
+    } finally {
+      autoRecycleInProgress = false;
+    }
+  }
+
+  /**
+   * Whether {@link #run()} closes implicit feedback loops with generated recycles before executing.
+   *
+   * @return true when automatic recycle insertion is enabled
+   */
+  public boolean isAutoRecycles() {
+    return autoRecycles;
+  }
+
+  /**
+   * Enables automatic recycle insertion on {@link #run()}.
+   *
+   * <p>
+   * With this enabled the caller no longer has to run the flowsheet, call {@link #makeRecycles()} and run again: the
+   * first {@code run()} that sees a loop without a {@code Recycle} seeds and closes it, and every later run uses the
+   * generated tear. Disabled by default, because inserting a tear changes how an existing flowsheet iterates.
+   * </p>
+   *
+   * @param autoRecycles true to close implicit loops automatically
+   */
+  public void setAutoRecycles(boolean autoRecycles) {
+    this.autoRecycles = autoRecycles;
+  }
+
+  /**
+   * Checks whether the flowsheet still has streams without a fluid, which a tear stream cannot be seeded from.
+   *
+   * @return true when at least one outlet stream has no fluid yet
+   */
+  private boolean needsSeedRun() {
+    for (ProcessEquipmentInterface unit : unitOperations) {
+      for (StreamInterface outlet : unit.getOutletStreams()) {
+        if (outlet != null && outlet.getFluid() == null) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Closes implicit loops before a run when automatic recycle insertion is enabled.
+   *
+   * <p>
+   * The analysis is redone on every run rather than cached, because rewiring a stream into an existing mixer is
+   * invisible to the structure caches. It costs one graph build and one strongly-connected-component pass, which is
+   * negligible next to the thermodynamics of the run itself.
+   * </p>
+   */
+  private void applyAutoRecycles() {
+    if (autoRecycles && !autoRecycleInProgress) {
+      makeRecycles();
+    }
+  }
+
+  /**
+   * Detects feedback loops that have no explicit recycle convergence controller.
+   *
+   * @return true for cyclic stream topology without Recycle equipment
+   */
+  private boolean hasImplicitRecycleLoops() {
+    if (hasRecycles() || !hasRecycleLoops()) {
+      return false;
+    }
+    // The full graph also contains adjuster/calculator signal feedback. Only
+    // physical stream dependencies require implicit outlet-state convergence.
+    ProcessGraph graph = buildGraph();
+    Map<ProcessNode, Integer> incoming = new IdentityHashMap<>();
+    Deque<ProcessNode> ready = new LinkedList<>();
+    for (ProcessNode node : graph.getNodes()) {
+      incoming.put(node, 0);
+    }
+    for (ProcessEdge edge : graph.getEdges()) {
+      if (edge.getEdgeType() == ProcessEdge.EdgeType.MATERIAL) {
+        incoming.put(edge.getTarget(), incoming.get(edge.getTarget()) + 1);
+      }
+    }
+    for (ProcessNode node : graph.getNodes()) {
+      if (incoming.get(node) == 0) {
+        ready.add(node);
+      }
+    }
+    int visited = 0;
+    while (!ready.isEmpty()) {
+      ProcessNode node = ready.removeFirst();
+      visited++;
+      for (ProcessEdge edge : node.getOutgoingEdges()) {
+        if (edge.getEdgeType() == ProcessEdge.EdgeType.MATERIAL) {
+          ProcessNode target = edge.getTarget();
+          int remaining = incoming.get(target) - 1;
+          incoming.put(target, remaining);
+          if (remaining == 0) {
+            ready.add(target);
+          }
+        }
+      }
+    }
+    return visited < graph.getNodes().size();
+  }
+
+  /**
+   * Captures outlet states after a complete pass through an implicit feedback loop.
+   *
+   * @param executionOrder units evaluated in this pass
+   * @return independent fluid snapshots keyed by stream identity
+   */
+  private Map<StreamInterface, SystemInterface> captureImplicitRecycleState(
+      List<ProcessEquipmentInterface> executionOrder) {
+    Map<StreamInterface, SystemInterface> states = new IdentityHashMap<>();
+    for (ProcessEquipmentInterface unit : executionOrder) {
+      for (StreamInterface outlet : unit.getOutletStreams()) {
+        if (outlet != null && outlet.getFluid() != null && !states.containsKey(outlet)) {
+          states.put(outlet, outlet.getFluid().clone());
+        }
+      }
+    }
+    return states;
+  }
+
+  /**
+   * Checks thermal state and every component flow, including downstream products, between complete passes.
+   *
+   * @param previous previous pass, or null before the first pass
+   * @param current current pass
+   * @return true when all finite states agree within the implicit-loop tolerances
+   */
+  private boolean implicitRecycleStatesMatch(Map<StreamInterface, SystemInterface> previous,
+      Map<StreamInterface, SystemInterface> current) {
+    if (previous == null || previous.size() != current.size() || current.isEmpty()) {
+      return false;
+    }
+    for (Map.Entry<StreamInterface, SystemInterface> entry : current.entrySet()) {
+      SystemInterface before = previous.get(entry.getKey());
+      SystemInterface after = entry.getValue();
+      if (before == null || before.getNumberOfComponents() != after.getNumberOfComponents()
+          || !implicitRecycleValueMatches(before.getTemperature(), after.getTemperature(), 1e-7)
+          || !implicitRecycleValueMatches(before.getPressure(), after.getPressure(), 1e-8)
+          || !implicitRecycleValueMatches(before.getEnthalpy(), after.getEnthalpy(), 1e-5)) {
+        return false;
+      }
+      for (int i = 0; i < after.getNumberOfComponents(); i++) {
+        if (!before.getComponent(i).getComponentName().equals(after.getComponent(i).getComponentName())
+            || !implicitRecycleValueMatches(before.getComponent(i).getNumberOfmoles(),
+                after.getComponent(i).getNumberOfmoles(), 1e-10)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Compares finite values using a relative tolerance of 1e-8 and a quantity-specific absolute floor.
+   *
+   * @param before previous value
+   * @param after current value
+   * @param absoluteTolerance tolerance near zero in the native SI-based quantity
+   * @return true when the values agree
+   */
+  private boolean implicitRecycleValueMatches(double before, double after, double absoluteTolerance) {
+    return Double.isFinite(before) && Double.isFinite(after)
+        && Math.abs(before - after) <= absoluteTolerance + 1e-8 * Math.max(Math.abs(before), Math.abs(after));
+  }
+
+  /**
+   * Checks whether the process contains recycle flow coordinators that require insertion-order execution.
+   *
+   * @return true if at least one {@link RecycleFlowCoordinator} is present
+   */
+  public boolean hasRecycleFlowCoordinators() {
+    for (ProcessEquipmentInterface unit : unitOperations) {
+      if (unit instanceof RecycleFlowCoordinator) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Checks if the process contains any multi-input equipment.
    *
    * <p>
    * Multi-input equipment (Mixer, Manifold, TurboExpanderCompressor, Ejector, HeatExchanger, MultiStreamHeatExchanger)
-   * require sequential execution to ensure correct mass balance. Parallel execution can change the order in which input
-   * streams are processed, leading to incorrect results.
+   * requires dependency-aware execution to ensure correct mass balance. Parallel and dataflow execution preserve inlet
+   * ordering and serialize consumers that share the same mutable stream object.
    * </p>
    *
    * @return true if there are multi-input equipment units in the process
@@ -1709,41 +1951,6 @@ public class ProcessSystem extends SimulationBaseClass {
       }
     }
     cachedHasMultiInput = false;
-    return false;
-  }
-
-  /**
-   * Returns true if the given graph node represents multi-input equipment. Used by
-   * {@link #groupNodesBySharedInputStreams(List)} to decide whether shared-stream consumers need to be serialised
-   * within a group.
-   *
-   * @param node the graph node
-   * @return {@code true} if the underlying equipment has 2+ inlet streams or is one of the class-based multi-input
-   * types
-   */
-  private boolean isMultiInputNode(ProcessNode node) {
-    ProcessEquipmentInterface unit = node.getEquipment();
-    if (unit == null) {
-      return false;
-    }
-    if (unit instanceof MixerInterface || unit instanceof Manifold || unit instanceof TurboExpanderCompressor
-        || unit instanceof Ejector || unit instanceof HeatExchanger || unit instanceof MultiStreamHeatExchangerInterface
-        || unit instanceof FurnaceBurner || unit instanceof FlareStack) {
-      return true;
-    }
-    if (unit instanceof neqsim.process.equipment.separator.Separator) {
-      if (((neqsim.process.equipment.separator.Separator) unit).numberOfInputStreams > 1) {
-        return true;
-      }
-    }
-    try {
-      java.util.List<neqsim.process.equipment.stream.StreamInterface> inlets = unit.getInletStreams();
-      if (inlets != null && inlets.size() > 1) {
-        return true;
-      }
-    } catch (Exception e) {
-      // Fall through - conservative default is false
-    }
     return false;
   }
 
@@ -1996,6 +2203,51 @@ public class ProcessSystem extends SimulationBaseClass {
   }
 
   /**
+   * Returns whether a recycle needs the legacy second observation before its state can be accepted.
+   *
+   * <p>
+   * A recycle with fewer than two completed observations cannot safely call {@link Recycle#solved()}, because an
+   * unconfigured recycle may not have an outlet stream yet. Previously accepted recycles are inspected before their
+   * per-run iteration counters are reset so an unchanged process can reuse that accepted state.
+   * </p>
+   *
+   * @return true when at least one recycle does not have a previously accepted state
+   */
+  private boolean requiresRecycleConfirmation() {
+    boolean hasRecycle = false;
+    for (ProcessEquipmentInterface unit : unitOperations) {
+      if (unit instanceof Recycle) {
+        hasRecycle = true;
+        Recycle recycle = (Recycle) unit;
+        if (recycle.getIterations() <= 1 || !recycle.solved()) {
+          return true;
+        }
+      }
+    }
+    return !hasRecycle;
+  }
+
+  /**
+   * Returns whether a recycle auto-deactivated during the current physical pass.
+   *
+   * <p>
+   * A recycle that collapses below its low-flow threshold reports itself solved and clears its residuals. When the run
+   * started from an accepted active recycle state, one additional process pass is still required to clear the prior
+   * loop inventory from upstream equipment.
+   * </p>
+   *
+   * @return true when at least one recycle is auto-deactivated but not explicitly locked inactive
+   */
+  private boolean hasAutoDeactivatedRecycle() {
+    for (ProcessEquipmentInterface unit : unitOperations) {
+      if (unit instanceof Recycle && !unit.isLockedInactive() && !unit.isActive()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Runs the process using hybrid execution strategy.
    *
    * <p>
@@ -2010,6 +2262,11 @@ public class ProcessSystem extends SimulationBaseClass {
    * @throws InterruptedException if thread is interrupted during parallel execution
    */
   public synchronized void runHybrid(UUID id) throws InterruptedException {
+    if (hasImplicitRecycleLoops()) {
+      runSequential(id);
+      return;
+    }
+    boolean requireRecycleConfirmation = requiresRecycleConfirmation();
     resetActiveStates();
     applyFlowsheetWideSettings();
     HybridExecutionPlan plan = getCachedHybridPlan();
@@ -2126,7 +2383,8 @@ public class ProcessSystem extends SimulationBaseClass {
         } else {
           recycleNoProgress = 0;
         }
-      } while ((!isConverged || (iter < 2)) && iter < 100 && !Thread.currentThread().isInterrupted());
+      } while ((!isConverged || (iter < 2 && (requireRecycleConfirmation || hasAutoDeactivatedRecycle()))) && iter < 100
+          && !Thread.currentThread().isInterrupted());
     }
 
     // Update calculation identifiers
@@ -2152,6 +2410,7 @@ public class ProcessSystem extends SimulationBaseClass {
     sb.append("=== Execution Strategy Explanation ===\n");
     List<String> adjusters = new ArrayList<>();
     List<String> recycles = new ArrayList<>();
+    List<String> recycleFlowCoordinators = new ArrayList<>();
     List<String> calculators = new ArrayList<>();
     List<String> multiInput = new ArrayList<>();
     for (ProcessEquipmentInterface unit : unitOperations) {
@@ -2160,6 +2419,9 @@ public class ProcessSystem extends SimulationBaseClass {
       }
       if (unit instanceof Recycle) {
         recycles.add(unit.getName());
+      }
+      if (unit instanceof RecycleFlowCoordinator) {
+        recycleFlowCoordinators.add(unit.getName());
       }
       if (unit instanceof Calculator) {
         calculators.add(unit.getName());
@@ -2174,24 +2436,36 @@ public class ProcessSystem extends SimulationBaseClass {
       strategy = "sequential";
       reason = "process contains Adjuster/MultiVariableAdjuster units which require "
           + "iterative feedback and cannot be represented in the graph partitioner";
+    } else if (!recycleFlowCoordinators.isEmpty()) {
+      strategy = "sequential (recycle flow coordination)";
+      reason = "process contains recycle flow coordinators whose valve-to-splitter signal dependency requires "
+          + "insertion-order execution";
     } else if (!recycles.isEmpty()) {
       strategy = "hybrid (parallel feed-forward then iterative recycle section)";
       reason = "process contains Recycle units - iterative convergence required";
-    } else if (!multiInput.isEmpty()) {
-      strategy = "parallel (topological levels with union-find grouping)";
-      reason = "process contains multi-input equipment - level-based parallelism applied";
+    } else if (hasImplicitRecycleLoops()) {
+      strategy = "sequential (implicit recycle convergence)";
+      reason = "stream topology contains a feedback loop without an explicit Recycle unit";
+    } else if (shouldUseDataflowExecution()) {
+      strategy = "dataflow (dependency-aware parallel tasks)";
+      reason = multiInput.isEmpty()
+          ? "wide feed-forward process has independent tasks that can run without level barriers"
+          : "wide feed-forward process includes multi-input equipment protected by predecessor dependencies and "
+              + "shared-input grouping";
     } else {
-      strategy = "parallel (fully data-parallel)";
-      reason = "feed-forward process with single-input equipment only";
+      strategy = "parallel (topological levels with union-find grouping)";
+      reason = "feed-forward plan is too small or too narrow to amortize dataflow scheduling";
     }
     sb.append("Strategy: ").append(strategy).append("\n");
     sb.append("Reason: ").append(reason).append("\n");
     sb.append("\nBlocking/controlling units:\n");
     appendUnitList(sb, "  Adjusters", adjusters);
     appendUnitList(sb, "  Recycles", recycles);
+    appendUnitList(sb, "  Recycle flow coordinators", recycleFlowCoordinators);
     appendUnitList(sb, "  Calculators", calculators);
     appendUnitList(sb, "  Multi-input equipment", multiInput);
-    if (adjusters.isEmpty() && recycles.isEmpty() && calculators.isEmpty() && multiInput.isEmpty()) {
+    if (adjusters.isEmpty() && recycles.isEmpty() && recycleFlowCoordinators.isEmpty() && calculators.isEmpty()
+        && multiInput.isEmpty()) {
       sb.append("  (none - all units are single-input feed-forward)\n");
     }
     try {
@@ -2394,6 +2668,10 @@ public class ProcessSystem extends SimulationBaseClass {
    * @throws InterruptedException if the thread is interrupted while waiting for tasks
    */
   public synchronized void runParallel(UUID id) throws InterruptedException {
+    if (hasImplicitRecycleLoops()) {
+      runSequential(id);
+      return;
+    }
     resetActiveStates();
     applyFlowsheetWideSettings();
     // Publish simulation start event
@@ -2526,6 +2804,10 @@ public class ProcessSystem extends SimulationBaseClass {
    * @throws InterruptedException if the thread is interrupted while waiting for dataflow completion
    */
   public synchronized void runDataflow(UUID id) throws InterruptedException {
+    if (hasImplicitRecycleLoops()) {
+      runSequential(id);
+      return;
+    }
     resetActiveStates();
     applyFlowsheetWideSettings();
     publishEvent(new ProcessEvent(ProcessEvent.generateId(), ProcessEvent.EventType.INFO, getName(),
@@ -2656,27 +2938,13 @@ public class ProcessSystem extends SimulationBaseClass {
       }
     }
 
-    // Union nodes that share the same input stream.
-    //
-    // Optimisation: only union when at least one of the nodes sharing the
-    // stream is multi-input equipment (Mixer, HeatExchanger, Separator with
-    // >1 inlets, etc.). Two single-input consumers reading the same upstream
-    // stream can run in parallel safely because the thermo clone() path is
-    // thread-safe for concurrent reads (shared read-only invariant on
-    // mixing-rule matrices). Forcing them into the same group was a legacy
-    // over-conservative grouping that limits parallelism unnecessarily.
+    // Union every pair of consumers that shares the same mutable stream object.
+    // Equipment commonly clones its inlet before calculating, but SystemInterface
+    // clone and initialization can touch shared thermodynamic helper state. Treating
+    // single-input consumers as read-only therefore permits platform-dependent races.
+    // Consumers of distinct stream objects remain in independent parallel groups.
     for (List<ProcessNode> nodesWithSameStream : streamToNodes.values()) {
       if (nodesWithSameStream.size() > 1) {
-        boolean anyMultiInput = false;
-        for (ProcessNode n : nodesWithSameStream) {
-          if (isMultiInputNode(n)) {
-            anyMultiInput = true;
-            break;
-          }
-        }
-        if (!anyMultiInput) {
-          continue; // Pure single-input readers - safe to run in parallel.
-        }
         ProcessNode first = nodesWithSameStream.get(0);
         for (int i = 1; i < nodesWithSameStream.size(); i++) {
           union.accept(first, nodesWithSameStream.get(i));
@@ -2812,6 +3080,7 @@ public class ProcessSystem extends SimulationBaseClass {
   /** {@inheritDoc} */
   @Override
   public synchronized void run(UUID id) {
+    applyAutoRecycles();
     enterRunScope();
     if (lastRunStatus == null) {
       lastRunStatus = new RunStatus();
@@ -2866,9 +3135,20 @@ public class ProcessSystem extends SimulationBaseClass {
       return;
     }
     if (!runThrew) {
+      java.util.Set<String> failedNames = null;
+      for (UnitRunStatus status : lastRunStatus.getUnits()) {
+        if (!status.isSuccess()) {
+          if (failedNames == null) {
+            failedNames = new java.util.HashSet<String>();
+          }
+          failedNames.add(status.getUnitName());
+        }
+      }
       List<UnitRunStatus> successfulStatuses = getSuccessfulRunStatuses();
       for (UnitRunStatus status : successfulStatuses) {
-        lastRunStatus.recordSuccess(status);
+        if (failedNames == null || !failedNames.contains(status.getUnitName())) {
+          lastRunStatus.recordSuccess(status);
+        }
       }
     }
     lastRunStatus.markComplete(!runThrew);
@@ -2949,12 +3229,18 @@ public class ProcessSystem extends SimulationBaseClass {
    * <p>
    * This method executes units in insertion order (or topological order if useGraphBasedExecution is enabled). It
    * handles recycle loops by iterating until convergence. This is the legacy execution mode preserved for backward
-   * compatibility.
+   * compatibility. When topology contains feedback but no explicit Recycle, complete passes are repeated until all
+   * outlet temperatures, pressures, enthalpies and component flows stabilize. Such implicit loops are limited to 100
+   * passes and throw on non-convergence, except when single-step execution is requested.
    * </p>
    *
    * @param id calculation identifier for tracking
+   * @throws IllegalStateException if an implicit feedback loop does not converge
    */
   public synchronized void runSequential(UUID id) {
+    boolean implicitRecycle = hasImplicitRecycleLoops();
+    Map<StreamInterface, SystemInterface> previousImplicitState = null;
+    boolean requireRecycleConfirmation = requiresRecycleConfirmation();
     resetActiveStates();
     applyFlowsheetWideSettings();
     // Determine execution order: use graph-based if enabled, otherwise use
@@ -3010,7 +3296,7 @@ public class ProcessSystem extends SimulationBaseClass {
         }
         if (!(unit instanceof Recycle)) {
           try {
-            if (iter == 1 || needsRecalculation(unit)) {
+            if (implicitRecycle || iter == 1 || needsRecalculation(unit)) {
               runUnitProfiled(unit, id);
             }
           } catch (Exception ex) {
@@ -3055,8 +3341,18 @@ public class ProcessSystem extends SimulationBaseClass {
           }
         }
       }
-    } while (((!isConverged || (iter < 2 && hasRecycle)) && iter < 100) && !runStep
-        && !Thread.currentThread().isInterrupted());
+      if (implicitRecycle) {
+        Map<StreamInterface, SystemInterface> currentState = captureImplicitRecycleState(executionOrder);
+        isConverged = implicitRecycleStatesMatch(previousImplicitState, currentState) && isConverged;
+        previousImplicitState = currentState;
+      }
+    } while (((!isConverged || (iter < 2 && hasRecycle && (requireRecycleConfirmation || hasAutoDeactivatedRecycle())))
+        && iter < 100) && !runStep && !Thread.currentThread().isInterrupted());
+
+    if (implicitRecycle && !isConverged && !runStep) {
+      throw new IllegalStateException("Implicit recycle loop did not converge after " + iter + " iterations in process "
+          + getName() + "; add an explicit Recycle for convergence control");
+    }
 
     // Publish simulation complete event
     publishEvent(new ProcessEvent(ProcessEvent.generateId(), ProcessEvent.EventType.SIMULATION_COMPLETE, getName(),
@@ -3212,7 +3508,7 @@ public class ProcessSystem extends SimulationBaseClass {
     Collections.sort(entries, (a, b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
     for (Map.Entry<String, long[]> entry : entries) {
       long[] nanos = entry.getValue();
-      result.put(entry.getKey(), new double[] { nanos[0] / 1e6, nanos[1] });
+      result.put(entry.getKey(), new double[] {nanos[0] / 1e6, nanos[1]});
     }
     return result;
   }
@@ -3275,7 +3571,7 @@ public class ProcessSystem extends SimulationBaseClass {
     }
     long[] timing = executionTimingNanos.get(unitName);
     if (timing == null) {
-      long[] fresh = new long[] { 0L, 0L };
+      long[] fresh = new long[] {0L, 0L};
       long[] existing = ((java.util.concurrent.ConcurrentHashMap<String, long[]>) executionTimingNanos)
           .putIfAbsent(unitName, fresh);
       timing = (existing != null) ? existing : fresh;
@@ -3718,12 +4014,8 @@ public class ProcessSystem extends SimulationBaseClass {
           "Low-flow threshold must be a finite non-negative number, was " + thresholdKgPerHour);
     }
     int managed = 0;
-    for (ProcessEquipmentInterface unit : unitOperations) {
-      if (unit instanceof Setter) {
-        continue;
-      }
-      if (unit instanceof neqsim.process.equipment.ProcessEquipmentBaseClass
-          && ((neqsim.process.equipment.ProcessEquipmentBaseClass) unit).applyAutoMinimumFlow(thresholdKgPerHour)) {
+    for (ProcessEquipmentBaseClass unit : getAutoLowFlowUnits()) {
+      if (unit.applyAutoMinimumFlow(thresholdKgPerHour)) {
         managed++;
       }
     }
@@ -3750,9 +4042,8 @@ public class ProcessSystem extends SimulationBaseClass {
           "Recycle flow tolerance must be a finite non-negative number, was " + thresholdKgPerHour);
     }
     int applied = 0;
-    for (ProcessEquipmentInterface unit : unitOperations) {
-      if (unit instanceof neqsim.process.equipment.util.Recycle
-          && ((neqsim.process.equipment.util.Recycle) unit).applyAutoAbsoluteFlowTolerance(thresholdKgPerHour)) {
+    for (Recycle recycle : getAutoTuningRecycles()) {
+      if (recycle.applyAutoAbsoluteFlowTolerance(thresholdKgPerHour)) {
         applied++;
       }
     }
@@ -3766,9 +4057,8 @@ public class ProcessSystem extends SimulationBaseClass {
    */
   int resetAutoRecycleFlowTolerance() {
     int cleared = 0;
-    for (ProcessEquipmentInterface unit : unitOperations) {
-      if (unit instanceof neqsim.process.equipment.util.Recycle
-          && ((neqsim.process.equipment.util.Recycle) unit).resetAutoAbsoluteFlowTolerance()) {
+    for (Recycle recycle : getAutoTuningRecycles()) {
+      if (recycle.resetAutoAbsoluteFlowTolerance()) {
         cleared++;
       }
     }
@@ -3782,8 +4072,8 @@ public class ProcessSystem extends SimulationBaseClass {
    */
   int applyAutoRecycleAdaptiveAcceleration() {
     int managed = 0;
-    for (ProcessEquipmentInterface unit : unitOperations) {
-      if (unit instanceof Recycle && ((Recycle) unit).applyAutoAdaptiveAcceleration()) {
+    for (Recycle recycle : getAutoTuningRecycles()) {
+      if (recycle.applyAutoAdaptiveAcceleration()) {
         managed++;
       }
     }
@@ -3797,8 +4087,8 @@ public class ProcessSystem extends SimulationBaseClass {
    */
   int resetAutoRecycleAdaptiveAcceleration() {
     int cleared = 0;
-    for (ProcessEquipmentInterface unit : unitOperations) {
-      if (unit instanceof Recycle && ((Recycle) unit).resetAutoAdaptiveAcceleration()) {
+    for (Recycle recycle : getAutoTuningRecycles()) {
+      if (recycle.resetAutoAdaptiveAcceleration()) {
         cleared++;
       }
     }
@@ -3854,9 +4144,8 @@ public class ProcessSystem extends SimulationBaseClass {
    */
   public int resetAutoLowFlowThreshold() {
     int cleared = 0;
-    for (ProcessEquipmentInterface unit : unitOperations) {
-      if (unit instanceof neqsim.process.equipment.ProcessEquipmentBaseClass
-          && ((neqsim.process.equipment.ProcessEquipmentBaseClass) unit).resetAutoMinimumFlow()) {
+    for (ProcessEquipmentBaseClass unit : getAutoLowFlowUnits()) {
+      if (unit.resetAutoMinimumFlow()) {
         cleared++;
         if (!unit.isLockedInactive()) {
           unit.isActive(true);
@@ -3864,6 +4153,36 @@ public class ProcessSystem extends SimulationBaseClass {
       }
     }
     return cleared;
+  }
+
+  /** Returns the topology-stable set of units eligible for automatic low-flow tuning. */
+  private List<ProcessEquipmentBaseClass> getAutoLowFlowUnits() {
+    List<ProcessEquipmentBaseClass> cached = cachedAutoLowFlowUnits;
+    if (cached == null) {
+      cached = new ArrayList<ProcessEquipmentBaseClass>();
+      for (ProcessEquipmentInterface unit : unitOperations) {
+        if (!(unit instanceof Setter) && unit instanceof ProcessEquipmentBaseClass) {
+          cached.add((ProcessEquipmentBaseClass) unit);
+        }
+      }
+      cachedAutoLowFlowUnits = cached;
+    }
+    return cached;
+  }
+
+  /** Returns the topology-stable recycle subset used by automatic recycle tuning. */
+  private List<Recycle> getAutoTuningRecycles() {
+    List<Recycle> cached = cachedAutoTuningRecycles;
+    if (cached == null) {
+      cached = new ArrayList<Recycle>();
+      for (ProcessEquipmentInterface unit : unitOperations) {
+        if (unit instanceof Recycle) {
+          cached.add((Recycle) unit);
+        }
+      }
+      cachedAutoTuningRecycles = cached;
+    }
+    return cached;
   }
 
   /**
@@ -4267,6 +4586,7 @@ public class ProcessSystem extends SimulationBaseClass {
    * @param id calculation identifier for tracking
    */
   public void runWithProgress(UUID id) {
+    boolean requireRecycleConfirmation = requiresRecycleConfirmation();
     // Determine execution order
     List<ProcessEquipmentInterface> executionOrder;
     if (useGraphBasedExecution) {
@@ -4392,8 +4712,8 @@ public class ProcessSystem extends SimulationBaseClass {
       double recycleError = recycleController.getMaxResidualError();
       notifyIterationComplete(iter, isConverged, recycleError);
 
-    } while (((!isConverged || (iter < 2 && hasRecycle)) && iter < 100) && !runStep
-        && !Thread.currentThread().isInterrupted());
+    } while (((!isConverged || (iter < 2 && hasRecycle && (requireRecycleConfirmation || hasAutoDeactivatedRecycle())))
+        && iter < 100) && !runStep && !Thread.currentThread().isInterrupted());
 
     // Notify simulation complete
     notifySimulationComplete(iter, isConverged);
@@ -4659,7 +4979,7 @@ public class ProcessSystem extends SimulationBaseClass {
     // Equipment that is manually locked inactive (setLockedInactive) or auto-deactivated
     // by low-flow bypass keeps its current state during the timestep — same skip gate as
     // the steady run() path (runUnitProfiled). See docs/process/processmodel/low_flow_bypass.md.
-    if (parallelTransientEnabled && unitOperations.size() > 1) {
+    if (parallelTransientEnabled && unitOperations.size() > 1 && !hasRecycles() && !hasRecycleFlowCoordinators()) {
       if (!runEquipmentTransientParallel(dt, id)) {
         return;
       }
@@ -4671,7 +4991,7 @@ public class ProcessSystem extends SimulationBaseClass {
 
     // Semi-implicit: run a second pass for improved stability
     if (integrationMethod == IntegrationMethod.SEMI_IMPLICIT) {
-      if (parallelTransientEnabled && unitOperations.size() > 1) {
+      if (parallelTransientEnabled && unitOperations.size() > 1 && !hasRecycles() && !hasRecycleFlowCoordinators()) {
         if (!runEquipmentTransientParallel(dt, id)) {
           return;
         }
@@ -4726,11 +5046,18 @@ public class ProcessSystem extends SimulationBaseClass {
 
   /**
    * Runs transient calculations in dependency order using the cached process-graph levels. Independent groups within a
-   * level execute in parallel; a downstream level is not submitted until every upstream group has completed. If the
-   * caller is interrupted while waiting, its interrupt status is restored and the wait loop stops. Each dependency
-   * level checks that status before submitting work, so an interrupt at a level boundary does not enqueue downstream
+   * level execute in parallel; a downstream level is not submitted until every upstream group has completed. Worker
+   * exceptions propagate fail-loudly to the caller, stop later groups and dependency levels, and prevent controller,
+   * measurement-history, alarm, timestep-counter, and calculation-identifier commit for the failed step. If the caller
+   * is interrupted while waiting, its interrupt status is restored and the wait loop stops. Each dependency level
+   * checks that status before submitting work, so an interrupt at a level boundary does not enqueue downstream
    * equipment. Already submitted equipment that is queued is cancelled without interrupting tasks already updating
    * state.
+   *
+   * <p>
+   * This boundary is not a whole-step transaction: the process clock, due-event effects, and state already mutated by
+   * equipment (including same-level siblings) are not rolled back.
+   * </p>
    *
    * @param dt time step in seconds
    * @param id calculation identifier
@@ -4761,11 +5088,7 @@ public class ProcessSystem extends SimulationBaseClass {
               if (stopRequested.get()) {
                 return;
               }
-              try {
-                runUnitTransientSkippingInactive(node.getEquipment(), stepSize, calcId);
-              } catch (Exception ex) {
-                logger.error("Parallel transient equipment execution failed for {}", node.getName(), ex);
-              }
+              runUnitTransientSkippingInactive(node.getEquipment(), stepSize, calcId);
             }
           }
         }));
@@ -4783,8 +5106,11 @@ public class ProcessSystem extends SimulationBaseClass {
           logger.warn("Parallel transient execution interrupted; caller interrupt status restored");
           return false;
         } catch (ExecutionException ex) {
-          Throwable cause = ex.getCause();
-          logger.error("Parallel transient equipment execution failed", cause == null ? ex : cause);
+          stopRequested.set(true);
+          for (int pendingIndex = i + 1; pendingIndex < futures.size(); pendingIndex++) {
+            futures.get(pendingIndex).cancel(false);
+          }
+          throw createWorkerExecutionException("Parallel transient", ex);
         }
       }
     }
@@ -5143,6 +5469,567 @@ public class ProcessSystem extends SimulationBaseClass {
    */
   public void setEventScheduler(EventScheduler scheduler) {
     this.eventScheduler = scheduler;
+  }
+
+  /**
+   * Audits whether every mutable process element can participate in an identity-preserving transient step transaction.
+   *
+   * <p>
+   * Duplicate registrations of the same Java object are counted once. State identities must be non-empty and unique
+   * among the participating objects. Shared {@link RecycleController} orchestration is captured separately and is not
+   * included in the process-element or participant counts; each recycle unit must still provide its own state contract.
+   * </p>
+   *
+   * @return immutable quantitative coverage report
+   */
+  public TransientTransactionCoverage getTransientTransactionCoverage() {
+    return getTransientTransactionCoverage(Collections.<String>emptySet());
+  }
+
+  /**
+   * Audits local transaction coverage while accepting event targets owned by a coordinating multi-area model.
+   *
+   * @param additionalEventStateIdentities completely covered participant identities owned by sibling process areas
+   * @return immutable quantitative local coverage report
+   */
+  TransientTransactionCoverage getTransientTransactionCoverage(Collection<String> additionalEventStateIdentities) {
+    List<ProcessElementInterface> elements = getUniqueTransientElements();
+    List<String> blockingIssues = new ArrayList<String>();
+    Map<String, ProcessElementInterface> identities = new HashMap<String, ProcessElementInterface>();
+    int participantCount = 0;
+
+    for (ProcessElementInterface element : elements) {
+      if (!(element instanceof TransientStateParticipant<?>)) {
+        blockingIssues.add(
+            "process element " + describeTransientElement(element) + " does not implement TransientStateParticipant");
+        continue;
+      }
+      participantCount++;
+      TransientStateParticipant<?> participant = (TransientStateParticipant<?>) element;
+      String coverageIssue;
+      try {
+        coverageIssue = normalizeTransientStateIdentity(participant.getTransientStateCoverageIssue());
+      } catch (RuntimeException ex) {
+        blockingIssues.add("process element " + describeTransientElement(element)
+            + " failed to report transient state coverage: " + ex.getMessage());
+        continue;
+      }
+      if (coverageIssue != null) {
+        blockingIssues.add("process element " + describeTransientElement(element)
+            + " has incomplete transient state coverage: " + coverageIssue);
+        continue;
+      }
+      String stateIdentity;
+      try {
+        stateIdentity = normalizeTransientStateIdentity(participant.getTransientStateIdentity());
+      } catch (RuntimeException ex) {
+        blockingIssues.add("process element " + describeTransientElement(element)
+            + " failed to provide a transient state identity: " + ex.getMessage());
+        continue;
+      }
+      if (stateIdentity == null) {
+        blockingIssues.add(
+            "process element " + describeTransientElement(element) + " has a null or empty transient state identity");
+        continue;
+      }
+      ProcessElementInterface previous = identities.put(stateIdentity, element);
+      if (previous != null && previous != element) {
+        blockingIssues.add("transient state identity '" + stateIdentity + "' is shared by "
+            + describeTransientElement(previous) + " and " + describeTransientElement(element));
+      }
+    }
+
+    if (parallelTransientEnabled) {
+      blockingIssues.add("parallel transient execution may leave same-level workers running after one worker fails; "
+          + "rollback cannot start until worker quiescence is guaranteed");
+    }
+    if (publishEvents) {
+      blockingIssues
+          .add("ProcessEventBus publishing is externally visible and has no rejected-step commit/defer contract");
+    }
+    if (alarmManager != null && !alarmManager.getActionHandlers().isEmpty()) {
+      blockingIssues.add("alarm action handlers may produce external side effects and have no rejected-step "
+          + "commit/defer contract");
+    }
+    if (eventScheduler != null) {
+      java.util.Set<String> eventStateIdentities = new java.util.HashSet<String>(identities.keySet());
+      eventStateIdentities.addAll(additionalEventStateIdentities);
+      addEventTransactionCoverageIssues(blockingIssues, eventScheduler.getPendingEvents(), eventStateIdentities,
+          "pending event");
+    }
+    return new TransientTransactionCoverage(elements.size(), participantCount, blockingIssues);
+  }
+
+  /**
+   * Adds deterministic blockers for scheduler actions that cannot be covered by participant snapshots.
+   *
+   * @param blockingIssues destination for coverage diagnostics
+   * @param events events to validate
+   * @param participantStateIdentities covered participants keyed by stable state identity
+   * @param eventKind diagnostic description such as {@code pending event}
+   */
+  private static void addEventTransactionCoverageIssues(List<String> blockingIssues,
+      List<EventScheduler.ScheduledEvent> events, java.util.Set<String> participantStateIdentities, String eventKind) {
+    for (EventScheduler.ScheduledEvent event : events) {
+      String eventDescription = eventKind + " '" + event.getLabel() + "' at t=" + event.getTime() + " s";
+      if (!event.hasDeclaredTransientStateScope()) {
+        blockingIssues.add(eventDescription
+            + " uses an unscoped Runnable; use scheduleTransactionalEvent and declare every mutated participant");
+        continue;
+      }
+      for (String stateIdentity : event.getTransientStateIdentities()) {
+        if (!participantStateIdentities.contains(stateIdentity)) {
+          blockingIssues.add(eventDescription + " declares transient state identity '" + stateIdentity
+              + "' that is not a completely covered participant in this process system");
+        }
+      }
+    }
+  }
+
+  /**
+   * Captures an identity-preserving rollback point for one physical transient step.
+   *
+   * <p>
+   * The method completes coverage validation and captures every participant before returning. It therefore fails before
+   * trial mutation when coverage is incomplete or snapshot capture fails. Only one transaction may be open for a
+   * process system at a time.
+   * </p>
+   *
+   * @return open single-use transaction
+   * @throws IllegalStateException if coverage is incomplete, a snapshot is invalid, or another transaction is open
+   */
+  public synchronized TransientStepTransaction beginTransientStepTransaction() {
+    return beginTransientStepTransaction(Collections.<String>emptySet());
+  }
+
+  /**
+   * Captures a rollback point with model-level event targets included in scheduler coverage.
+   *
+   * @param additionalEventStateIdentities completely covered participant identities owned by sibling process areas
+   * @return open single-use transaction
+   */
+  synchronized TransientStepTransaction beginTransientStepTransaction(
+      Collection<String> additionalEventStateIdentities) {
+    if (activeTransientStepTransaction != null && activeTransientStepTransaction.isOpen()) {
+      throw new IllegalStateException(
+          "A transient step transaction is already open for process system '" + getName() + "'");
+    }
+
+    TransientTransactionCoverage coverage = getTransientTransactionCoverage(additionalEventStateIdentities);
+    coverage.assertComplete();
+    List<ProcessElementInterface> elements = getUniqueTransientElements();
+    List<TransientParticipantCheckpoint> participantCheckpoints = new ArrayList<TransientParticipantCheckpoint>(
+        elements.size());
+    for (ProcessElementInterface element : elements) {
+      TransientStateParticipant<?> participant = (TransientStateParticipant<?>) element;
+      Serializable snapshot = captureParticipantSnapshot(participant);
+      String stateIdentity = normalizeTransientStateIdentity(participant.getTransientStateIdentity());
+      if (stateIdentity == null) {
+        throw new IllegalStateException(
+            "Transient state identity changed to null or empty while capturing " + describeTransientElement(element));
+      }
+      participantCheckpoints.add(new TransientParticipantCheckpoint(participant, stateIdentity, snapshot));
+    }
+
+    RecycleController capturedRecycleController = recycleController;
+    RecycleController.Snapshot recycleControllerSnapshot = capturedRecycleController == null ? null
+        : capturedRecycleController.captureTransientState();
+    ProcessSystemStepTransaction transaction = new ProcessSystemStepTransaction(elements, participantCheckpoints,
+        capturedRecycleController, recycleControllerSnapshot, eventScheduler,
+        eventScheduler == null ? null : eventScheduler.snapshot(), new ArrayList<>(alarmManager.getHistory()),
+        additionalEventStateIdentities);
+    activeTransientStepTransaction = transaction;
+    return transaction;
+  }
+
+  /**
+   * Advances one transient step and commits it only if the complete step succeeds.
+   *
+   * <p>
+   * Any runtime exception or error from event, equipment, controller, measurement, or alarm execution closes the
+   * transaction and restores all captured state in place. This method is intentionally separate from legacy
+   * {@link #runTransient(double, UUID)} so existing simulations are not silently rejected while built-in equipment
+   * families adopt the participant contract.
+   * </p>
+   *
+   * @param dt timestep in seconds
+   * @param id physical-step calculation identifier
+   * @throws IllegalStateException if transaction coverage is incomplete
+   */
+  public void runTransientTransactional(double dt, UUID id) {
+    try (TransientStepTransaction transaction = beginTransientStepTransaction()) {
+      runTransient(dt, id);
+      transaction.commit();
+    }
+  }
+
+  /**
+   * Returns unique registered process elements in deterministic registration order.
+   *
+   * @return identity-de-duplicated process elements
+   */
+  private List<ProcessElementInterface> getUniqueTransientElements() {
+    List<ProcessElementInterface> unique = new ArrayList<ProcessElementInterface>();
+    java.util.Set<ProcessElementInterface> seen = Collections
+        .newSetFromMap(new IdentityHashMap<ProcessElementInterface, Boolean>());
+    for (ProcessElementInterface element : getAllElements()) {
+      if (element == null) {
+        throw new IllegalStateException("Process system '" + getName() + "' contains a null process element");
+      }
+      if (seen.add(element)) {
+        unique.add(element);
+      }
+    }
+    for (ProcessEquipmentInterface unit : unitOperations) {
+      Collection<ControllerDeviceInterface> attachedControllers = unit.getControllers();
+      if (attachedControllers == null) {
+        throw new IllegalStateException(
+            "Process equipment " + describeTransientElement(unit) + " returned a null controller collection");
+      }
+      for (ControllerDeviceInterface controller : attachedControllers) {
+        if (controller == null) {
+          throw new IllegalStateException(
+              "Process equipment " + describeTransientElement(unit) + " contains a null attached controller");
+        }
+        if (seen.add(controller)) {
+          unique.add(controller);
+        }
+      }
+    }
+    return unique;
+  }
+
+  /**
+   * Returns every locally complete participant identity for multi-area event-scope validation.
+   *
+   * @return deterministic set of complete local participant identities
+   */
+  java.util.Set<String> getCompleteTransientStateIdentities() {
+    java.util.Set<String> identities = new java.util.LinkedHashSet<String>();
+    for (ProcessElementInterface element : getUniqueTransientElements()) {
+      if (element instanceof TransientStateParticipant<?>) {
+        TransientStateParticipant<?> participant = (TransientStateParticipant<?>) element;
+        try {
+          String coverageIssue = normalizeTransientStateIdentity(participant.getTransientStateCoverageIssue());
+          String identity = normalizeTransientStateIdentity(participant.getTransientStateIdentity());
+          if (coverageIssue == null && identity != null) {
+            identities.add(identity);
+          }
+        } catch (RuntimeException ex) {
+          // The area coverage audit below owns the deterministic diagnostic for this participant.
+        }
+      }
+    }
+    return identities;
+  }
+
+  /**
+   * Returns a deterministic diagnostic label for a process element.
+   *
+   * @param element process element
+   * @return diagnostic label
+   */
+  private static String describeTransientElement(ProcessElementInterface element) {
+    String name = element.getName();
+    return "'" + (name == null ? "" : name) + "' (" + element.getClass().getName() + ")";
+  }
+
+  /**
+   * Normalizes a state identity without manufacturing a fallback identity.
+   *
+   * @param identity participant-provided identity
+   * @return trimmed identity, or {@code null} when absent
+   */
+  private static String normalizeTransientStateIdentity(String identity) {
+    if (identity == null || identity.trim().isEmpty()) {
+      return null;
+    }
+    return identity.trim();
+  }
+
+  /**
+   * Captures a typed participant snapshot through a wildcard-safe helper.
+   *
+   * @param participant state participant
+   * @return non-null serializable snapshot
+   */
+  private static <S extends Serializable> Serializable captureParticipantSnapshot(
+      TransientStateParticipant<S> participant) {
+    S snapshot = participant.captureTransientState();
+    if (snapshot == null) {
+      throw new IllegalStateException(
+          "Transient state participant '" + participant.getTransientStateIdentity() + "' returned a null snapshot");
+    }
+    return snapshot;
+  }
+
+  /**
+   * Restores a typed participant snapshot through one checked cast boundary.
+   *
+   * @param participant participant to restore
+   * @param snapshot captured snapshot
+   * @param <S> participant snapshot type
+   */
+  @SuppressWarnings("unchecked")
+  private static <S extends Serializable> void restoreParticipantSnapshot(TransientStateParticipant<S> participant,
+      Serializable snapshot) {
+    participant.restoreTransientState((S) snapshot);
+  }
+
+  /** Captured state for one participant, keyed by object identity. */
+  private static final class TransientParticipantCheckpoint {
+    private final TransientStateParticipant<?> participant;
+    private final String stateIdentity;
+    private final Serializable snapshot;
+
+    private TransientParticipantCheckpoint(TransientStateParticipant<?> participant, String stateIdentity,
+        Serializable snapshot) {
+      this.participant = participant;
+      this.stateIdentity = stateIdentity;
+      this.snapshot = snapshot;
+    }
+  }
+
+  /** Process-system transaction implementation. */
+  private final class ProcessSystemStepTransaction implements TransientStepTransaction {
+    private final List<ProcessElementInterface> elementIdentities;
+    private final List<TransientParticipantCheckpoint> participantCheckpoints;
+    private final double capturedTime = time;
+    private final double capturedTimeStep = timeStep;
+    private final int capturedTimeStepNumber = timeStepNumber;
+    private final UUID capturedCalculationIdentifier = getCalculationIdentifier();
+    private final MeasurementHistory capturedMeasurementHistory = measurementHistory.copy();
+    private final Boolean capturedRecordMeasurementHistory = recordMeasurementHistory;
+    private final double capturedPreviousTotalMass = previousTotalMass;
+    private final double capturedMassBalanceError = massBalanceError;
+    private final ProcessSystem capturedInitialStateSnapshot = initialStateSnapshot;
+    private final RecycleController capturedRecycleController;
+    private final RecycleController.Snapshot capturedRecycleControllerSnapshot;
+    private final EventScheduler capturedEventScheduler;
+    private final EventScheduler.Snapshot capturedEventSchedulerSnapshot;
+    private final List<neqsim.process.alarm.AlarmEvent> capturedAlarmHistory;
+    private final java.util.Set<String> allowedEventStateIdentities;
+    private Status status = Status.OPEN;
+
+    private ProcessSystemStepTransaction(List<ProcessElementInterface> elementIdentities,
+        List<TransientParticipantCheckpoint> participantCheckpoints, RecycleController capturedRecycleController,
+        RecycleController.Snapshot capturedRecycleControllerSnapshot, EventScheduler capturedEventScheduler,
+        EventScheduler.Snapshot capturedEventSchedulerSnapshot,
+        List<neqsim.process.alarm.AlarmEvent> capturedAlarmHistory, Collection<String> additionalEventStateIdentities) {
+      this.elementIdentities = new ArrayList<ProcessElementInterface>(elementIdentities);
+      this.participantCheckpoints = new ArrayList<TransientParticipantCheckpoint>(participantCheckpoints);
+      this.capturedRecycleController = capturedRecycleController;
+      this.capturedRecycleControllerSnapshot = capturedRecycleControllerSnapshot;
+      this.capturedEventScheduler = capturedEventScheduler;
+      this.capturedEventSchedulerSnapshot = capturedEventSchedulerSnapshot;
+      this.capturedAlarmHistory = new ArrayList<neqsim.process.alarm.AlarmEvent>(capturedAlarmHistory);
+      this.allowedEventStateIdentities = new java.util.HashSet<String>(additionalEventStateIdentities);
+      for (TransientParticipantCheckpoint checkpoint : participantCheckpoints) {
+        this.allowedEventStateIdentities.add(checkpoint.stateIdentity);
+      }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void prepareCommit() {
+      synchronized (ProcessSystem.this) {
+        requireOpen("prepare commit");
+        RuntimeException validationFailure = validateIdentityContract();
+        if (validationFailure != null) {
+          throw validationFailure;
+        }
+      }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void commit() {
+      synchronized (ProcessSystem.this) {
+        try {
+          prepareCommit();
+        } catch (RuntimeException validationFailure) {
+          try {
+            rollback();
+          } catch (RuntimeException rollbackFailure) {
+            validationFailure.addSuppressed(rollbackFailure);
+          }
+          throw validationFailure;
+        }
+        status = Status.COMMITTED;
+        activeTransientStepTransaction = null;
+      }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void rollback() {
+      synchronized (ProcessSystem.this) {
+        if (status == Status.ROLLED_BACK) {
+          return;
+        }
+        requireOpen("rollback");
+        RuntimeException failure = validateIdentityContract();
+
+        for (int i = participantCheckpoints.size() - 1; i >= 0; i--) {
+          TransientParticipantCheckpoint checkpoint = participantCheckpoints.get(i);
+          try {
+            restoreCapturedParticipant(checkpoint);
+          } catch (RuntimeException ex) {
+            failure = accumulateTransactionFailure(failure,
+                "Failed to restore transient state participant '" + checkpoint.stateIdentity + "'", ex);
+          }
+        }
+
+        try {
+          if (recycleController != capturedRecycleController) {
+            failure = accumulateTransactionFailure(failure,
+                "RecycleController identity changed during transient transaction",
+                new IllegalStateException("Expected the captured RecycleController instance"));
+            recycleController = capturedRecycleController;
+          }
+          if (capturedRecycleController != null) {
+            capturedRecycleController.restoreTransientState(capturedRecycleControllerSnapshot);
+          }
+        } catch (RuntimeException ex) {
+          failure = accumulateTransactionFailure(failure, "Failed to restore RecycleController state", ex);
+        }
+
+        try {
+          time = capturedTime;
+          timeStep = capturedTimeStep;
+          timeStepNumber = capturedTimeStepNumber;
+          setCalculationIdentifier(capturedCalculationIdentifier);
+          measurementHistory = capturedMeasurementHistory.copy();
+          recordMeasurementHistory = capturedRecordMeasurementHistory;
+          previousTotalMass = capturedPreviousTotalMass;
+          massBalanceError = capturedMassBalanceError;
+          initialStateSnapshot = capturedInitialStateSnapshot;
+          eventScheduler = capturedEventScheduler;
+          if (capturedEventScheduler != null) {
+            capturedEventScheduler.restore(capturedEventSchedulerSnapshot);
+          }
+          alarmManager.restoreHistory(capturedAlarmHistory);
+        } catch (RuntimeException ex) {
+          failure = accumulateTransactionFailure(failure, "Failed to restore ProcessSystem orchestration state", ex);
+        } finally {
+          status = Status.ROLLED_BACK;
+          activeTransientStepTransaction = null;
+        }
+
+        if (failure != null) {
+          throw failure;
+        }
+      }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Status getStatus() {
+      return status;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void close() {
+      if (isOpen()) {
+        rollback();
+      }
+    }
+
+    /**
+     * Restores one captured participant.
+     *
+     * @param checkpoint participant snapshot
+     */
+    private void restoreCapturedParticipant(TransientParticipantCheckpoint checkpoint) {
+      restoreParticipantSnapshot(checkpoint.participant, checkpoint.snapshot);
+    }
+
+    /**
+     * Validates object, registration-order, and stable-state identities.
+     *
+     * @return failure diagnostic, or {@code null}
+     */
+    private RuntimeException validateIdentityContract() {
+      List<ProcessElementInterface> currentElements;
+      try {
+        currentElements = getUniqueTransientElements();
+      } catch (RuntimeException ex) {
+        return new IllegalStateException("Could not inspect process elements while finalizing transient transaction",
+            ex);
+      }
+      if (currentElements.size() != elementIdentities.size()) {
+        return new IllegalStateException("Process structure changed during transient transaction: captured "
+            + elementIdentities.size() + " unique elements but found " + currentElements.size());
+      }
+      for (int i = 0; i < elementIdentities.size(); i++) {
+        if (currentElements.get(i) != elementIdentities.get(i)) {
+          return new IllegalStateException(
+              "Process element identity or registration order changed during transient transaction at index " + i);
+        }
+      }
+      for (TransientParticipantCheckpoint checkpoint : participantCheckpoints) {
+        String currentIdentity = normalizeTransientStateIdentity(checkpoint.participant.getTransientStateIdentity());
+        if (!checkpoint.stateIdentity.equals(currentIdentity)) {
+          return new IllegalStateException("Transient state identity changed during transaction from '"
+              + checkpoint.stateIdentity + "' to '" + currentIdentity + "'");
+        }
+      }
+      if (recycleController != capturedRecycleController) {
+        return new IllegalStateException("RecycleController identity changed during transient transaction");
+      }
+      if (eventScheduler != capturedEventScheduler) {
+        return new IllegalStateException("EventScheduler identity changed during transient transaction");
+      }
+      if (capturedEventScheduler != null) {
+        List<String> eventCoverageIssues = new ArrayList<String>();
+        addEventTransactionCoverageIssues(eventCoverageIssues, capturedEventScheduler.getPendingEvents(),
+            allowedEventStateIdentities, "pending event");
+        List<EventScheduler.ScheduledEvent> firedEvents = capturedEventScheduler.getFiredEvents();
+        int capturedFiredEventCount = capturedEventSchedulerSnapshot.getFiredEventCount();
+        if (firedEvents.size() < capturedFiredEventCount) {
+          eventCoverageIssues.add("event scheduler fired-event history shrank during transient transaction");
+        } else if (firedEvents.size() > capturedFiredEventCount) {
+          addEventTransactionCoverageIssues(eventCoverageIssues,
+              firedEvents.subList(capturedFiredEventCount, firedEvents.size()), allowedEventStateIdentities,
+              "event fired during transaction");
+        }
+        if (!eventCoverageIssues.isEmpty()) {
+          return new IllegalStateException(
+              "EventScheduler transaction coverage became incomplete: " + eventCoverageIssues);
+        }
+      }
+      return null;
+    }
+
+    /**
+     * Enforces single-use transaction semantics.
+     *
+     * @param operation requested lifecycle operation
+     */
+    private void requireOpen(String operation) {
+      if (status != Status.OPEN) {
+        throw new IllegalStateException("Cannot " + operation + " transient transaction in state " + status);
+      }
+    }
+  }
+
+  /**
+   * Accumulates rollback failures while allowing later participants and orchestration state to restore.
+   *
+   * @param existing first failure, or {@code null}
+   * @param message diagnostic context
+   * @param cause new failure
+   * @return first failure with later failures suppressed
+   */
+  private static RuntimeException accumulateTransactionFailure(RuntimeException existing, String message,
+      RuntimeException cause) {
+    RuntimeException wrapped = new IllegalStateException(message, cause);
+    if (existing == null) {
+      return wrapped;
+    }
+    existing.addSuppressed(wrapped);
+    return existing;
   }
 
   /**
@@ -6121,7 +7008,6 @@ public class ProcessSystem extends SimulationBaseClass {
    * @return a map with failed unit operation names and their mass balance results
    */
   public Map<String, MassBalanceResult> getFailedMassBalance(String unit, double percentThreshold) {
-    Map<String, MassBalanceResult> allResults = checkMassBalance(unit);
     Map<String, MassBalanceResult> failedUnits = new HashMap<>();
 
     // Convert minimum flow threshold to the requested unit
@@ -6141,13 +7027,27 @@ public class ProcessSystem extends SimulationBaseClass {
       minimumFlowInUnit = minimumFlowForMassBalanceError;
     }
 
-    for (Map.Entry<String, MassBalanceResult> entry : allResults.entrySet()) {
-      MassBalanceResult result = entry.getValue();
-      if (result.isBypassed()) {
+    // Evaluate and filter in one pass. Calling checkMassBalance() here materialized a
+    // result for every unit and then read every active unit's inlet flow a second time.
+    for (ProcessEquipmentInterface unitOp : unitOperations) {
+      boolean bypassed = unitOp.isLockedInactive() || !unitOp.isActive();
+      double massBalanceError;
+      double inletFlow;
+      double percentError;
+      try {
+        massBalanceError = unitOp.getMassBalance(unit);
+        inletFlow = calculateInletFlow(unitOp, unit);
+        percentError = calculatePercentError(massBalanceError, inletFlow);
+      } catch (Exception e) {
+        logger.warn("Failed to calculate mass balance for unit: " + unitOp.getName(), e);
+        massBalanceError = Double.NaN;
+        percentError = Double.NaN;
+        inletFlow = calculateInletFlow(unitOp, unit);
+      }
+
+      if (bypassed) {
         continue;
       }
-      ProcessEquipmentInterface unitOp = getUnit(entry.getKey());
-      double inletFlow = calculateInletFlow(unitOp, unit);
 
       // Skip units with insignificant inlet flow
       if (Math.abs(inletFlow) < minimumFlowInUnit) {
@@ -6164,8 +7064,8 @@ public class ProcessSystem extends SimulationBaseClass {
         }
       }
 
-      if (Double.isNaN(result.getPercentError()) || Math.abs(result.getPercentError()) > percentThreshold) {
-        failedUnits.put(entry.getKey(), result);
+      if (Double.isNaN(percentError) || Math.abs(percentError) > percentThreshold) {
+        failedUnits.put(unitOp.getName(), new MassBalanceResult(massBalanceError, percentError, unit, bypassed));
       }
     }
     return failedUnits;
@@ -7152,6 +8052,8 @@ public class ProcessSystem extends SimulationBaseClass {
     cachedHybridPlan = null;
     cachedHasAdjusters = null;
     cachedHasRecycles = null;
+    cachedAutoLowFlowUnits = null;
+    cachedAutoTuningRecycles = null;
     cachedHasCalculators = null;
     cachedHasMultiInput = null;
   }
@@ -8292,6 +9194,12 @@ public class ProcessSystem extends SimulationBaseClass {
             if (c.getDataSource() != null) {
               co.addProperty("dataSource", c.getDataSource());
             }
+            if (c.getSource() != null) {
+              co.addProperty("source", c.getSource().name());
+            }
+            if (c.getSourceReference() != null && !c.getSourceReference().trim().isEmpty()) {
+              co.addProperty("sourceReference", c.getSourceReference());
+            }
             constraintsArr.add(co);
           }
         } catch (Exception e) {
@@ -8498,6 +9406,155 @@ public class ProcessSystem extends SimulationBaseClass {
       count += equipment.applyMechanicalDesignCapacityConstraints();
     }
     return count;
+  }
+
+  /**
+   * Applies normalized design capacities to named equipment using the same units and setters as JSON design data.
+   *
+   * <p>
+   * All names, supported properties and finite positive values are validated before any design value is changed. Names
+   * refer to direct unit operations and must resolve uniquely. Supported properties are those documented by
+   * {@link EquipmentDesignData}. Supplied values replace earlier values; omitted properties remain unchanged. The
+   * method does not run the process, size equipment or register generic mechanical-design constraints.
+   * </p>
+   *
+   * <p>
+   * This strict Java/JPype entry point differs from advisory JSON building, which reports missing or unsupported
+   * equipment and continues. Validation errors here throw before application. Unexpected equipment setter failures
+   * during application are propagated and are not rolled back.
+   * </p>
+   *
+   * @param designCapacities map from equipment name to normalized numeric capacity properties
+   * @return application reports in equipment-name order
+   * @throws IllegalArgumentException if a target or property is missing, ambiguous, unsupported or invalid
+   */
+  public Map<String, EquipmentDesignData.ApplyResult> applyDesignCapacities(
+      Map<String, Map<String, Object>> designCapacities) {
+    return applyDesignCapacitiesJson(prepareDesignCapacities(designCapacities));
+  }
+
+  /**
+   * Validates and snapshots a design-capacity map without changing equipment.
+   *
+   * @param designCapacities normalized capacity properties keyed by direct equipment name
+   * @return validated JSON in deterministic name and property order
+   */
+  com.google.gson.JsonObject prepareDesignCapacities(Map<String, Map<String, Object>> designCapacities) {
+    if (designCapacities == null) {
+      throw new IllegalArgumentException("Design capacities must not be null");
+    }
+    for (String name : designCapacities.keySet()) {
+      if (name == null || name.trim().isEmpty()) {
+        throw new IllegalArgumentException("Design capacity equipment name must not be blank");
+      }
+    }
+    com.google.gson.JsonObject normalized = new com.google.gson.JsonObject();
+    for (Map.Entry<String, Map<String, Object>> entry : new java.util.TreeMap<String, Map<String, Object>>(
+        designCapacities).entrySet()) {
+      String name = entry.getKey();
+      ProcessEquipmentInterface target = null;
+      for (ProcessEquipmentInterface equipment : getUnitOperations()) {
+        if (name.equals(equipment.getName())) {
+          if (target != null) {
+            throw new IllegalArgumentException("Ambiguous design capacity equipment: " + name);
+          }
+          target = equipment;
+        }
+      }
+      if (target == null) {
+        throw new IllegalArgumentException("Design capacity equipment not found: " + name);
+      }
+      List<String> supported;
+      if (target instanceof neqsim.process.equipment.separator.Separator) {
+        supported = Arrays.asList("internalDiameter", "separatorLength", "designGasLoadFactor");
+      } else if (target instanceof Compressor) {
+        supported = Arrays.asList("maxSpeed", "ratedPower");
+      } else if (target instanceof Heater) {
+        supported = Arrays.asList("maxDesignDuty", "maxDesignDutyKW", "maxDesignDutyMW");
+      } else if (target instanceof Pump) {
+        supported = Arrays.asList("maxDesignPower", "maxDesignVolumeFlow");
+      } else {
+        throw new IllegalArgumentException("Unsupported design capacity equipment: " + name);
+      }
+      Map<String, Object> properties = entry.getValue();
+      if (properties == null || properties.isEmpty()) {
+        throw new IllegalArgumentException("Design capacity properties must not be empty for " + name);
+      }
+      for (String property : properties.keySet()) {
+        if (property == null || !supported.contains(property)) {
+          throw new IllegalArgumentException("Unsupported design capacity property for " + name + ": " + property);
+        }
+      }
+      if (target instanceof Heater && properties.size() > 1) {
+        throw new IllegalArgumentException("Specify one duty unit for " + name);
+      }
+      com.google.gson.JsonObject values = new com.google.gson.JsonObject();
+      for (Map.Entry<String, Object> property : new java.util.TreeMap<String, Object>(properties).entrySet()) {
+        if (!(property.getValue() instanceof Number)) {
+          throw new IllegalArgumentException("Design capacity must be numeric: " + name + "." + property.getKey());
+        }
+        double value = ((Number) property.getValue()).doubleValue();
+        double multiplier = "maxDesignDutyMW".equals(property.getKey()) ? 1.0e6
+            : ("maxDesignDutyKW".equals(property.getKey()) || "maxDesignPower".equals(property.getKey()) ? 1000.0
+                : 1.0);
+        if (!Double.isFinite(value) || value <= 0.0 || !Double.isFinite(value * multiplier)) {
+          throw new IllegalArgumentException(
+              "Design capacity must be finite and positive in native units: " + name + "." + property.getKey());
+        }
+        values.addProperty(property.getKey(), value);
+      }
+      validateDesignCapacityConstraintUnits(target, properties);
+      normalized.add(name, values);
+    }
+    return normalized;
+  }
+
+  /**
+   * Rejects a rating update when an affected same-name constraint uses a different physical unit.
+   *
+   * @param equipment the equipment whose cached constraints will be refreshed
+   * @param properties the validated normalized capacity properties
+   */
+  private void validateDesignCapacityConstraintUnits(ProcessEquipmentInterface equipment,
+      Map<String, Object> properties) {
+    Map<String, String> expectedUnits = new java.util.LinkedHashMap<String, String>();
+    if (equipment instanceof Pump) {
+      if (properties.containsKey("maxDesignPower")) {
+        expectedUnits.put("power", "kW");
+      }
+      if (properties.containsKey("maxDesignVolumeFlow")) {
+        expectedUnits.put("flowRate", "m3/hr");
+      }
+    } else if (equipment instanceof Heater) {
+      expectedUnits.put("duty", "W");
+    } else if (equipment instanceof Compressor && properties.containsKey("maxSpeed")) {
+      expectedUnits.put("speed", "RPM");
+    } else if (equipment instanceof neqsim.process.equipment.separator.Separator
+        && properties.containsKey("designGasLoadFactor")) {
+      expectedUnits.put("gasLoadFactor", "m/s");
+    }
+    if (expectedUnits.isEmpty()) {
+      return;
+    }
+    Map<String, neqsim.process.equipment.capacity.CapacityConstraint> constraints = ((neqsim.process.equipment.capacity.CapacityConstrainedEquipment) equipment)
+        .getCapacityConstraints();
+    for (Map.Entry<String, String> expected : expectedUnits.entrySet()) {
+      neqsim.process.equipment.capacity.CapacityConstraint constraint = constraints.get(expected.getKey());
+      if (constraint != null && !expected.getValue().equals(constraint.getUnit())) {
+        throw new IllegalArgumentException("Incompatible design capacity constraint unit for " + equipment.getName()
+            + "." + expected.getKey() + ": expected " + expected.getValue() + ", found " + constraint.getUnit());
+      }
+    }
+  }
+
+  /**
+   * Applies the shared JSON capacity representation, retaining the advisory reporting contract of JSON builds.
+   *
+   * @param designCapacities capacity JSON keyed by direct equipment name
+   * @return per-equipment application report
+   */
+  Map<String, EquipmentDesignData.ApplyResult> applyDesignCapacitiesJson(com.google.gson.JsonObject designCapacities) {
+    return EquipmentDesignData.apply(this, designCapacities);
   }
 
   /**

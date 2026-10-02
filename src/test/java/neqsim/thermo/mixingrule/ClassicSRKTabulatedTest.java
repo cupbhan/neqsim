@@ -17,8 +17,8 @@ class ClassicSRKTabulatedTest {
     int co2 = system.getPhase(0).getComponent("CO2").getComponentNumber();
     int methane = system.getPhase(0).getComponent("methane").getComponentNumber();
     EosMixingRulesInterface rule = ((PhaseEos) system.getPhase(0)).getMixingRule();
-    double[] knots = { 300.0, 400.0, 500.0 };
-    double[] values = { 0.05, 0.10, 0.02 };
+    double[] knots = {300.0, 400.0, 500.0};
+    double[] values = {0.05, 0.10, 0.02};
 
     rule.setBinaryInteractionParameterTemperatureTable(co2, methane, knots, values);
     EosMixingRuleHandler.ClassicSRKTabulated tabulated = (EosMixingRuleHandler.ClassicSRKTabulated) rule;
@@ -42,7 +42,7 @@ class ClassicSRKTabulatedTest {
     int co2 = system.getPhase(0).getComponent("CO2").getComponentNumber();
     int methane = system.getPhase(0).getComponent("methane").getComponentNumber();
     ((PhaseEos) system.getPhase(0)).getMixingRule().setBinaryInteractionParameterTemperatureTable(co2, methane,
-        new double[] { 300.0, 400.0 }, new double[] { 0.05, 0.10 });
+        new double[] {300.0, 400.0}, new double[] {0.05, 0.10});
 
     SystemInterface clonedSystem = system.clone();
     EosMixingRuleHandler.ClassicSRKTabulated clonedRule = (EosMixingRuleHandler.ClassicSRKTabulated) ((PhaseEos) clonedSystem
@@ -62,11 +62,11 @@ class ClassicSRKTabulatedTest {
     EosMixingRulesInterface rule = ((PhaseEos) system.getPhase(0)).getMixingRule();
 
     assertThrows(IllegalArgumentException.class, () -> rule.setBinaryInteractionParameterTemperatureTable(co2, methane,
-        new double[] { 300.0 }, new double[] { 0.05 }));
+        new double[] {300.0}, new double[] {0.05}));
     assertThrows(IllegalArgumentException.class, () -> rule.setBinaryInteractionParameterTemperatureTable(co2, methane,
-        new double[] { 400.0, 300.0 }, new double[] { 0.05, 0.10 }));
+        new double[] {400.0, 300.0}, new double[] {0.05, 0.10}));
     assertThrows(IllegalArgumentException.class, () -> rule.setBinaryInteractionParameterTemperatureTable(co2, co2,
-        new double[] { 300.0, 400.0 }, new double[] { 0.05, 0.10 }));
+        new double[] {300.0, 400.0}, new double[] {0.05, 0.10}));
   }
 
   private static SystemInterface createSystem() {

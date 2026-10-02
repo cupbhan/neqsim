@@ -1,0 +1,87 @@
+name: Check and prepare official NeqSim updates
+
+on:
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Official stable release tag (empty means latest)
+        required: false
+      prepare:
+        description: Merge on a new sync branch, validate and publish the review branch
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shared-thermo-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'cupbhan/neqsim'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Configure merge identity on the disposable runner
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Exercise synchronization safeguards
+        run: python devtools/test_sync_upstream.py
+      - name: Inspect or prepare the release
+        id: sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_TAG: ${{ inputs.tag }}
+          PREPARE: ${{ github.event_name == 'workflow_dispatch' && inputs.prepare }}
+        shell: bash
+        run: |
+          args=()
+          if [[ -n "$SYNC_TAG" ]]; then args+=(--tag "$SYNC_TAG"); fi
+          if [[ "$PREPARE" == 'true' ]]; then args+=(--apply); fi
+          python devtools/sync_upstream.py "${args[@]}"
+      - uses: actions/setup-java@v5
+        if: steps.sync.outputs.changed == 'true'
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Validate the merged candidate in this workflow
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          CANDIDATE_VERSION: ${{ format('{0}-cupbhan.1-rc.{1}', steps.sync.outputs.version, github.run_id) }}
+        run: |
+          python devtools/test_build_shared_thermo.py
+          python devtools/test_shared_runtime.py
+          python devtools/test_verify_shared_enhancements.py
+          python devtools/build_shared_thermo.py --version "$CANDIDATE_VERSION"
+      - name: Publish the validated review branch
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          SYNC_BRANCH: ${{ steps.sync.outputs.branch }}
+        run: |
+          git push origin "HEAD:refs/heads/$SYNC_BRANCH"
+          echo "Review and create a pull request: https://github.com/$GITHUB_REPOSITORY/compare/master...$SYNC_BRANCH" >> "$GITHUB_STEP_SUMMARY"
+          echo 'The main branch and selected product runtime have not changed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve comparison, conflicts and validation logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-sync-${{ github.run_id }}
+          path: |
+            build/upstream-sync/
+            build/shared-thermo/
+          if-no-files-found: warn

@@ -108,15 +108,15 @@ public final class HydrocarbonWaterRetainedPhaseSpinodalBranchInitializer {
     List<Attempt> attempts = new ArrayList<Attempt>();
     SpecifiedThreePhaseFlashSolver.Result accepted = null;
     Candidate aqueousCandidate = null;
-    for (double split : new double[] { 0.05, 0.01, 0.10 }) {
-      for (double amplitude : new double[] { 0.20, 0.10, 0.40 }) {
-        for (double sign : new double[] { -1.0, 1.0 }) {
+    for (double split : new double[] {0.05, 0.01, 0.10}) {
+      for (double amplitude : new double[] {0.20, 0.10, 0.40}) {
+        for (double sign : new double[] {-1.0, 1.0}) {
           double firstAmplitude = -sign * amplitude * split / (1.0 - split);
           double secondAmplitude = sign * amplitude;
           double[] firstComposition = perturbAlongMode(bifurcatingComposition, mode, firstAmplitude);
           double[] secondComposition = perturbAlongMode(bifurcatingComposition, mode, secondAmplitude);
-          double[] fractions = new double[] { otherFraction, bifurcatingFraction * (1.0 - split),
-              bifurcatingFraction * split };
+          double[] fractions = new double[] {otherFraction, bifurcatingFraction * (1.0 - split),
+              bifurcatingFraction * split};
           SpecifiedThreePhaseGibbsSeedPreconditioner.Result preconditioned = new SpecifiedThreePhaseGibbsSeedPreconditioner(
               template, otherPhase, bifurcatingPhase, bifurcatingPhase).setNumericalControls(4, 1.0e-10)
               .precondition(boundaryState.getTemperatureK(), boundaryState.getPressureBara(), fractions,

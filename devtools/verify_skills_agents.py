@@ -8,6 +8,10 @@ Checks performed:
   4. The TF-IDF retriever (``skill_search.py``) can parse every SKILL.md
      and returns at least one match for each skill's own description.
   5. The flat keyword index in ``skill-index.json`` is valid JSON.
+  6. OpenAI Codex discovers the canonical skills through the
+     ``.agents/skills`` symbolic link without maintaining a second copy.
+  7. Agent instructions do not launch bare Python tools, select/create/activate
+      interpreter environments, or direct fallback to another interpreter.
 
 Exit code is 1 if any structural error is found; warnings are printed but
 do not fail the run unless ``--strict`` is set.
@@ -18,17 +22,51 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import agent_frontmatter as af  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / ".github" / "skills"
+CODEX_SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 AGENTS_DIR = REPO_ROOT / ".github" / "agents"
 INDEX_PATH = SKILLS_DIR / "skill-index.json"
+CANONICAL_MCP = REPO_ROOT / ".github" / "mcp" / "mcp.json"
+VSCODE_MCP = REPO_ROOT / ".vscode" / "mcp.json"
 
 FRONT_MATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+# Agent Skills / Agent Plugins name rule; plugin loaders silently skip violators.
+KEBAB_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# Agent plugin ids: lowercase, digits, hyphens; dots are rejected by marketplaces.
+AGENT_ID_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# Agent Skills spec cap on SKILL.md description; the excess is silently truncated by clients.
+MAX_DESCRIPTION = 1024
+# Every chat request resends each installed skill/agent description, so the catalog is a
+# per-call token cost; detail belongs in the body.
+MAX_CATALOG_DESCRIPTION = 500
+BARE_PYTHON_LAUNCH_RE = re.compile(
+    r"(?<![A-Za-z0-9_./\\-])(?:(python(?:\.exe)?|py)\s+"
+    r"(?:-m\s+|-[A-Za-z]|[^\s`]+\.py\b|devtools[\\/]|<)|"
+    r"(pip)\s+(?:install|uninstall|list|show|check|freeze)\b|"
+    r"(pytest)\s+)"
+)
+PYTHON_ENV_CONFLICT_RE = re.compile(
+    r"(?:select (?:a |another |the )?(?:python )?interpreter|"
+    r"(?:create|activate) (?:a |the )?(?:new |per-agent )?"
+    r"(?:virtual environment|venv)|"
+    r"fall back to (?:the )?(?:system|another|different) (?:python|interpreter))",
+    re.IGNORECASE,
+)
+NEGATED_RUNTIME_DIRECTIVE_RE = re.compile(
+    r"\b(?:do not|don't|never|must not|without|no)\b", re.IGNORECASE
+)
 
 
 def parse_front_matter(text: str) -> Dict[str, str]:
@@ -82,8 +120,13 @@ def check_skills() -> Tuple[List[str], List[str]]:
         if "name" not in fm:
             errors.append(f"{skill_dir.name}: SKILL.md front-matter missing 'name'")
         elif fm["name"] != skill_dir.name:
-            warnings.append(
-                f"{skill_dir.name}: front-matter name '{fm['name']}' differs from folder name"
+            errors.append(
+                f"{skill_dir.name}: front-matter name '{fm['name']}' must equal the folder "
+                "name (agent-plugin loaders skip mismatched skills)"
+            )
+        elif not KEBAB_NAME_RE.match(fm["name"]):
+            errors.append(
+                f"{skill_dir.name}: name must be kebab-case [a-z0-9-] for Agent Plugins"
             )
         if "description" not in fm:
             errors.append(f"{skill_dir.name}: SKILL.md front-matter missing 'description'")
@@ -91,12 +134,25 @@ def check_skills() -> Tuple[List[str], List[str]]:
             warnings.append(
                 f"{skill_dir.name}: description is very short (<40 chars), retrieval will suffer"
             )
+        elif len(fm["description"]) > MAX_DESCRIPTION:
+            errors.append(
+                f"{skill_dir.name}: description is {len(fm['description'])} chars; the Agent "
+                f"Skills cap is {MAX_DESCRIPTION} and clients truncate, silently dropping the "
+                "trigger words used for routing"
+            )
+        elif len(fm["description"]) > MAX_CATALOG_DESCRIPTION:
+            errors.append(
+                f"{skill_dir.name}: description is {len(fm['description'])} chars; keep it "
+                f"<= {MAX_CATALOG_DESCRIPTION} (resent on every chat request) and move detail "
+                "into the SKILL.md body"
+            )
     return errors, warnings
 
 
 def check_agents() -> Tuple[List[str], List[str]]:
     errors: List[str] = []
     warnings: List[str] = []
+    known_skills = {p.name for p in SKILLS_DIR.iterdir() if p.is_dir()}
     for agent_md in sorted(AGENTS_DIR.glob("*.agent.md")):
         text = agent_md.read_text(encoding="utf-8")
         fm = parse_front_matter(text)
@@ -105,11 +161,73 @@ def check_agents() -> Tuple[List[str], List[str]]:
             continue
         if "name" not in fm:
             errors.append(f"{agent_md.name}: front-matter missing 'name'")
+        agent_id = agent_md.name[: -len(".agent.md")]
+        if not AGENT_ID_RE.match(agent_id):
+            errors.append(
+                f"{agent_md.name}: filename id '{agent_id}' must be kebab-case [a-z0-9-] "
+                "(plugin/marketplace agent ids reject dots)"
+            )
         if "description" not in fm:
             errors.append(f"{agent_md.name}: front-matter missing 'description'")
         elif len(fm["description"]) < 40:
             warnings.append(f"{agent_md.name}: description is very short")
+        elif len(fm["description"]) > MAX_CATALOG_DESCRIPTION:
+            errors.append(
+                f"{agent_md.name}: description is {len(fm['description'])} chars; keep it "
+                f"<= {MAX_CATALOG_DESCRIPTION} (resent on every chat request)"
+            )
+        full_fm = af.parse_frontmatter(text)
+        declared = full_fm.get("required_skills")
+        if not isinstance(declared, list):
+            errors.append(
+                f"{agent_md.name}: front-matter missing 'required_skills' list "
+                "(run devtools/sync_agent_required_skills.py --apply; use [] for none)"
+            )
+        else:
+            expected = af.extract_required_skills(text)
+            if list(declared) != expected:
+                errors.append(
+                    f"{agent_md.name}: required_skills is stale vs body declarations "
+                    "(run devtools/sync_agent_required_skills.py --apply)"
+                )
+            for skill in declared:
+                if not KEBAB_NAME_RE.match(skill):
+                    errors.append(f"{agent_md.name}: required skill '{skill}' is not kebab-case")
+                elif skill not in known_skills:
+                    warnings.append(
+                        f"{agent_md.name}: required skill '{skill}' not found under "
+                        ".github/skills (external skills must be in a sibling *-skills repo)"
+                    )
+        for runtime_error in check_python_runtime_instructions(agent_md):
+            errors.append(f"{agent_md.name}: {runtime_error}")
     return errors, warnings
+
+
+def check_python_runtime_instructions(agent_md: Path) -> List[str]:
+    """Return conflicts with the inherited shared Python runtime policy."""
+    errors: List[str] = []
+    try:
+        lines = agent_md.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return errors
+    for line_number, line in enumerate(lines, start=1):
+        context = " ".join(lines[max(0, line_number - 4) : line_number])
+        if NEGATED_RUNTIME_DIRECTIVE_RE.search(context):
+            continue
+        bare_match = BARE_PYTHON_LAUNCH_RE.search(line)
+        conflict_match = PYTHON_ENV_CONFLICT_RE.search(line)
+        if bare_match:
+            launcher = next(group for group in bare_match.groups() if group)
+            errors.append(
+                f"line {line_number} uses bare '{launcher}' launcher; use the "
+                "parent-selected absolute executable or sys.executable"
+            )
+        elif conflict_match:
+            errors.append(
+                f"line {line_number} conflicts with the shared Python runtime "
+                f"policy: '{conflict_match.group(0)}'"
+            )
+    return errors
 
 
 def check_skill_index() -> Tuple[List[str], List[str]]:
@@ -144,6 +262,132 @@ def check_skill_index() -> Tuple[List[str], List[str]]:
     return errors, warnings
 
 
+def _git_symlink_target(path: Path) -> str:
+    """Return the committed symlink target for ``path``, or "" if not a git symlink.
+
+    A Windows clone made with ``core.symlinks=false`` materializes a committed
+    symlink (git mode 120000) as a plain text file holding the target path, so
+    the filesystem check alone cannot distinguish it from a copied tree.
+    """
+    rel = path.relative_to(REPO_ROOT).as_posix()
+    try:
+        entry = subprocess.run(
+            ["git", "ls-files", "-s", "--", rel],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return ""
+    if entry.returncode != 0 or not entry.stdout.startswith("120000 "):
+        return ""
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def check_codex_skill_discovery() -> Tuple[List[str], List[str]]:
+    """Verify that Codex discovers the canonical skill directory via symlink."""
+    errors: List[str] = []
+    warnings: List[str] = []
+    expected_target = "../.github/skills"
+
+    if not CODEX_SKILLS_DIR.is_symlink():
+        committed_target = _git_symlink_target(CODEX_SKILLS_DIR)
+        if committed_target == expected_target:
+            warnings.append(
+                ".agents/skills is committed as a symlink to {0} but this checkout "
+                "materialized it as a plain file (git core.symlinks=false). The repo "
+                "is correct; to get a real link locally enable Windows Developer Mode, "
+                "then run: git config core.symlinks true && git checkout -- "
+                ".agents/skills".format(expected_target)
+            )
+        elif committed_target:
+            errors.append(
+                ".agents/skills is committed as a symlink to {!r}; expected {!r}".format(
+                    committed_target, expected_target
+                )
+            )
+        else:
+            errors.append(
+                ".agents/skills must be a symbolic link to ../.github/skills; "
+                "do not maintain a copied skill tree"
+            )
+        return errors, warnings
+
+    actual_target = os.readlink(str(CODEX_SKILLS_DIR))
+    if actual_target != expected_target:
+        errors.append(
+            ".agents/skills points to {!r}; expected {!r}".format(
+                actual_target, expected_target
+            )
+        )
+        return errors, warnings
+
+    try:
+        if not CODEX_SKILLS_DIR.resolve(strict=True).samefile(
+            SKILLS_DIR.resolve(strict=True)
+        ):
+            errors.append(
+                ".agents/skills does not resolve to the canonical .github/skills directory"
+            )
+    except OSError as error:
+        errors.append(".agents/skills cannot be resolved: {}".format(error))
+
+    return errors, warnings
+
+
+def check_mcp_definition() -> Tuple[List[str], List[str]]:
+    """The plugin ``mcp.json`` is canonical; ``.vscode/mcp.json`` must mirror it."""
+    errors: List[str] = []
+    warnings: List[str] = []
+    if not CANONICAL_MCP.exists():
+        errors.append(".github/mcp/mcp.json (canonical MCP definition) is missing")
+        return errors, warnings
+    try:
+        canonical = json.loads(CANONICAL_MCP.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        errors.append(f".github/mcp/mcp.json is invalid JSON: {e}")
+        return errors, warnings
+    servers = canonical.get("mcpServers")
+    if not isinstance(servers, dict) or not servers:
+        errors.append(".github/mcp/mcp.json must define a non-empty 'mcpServers' object")
+        return errors, warnings
+    for name, server in servers.items():
+        if server.get("type") == "stdio" and not server.get("command"):
+            errors.append(f"mcp.json server '{name}': stdio requires 'command'")
+        if server.get("type") in ("streamable-http", "sse") and not server.get("url"):
+            errors.append(f"mcp.json server '{name}': http transport requires 'url'")
+    if VSCODE_MCP.exists():
+        try:
+            vscode = json.loads(VSCODE_MCP.read_text(encoding="utf-8")).get("servers", {})
+        except json.JSONDecodeError as e:
+            errors.append(f".vscode/mcp.json is invalid JSON: {e}")
+            return errors, warnings
+        for name, server in servers.items():
+            mirror = vscode.get(name)
+            if mirror is None:
+                errors.append(f".vscode/mcp.json is missing server '{name}' from .github/mcp/mcp.json")
+                continue
+            if server.get("command") != mirror.get("command") or server.get("url") != mirror.get("url"):
+                errors.append(
+                    f".vscode/mcp.json server '{name}' command/url differs from the "
+                    "canonical .github/mcp/mcp.json"
+                )
+            # The workspace has no ${PLUGIN_ROOT}: it addresses .github/mcp directly and
+            # may append --root/--data; the canonical args must be its prefix.
+            canonical_args = [a.replace("${PLUGIN_ROOT}", "${workspaceFolder}/.github/mcp")
+                              for a in server.get("args", [])]
+            if mirror.get("args", [])[:len(canonical_args)] != canonical_args:
+                errors.append(
+                    f".vscode/mcp.json server '{name}' args must start with the canonical args "
+                    "with ${PLUGIN_ROOT} -> ${workspaceFolder}/.github/mcp"
+                )
+    return errors, warnings
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -154,14 +398,19 @@ def main() -> int:
     args = parser.parse_args()
 
     print(f"Skills dir: {SKILLS_DIR}")
+    print(f"Codex skills link: {CODEX_SKILLS_DIR}")
     print(f"Agents dir: {AGENTS_DIR}")
 
     skill_errors, skill_warnings = check_skills()
     agent_errors, agent_warnings = check_agents()
     index_errors, index_warnings = check_skill_index()
+    codex_errors, codex_warnings = check_codex_skill_discovery()
+    mcp_errors, mcp_warnings = check_mcp_definition()
 
-    all_errors = skill_errors + agent_errors + index_errors
-    all_warnings = skill_warnings + agent_warnings + index_warnings
+    all_errors = skill_errors + agent_errors + index_errors + codex_errors + mcp_errors
+    all_warnings = (
+        skill_warnings + agent_warnings + index_warnings + codex_warnings + mcp_warnings
+    )
 
     if all_errors:
         print("\n=== ERRORS ===")

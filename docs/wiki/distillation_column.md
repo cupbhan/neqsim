@@ -85,6 +85,22 @@ stability during the matrix warm-start stage.
 | `MESH_RESIDUAL` | `solveMeshResidual()` | Inside-out initialization followed by full MESH residual evaluation. | Best for auditing material, equilibrium, summation, energy, specification, and product-draw residuals. |
 | `AUTO` | `ColumnSolverFactory.AutoSolver` | Runs a feasibility pre-screen and copy-based solver probes. A fixed-specification reboiler-only stripper tries native sum-rates before paying for the relaxed damped base; other configurations retain the robust base/fallback ladder. | Useful when an agent or workflow should request robust automatic solver selection while still reporting the concrete solver through `getLastSolverTypeUsed()`. |
 
+### Accelerated full-sweep workspace
+
+The finite-difference `NEWTON` route and the final `WEGSTEIN` stream synchronization use
+undamped full-tray sweeps. Each internal vapor or liquid transfer now takes one owned clone of the
+already-flashed tray outlet and installs that same snapshot as the target tray inlet. Because unit
+relaxation never consumes a previous iterate, these sweeps do not allocate per-tray previous-stream
+arrays or create a second cache clone. The one owned snapshot still follows the established
+relaxation and reflash path, preserving downstream tear-state thermodynamic semantics.
+
+Use `getLastAcceleratedFullTraySweepCount()` and
+`getLastAcceleratedInternalStreamTransferCount()` to audit this work. The transfer count equals the
+number of downward liquid plus upward vapor transfers across all reported sweeps. These values
+describe accelerator work attempted by the latest route; they are preserved when `AUTO` adopts a
+candidate and can remain nonzero when a later coordinated fallback completes the solve. They do
+not replace mass, energy, specification, physical-state, or MESH convergence evidence.
+
 ### Sequential substitution details
 
 - Upward sweep: for trays below the lowest feed, new liquid draws from the tray above.
@@ -255,17 +271,76 @@ targets manipulated through condenser or reboiler temperature.
 - Solves a simultaneous block of MESH residual equations with liquid component flows, tray
   temperature, and vapor flow as tray variables.
 - Builds a finite-difference block-tridiagonal Jacobian from neighboring tray couplings and uses a
-  guarded Newton line search with flow and temperature trust limits.
+  guarded Newton line search with flow and temperature trust limits. Before each build, up to one
+  full-column thermodynamic pass per local finite-difference variable refreshes the base. This
+  matches the restore-evaluation budget that the frozen base replaces. The latest finite state
+  among those passes is retained so the base owns the most thermodynamically consistent K-value
+  fixed point, while the incoming derived state is only a non-finite fallback. Refinement stops
+  early when consecutive residual vectors agree within one tenth of the outer tolerance. Every
+  perturbed column then starts from that same frozen K-value, vapor-flow, and enthalpy state.
+  Exact restoration prevents finite-difference column order from silently refining the base
+  residual.
+- Starts every backtracking line-search trial from the same primary and derived thermodynamic base,
+  so a rejected larger step cannot change the K-value seed of the next trial. The accepted trial
+  remains applied and its evaluated MESH residual is reused; the solver does not repeat the same
+  thermodynamic evaluation merely to apply a step that the line search has already accepted.
+- Retries a rejected retained-state solve from the normal cold initializer before materializing the
+  rejected tray profile. This keeps the live column and its product caches unchanged until a cold
+  recovery attempt has either been accepted or exhausted.
+- Restores the intended single gas or liquid phase after composition initialization when applying
+  no-side-draw products. This prevents initialization from re-expanding both phase slots with the
+  same accepted component inventory.
+- Publishes the accepted adjacent-tray phase flows into the existing tray inlet streams before
+  evaluating balances. Reboiler and condenser duties are recalculated from those same material
+  streams, without another tray flash, and copied to calculated `heatDuty` energy ports. Duties
+  are in W: positive adds heat to the column and negative removes heat. A connected energy port
+  in specification mode retains its prescribed value.
+- The applied public state determines acceptance for ordinary columns as well as side-draw
+  columns. A directly accepted result reports `RIGOROUS_CONVERGED`; an unqualified result is
+  rejected and can proceed to the existing coordinated fallback. `getLastEnergyResidual()`
+  describes the published streams and duties, including fixed-temperature terminal stages.
+  MESH energy diagnostics include terminal heat duties and use the published phase outlets,
+  including side and pumparound draws, rather than a separately flashed mixed-stream phase split.
+  Non-finite flowing enthalpies or duties fail the MESH energy check.
+- `getEnergyBalanceError()` initializes cloned material-stream properties before reading their
+  enthalpies, includes any separate condenser liquid product, and preserves non-finite values.
+  Cloning keeps this public diagnostic from changing the adaptive relaxation controller's state.
+  Sequential solvers also refresh their final energy residual after product reconciliation and
+  property finalization, so the reported residual describes the published state. Terminal inlet
+  enthalpy sums exclude zero-flow phase templates, just as outlet sums do; this keeps absent
+  phases from producing non-finite duties in single-phase columns. Invalid flowing enthalpies
+  remain non-finite. Sequential MESH diagnostics are refreshed after the final terminal duties.
+- Exact repeated runs retain stream object identities and update calculation identifiers on
+  tray inlets, outlets, and column products. Nearby feed or terminal-temperature changes refresh
+  the retained inlet and product objects when the simultaneous result is accepted. For a column
+  with both terminal stages, cold and changed warm states receive Newton correction unless the
+  full residual already meets the solver tolerance. The percent-level initializer shortcuts
+  remain limited to the reboiler-only topology for which they were introduced.
+- Package-level solver diagnostics record Jacobian base-refinement passes and the residual-vector
+  mutation measured after each completed build. The mutation is expected to be bitwise zero; these
+  counters support deterministic regression and do not change the public column API.
 - Work diagnostics classify every currently assembled derivative column as finite-difference;
   `getLastNaphtaliAnalyticJacobianColumns()` remains available for compatibility and reports zero
   until a mixed analytic/numerical assembly is implemented.
-- Tray thermodynamics retain the established two forced-root fugacity sweeps. Diagnostics now
-  report their total count, the number of tray evaluations whose final
+- When coordinated routing rejects a Naphtali-Sandholm result and adopts damped substitution,
+  products, residuals, status, and `getLastIterationCount()` describe the accepted fallback.
+  Naphtali-specific Jacobian, thermodynamic, cache, K-value, and linear-solve counters continue to
+  describe the rejected simultaneous attempt. Use `getLastSolverTypeUsed()` and
+  `getLastSolveStatusReason()` with those counters to distinguish accepted-state convergence from
+  attempted-solver work. An identical subsequent invocation reuses the accepted damped tray and
+  product state through its full sequential-state fingerprint without labeling that state as
+  Naphtali-owned. Changed feed, tray, product, or configuration state invalidates that reuse.
+- Tray thermodynamics perform up to two forced-root fugacity sweeps for a cold solve and up to three
+  when refining a retained column state. Both paths stop early when
+  `max(abs(log(Knew/Kold)))` is already at or below `1e-8`. The extra warm-start sweep keeps the
+  finite-difference residual locally consistent after a nearby operating-point change without
+  adding EOS work to cold solves. Diagnostics report the actual sweep
+  count, the number of tray evaluations whose final
   `max(abs(log(Knew/Kold)))` exceeds `1e-8`, and the largest such final update through
   `getLastNaphtaliThermoKValueIterationCount()`,
   `getLastNaphtaliThermoKValueNonConvergedCount()`, and
   `getLastNaphtaliThermoMaxLogKValueUpdate()`. These metrics expose incomplete inner convergence;
-  they do not loosen the MESH acceptance criteria or silently add extra EOS work.
+  they do not loosen the MESH acceptance criteria or add extra EOS work.
 - Allows at most three line-search steps that fail to reduce the MESH residual. After three such
   non-descent steps, the solver restores the best finite tray state and returns the actual iteration
   count so the column can proceed to its coordinated fallback instead of exhausting the Newton
@@ -367,7 +442,7 @@ accelerator. The residual is $f_i(\mathbf{T}) = T_i^{sweep} - T_i$ and the Jacob
 
 $$J_{ij} \approx \frac{f_i(\mathbf{T} + \epsilon \mathbf{e}_j) - f_i(\mathbf{T})}{\epsilon}$$
 
-A line search ($\lambda = 1, 0.5, 0.25, 0.125$) controls step size, and 2–3 warm-up direct substitution iterations establish the convergence basin.
+A line search ($\lambda = 1, 0.5, 0.25, 0.125$) controls step size. It retains the evaluated trial with the lowest finite residual, including when every trial is non-descent, and the applied state, reported step, and reported residual refer to that same trial. Inspect `getLastNewtonLineSearchStepLength()`, `getLastNewtonLineSearchResidual()`, and `getLastNewtonLineSearchTrialCount()` after a `NEWTON` run. Two to three warm-up direct-substitution iterations establish the convergence basin.
 
 **MESH_RESIDUAL** starts from `INSIDE_OUT` and evaluates the scaled MESH residual vector without
 running an additional Newton-polishing solve. When the residual or product-draw gate is not

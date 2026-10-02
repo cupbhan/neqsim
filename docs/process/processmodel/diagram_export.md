@@ -3,11 +3,17 @@ title: Process Flow Diagram (PFD) Export
 description: Export deterministic simulator-style PFD topology and Graphviz diagrams from NeqSim process models.
 ---
 
-# Process Flow Diagram (PFD) Export
-
 NeqSim can export deterministic simulator-style process flow diagrams (PFDs) as Graphviz DOT and,
 when Graphviz is installed, SVG or PDF. These exports help inspect simulation topology; they are not
 qualified engineering drawings and do not claim ISO 10628 conformance.
+
+For controlled multi-sheet drawing proposals, first create an `EngineeringDiagramDocumentSet` with
+`ProcessDiagramDocumentSetAdapter`, then use `NativeEngineeringDiagramRenderer`. The native renderer
+does not require Graphviz and emits deterministic vector SVG sheets plus one multi-page PDF from the
+same semantic document model. It preserves pinned millimetre positions, protected routes,
+reciprocal off-page references, and title/revision metadata. The result remains an engineering
+proposal and is not a qualified P&amp;ID or standards-conformance claim. See
+[Engineering diagram document and sheet model](../../integration/engineering-diagram-document-model.md).
 
 ## Canonical Topology Foundation
 
@@ -34,9 +40,40 @@ of silently losing the ambiguity. The result owns a deterministic JSON snapshot 
 defensive graph copy. Consumers should review structured diagnostics before treating an adaptation
 as complete.
 
-The existing DOT and DEXPI exporters have not yet been migrated to consume this graph. Until that
-migration is complete, this adapter is a shared topology contract rather than a new rendering or
-standards-conformance claim.
+### Operating-case enrichment
+
+After a successful simulation, use the opt-in four-argument overload to capture selected current
+stream results in the same canonical plant snapshot:
+
+```java
+process.run();
+ProcessDiagramGraphAdapter.Result operatingSnapshot =
+    ProcessDiagramGraphAdapter.fromProcessSystem(
+        process, "PLANT-001", "A", "NORMAL-001");
+```
+
+The overload works for both `ProcessSystem` and multi-area `ProcessModel`. It creates one stable
+plant-wide operating-case node and, when each result is finite and available, three calculation
+nodes per registered stream:
+
+- thermodynamic temperature in K;
+- absolute pressure in bara; and
+- mass flow in kg/s.
+
+Every value names its unit and quantity basis, references its stream and operating case, and carries
+`SIMULATION_RESULT` provenance with `CALCULATED` engineering state and
+`REVIEW_REQUIRED` approval status. Values are captured only for areas whose latest run completed
+successfully. An unrun or failed area remains in the topology and emits
+`DIAGRAM_OPERATING_CASE_NOT_SUCCESSFUL` instead of publishing potentially stale values.
+
+The established three-argument overload remains topology-only, so existing fingerprints and
+consumers do not acquire simulation values silently. The opt-in five-argument
+`Dexpi20ProcessModelWriter.writeAndAssessTopology(...)` overload consumes both the canonical
+material projection and matching calculation nodes for one named operating case. It converts K to
+degree Celsius and kg/s to kg/hour, keeps bara as absolute bar, records the canonical value source,
+and reports omitted values without reading streams as a fallback. Legacy DOT, Graphviz, and DEXPI
+compatibility APIs remain unchanged. This adapter is still a shared semantic contract rather than a
+rendering or standards-conformance claim.
 
 ### Topology-equivalence reference cases
 

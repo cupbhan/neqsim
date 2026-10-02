@@ -16,8 +16,11 @@ import org.ejml.dense.row.MatrixFeatures_DDRM;
 import org.ejml.dense.row.NormOps_DDRM;
 import org.ejml.simple.SimpleMatrix;
 import neqsim.thermo.component.ComponentInterface;
+import neqsim.thermo.phase.PhaseInterface;
 import neqsim.thermo.phase.PhaseType;
+import neqsim.thermo.system.SystemFurstElectrolyteEos;
 import neqsim.thermo.system.SystemInterface;
+import neqsim.thermo.system.SystemUMRPRUMCEos;
 
 /**
  * TPmultiflash class.
@@ -74,6 +77,7 @@ public class TPmultiflash extends TPflash {
   boolean multiPhaseTest = false;
   double[][] dQdbeta;
   double[][] Qmatrix;
+  private double[][] fugacityCoefficients;
   double[] Erow;
   double Q = 0;
   boolean doStabilityAnalysis = true;
@@ -81,6 +85,8 @@ public class TPmultiflash extends TPflash {
   boolean checkOneRemove = false;
   boolean secondTime = false;
   boolean aqueousPhaseSeedAttempted = false;
+  /** Guards the water-rich vapour-appearance seed so it is attempted at most once per flash. */
+  private boolean vapourPhaseSeedAttempted = false;
   boolean postFlashStabilityChecked = false;
   boolean enhancedStabilityChecked = false;
   /** True when the beta loop exited above its own tolerance, i.e. the three-phase solve really stalled. */
@@ -101,6 +107,24 @@ public class TPmultiflash extends TPflash {
   private int convergedPhaseRemovalCount = 0;
   private double finalMassBalanceResidual = Double.NaN;
   private boolean phaseCleanupSkipped = false;
+  /** Exact reaction-adjusted overall species inventory during coupled phase/chemical equilibrium. */
+  private transient double[] reactiveOverallMoles;
+  /** Normalized reaction-adjusted species fractions used by the multiphase beta equations. */
+  private transient double[] reactiveOverallFractions;
+  /** Positive floor for reaction products introduced at trace level. */
+  private static final double MINIMUM_REACTIVE_COMPONENT_MOLES = 1.0e-45;
+  /** Margin by which both Rachford-Rice sums must exceed unity before a vapour phase is sought. */
+  private static final double WILSON_TWO_PHASE_SCREEN_TOLERANCE = 1.0e-3;
+  /**
+   * Blocks nested vapour-appearance restarts. The restart runs a new {@link TPmultiflash} instance, whose own one-shot
+   * flag starts unset, so without a guard shared across instances the restart could recurse indefinitely.
+   */
+  private static final ThreadLocal<Boolean> VAPOUR_RESTART_ACTIVE = new ThreadLocal<Boolean>() {
+    @Override
+    protected Boolean initialValue() {
+      return Boolean.FALSE;
+    }
+  };
 
   double[] multTerm;
   double[] multTerm2;
@@ -336,25 +360,36 @@ public class TPmultiflash extends TPflash {
   public void setDoubleArrays() {
     dQdbeta = new double[system.getNumberOfPhases()][1];
     Qmatrix = new double[system.getNumberOfPhases()][system.getNumberOfPhases()];
+    fugacityCoefficients = new double[system.getNumberOfPhases()][system.getPhase(0).getNumberOfComponents()];
   }
 
   /**
    * setXY.
    */
   public void setXY() {
-    // Check for ions directly - ions must be handled specially regardless of whether
-    // chemical reactions are defined. Ions can only exist in aqueous phases.
+    boolean coupledReactiveFlash = isCoupledReactiveHydrateFlash() && reactiveOverallFractions != null;
     for (int k = 0; k < system.getNumberOfPhases(); k++) {
       boolean isAqueous = system.getPhase(k).getType() == PhaseType.AQUEOUS;
+      double ionFractionSum = 0.0;
+      double neutralFractionSum = 0.0;
 
       for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
-        if (system.getPhase(0).getComponent(i).getz() > 1e-100) {
+        double overallFraction = getFlashOverallFraction(i);
+        // Stability trials can activate stored phases containing ions stripped from the feed.
+        // Clear them on every molecular-basis update, before normalization dilutes the molecules.
+        if (isIon(i) && overallFraction <= 1.0e-100) {
+          system.getPhase(k).getComponent(i).setx(1.0e-50);
+          continue;
+        }
+        if (overallFraction > 1e-100) {
           // Check for ions - ions can only exist in aqueous phases
           // This check must happen regardless of isChemicalSystem() status
-          if (system.getPhase(0).getComponent(i).getIonicCharge() != 0
-              || system.getPhase(0).getComponent(i).isIsIon()) {
+          if (isIon(i)) {
             // Ions only exist in aqueous phases, near-zero in gas/oil
-            if (isAqueous) {
+            if (isAqueous && coupledReactiveFlash) {
+              system.getPhase(k).getComponent(i)
+                  .setx(overallFraction / Math.max(system.getBeta(k), phaseFractionMinimumLimit));
+            } else if (isAqueous) {
               // In aqueous phase, calculate ion x from moles
               double totalMoles = system.getPhase(k).getNumberOfMolesInPhase();
               if (totalMoles > 1e-100) {
@@ -369,17 +404,36 @@ public class TPmultiflash extends TPflash {
             }
           } else {
             // Non-ionic components: normal flash calculation
-            double newX = system.getPhase(0).getComponent(i).getz() / Erow[i]
-                / system.getPhase(k).getComponent(i).getFugacityCoefficient();
+            double newX = overallFraction / Erow[i] / system.getPhase(k).getComponent(i).getFugacityCoefficient();
             if (!Double.isFinite(newX) || newX <= 0.0) {
-              newX = Math.max(system.getPhase(0).getComponent(i).getz(), 1.0e-30);
+              newX = Math.max(overallFraction, 1.0e-30);
             }
             system.getPhase(k).getComponent(i).setx(newX);
+          }
+          if (isIon(i)) {
+            ionFractionSum += system.getPhase(k).getComponent(i).getx();
+          } else {
+            neutralFractionSum += system.getPhase(k).getComponent(i).getx();
           }
         }
       }
 
-      system.getPhase(k).normalize();
+      if (coupledReactiveFlash && isAqueous) {
+        if (!(ionFractionSum < 1.0) || !(neutralFractionSum > 0.0)) {
+          throw new IllegalStateException(
+              "Reactive aqueous composition cannot accommodate the ionic inventory: " + "ionFraction=" + ionFractionSum
+                  + ", neutralFraction=" + neutralFractionSum + ", beta=" + system.getBeta(k));
+        }
+        double neutralScale = (1.0 - ionFractionSum) / neutralFractionSum;
+        for (int component = 0; component < system.getPhase(k).getNumberOfComponents(); component++) {
+          if (!isIon(component)) {
+            ComponentInterface phaseComponent = system.getPhase(k).getComponent(component);
+            phaseComponent.setx(phaseComponent.getx() * neutralScale);
+          }
+        }
+      } else {
+        system.getPhase(k).normalize();
+      }
     }
   }
 
@@ -391,7 +445,7 @@ public class TPmultiflash extends TPflash {
     for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
       Erow[i] = 0.0;
       for (int k = 0; k < system.getNumberOfPhases(); k++) {
-        Erow[i] += system.getPhase(k).getBeta() / system.getPhase(k).getComponent(i).getFugacityCoefficient();
+        Erow[i] += system.getPhase(k).getBeta() * inverseFugacityCoefficient(k, i);
       }
       if (Erow[i] < 1e-100) {
         Erow[i] = 1e-100;
@@ -413,21 +467,25 @@ public class TPmultiflash extends TPflash {
      * double betaTotal = 0; for (int k = 0; k < system.getNumberOfPhases(); k++) { betaTotal +=
      * system.getPhase(k).getBeta(); } Q = betaTotal;
      */
-    this.calcE();
+    calcEAndCacheFugacityCoefficients();
     /*
      * for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) { Q -= Math.log(E[i]) *
      * system.getPhase(0).getComponent(i).getz(); }
      */
 
     for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
-      multTerm[i] = system.getPhase(0).getComponent(i).getz() / Erow[i];
-      multTerm2[i] = system.getPhase(0).getComponent(i).getz() / (Erow[i] * Erow[i]);
+      double overallFraction = getFlashOverallFraction(i);
+      if (isIon(i) && overallFraction <= 1.0e-100) {
+        overallFraction = 0.0;
+      }
+      multTerm[i] = overallFraction / Erow[i];
+      multTerm2[i] = overallFraction / (Erow[i] * Erow[i]);
     }
 
     for (int k = 0; k < system.getNumberOfPhases(); k++) {
       dQdbeta[k][0] = 1.0;
       for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
-        dQdbeta[k][0] -= multTerm[i] / system.getPhase(k).getComponent(i).getFugacityCoefficient();
+        dQdbeta[k][0] -= multTerm[i] / fugacityCoefficients[k][i];
       }
     }
 
@@ -435,8 +493,7 @@ public class TPmultiflash extends TPflash {
       for (int j = 0; j < system.getNumberOfPhases(); j++) {
         Qmatrix[i][j] = 0.0;
         for (int k = 0; k < system.getPhase(0).getNumberOfComponents(); k++) {
-          Qmatrix[i][j] += multTerm2[k] / (system.getPhase(j).getComponent(k).getFugacityCoefficient()
-              * system.getPhase(i).getComponent(k).getFugacityCoefficient());
+          Qmatrix[i][j] += multTerm2[k] / (fugacityCoefficients[j][k] * fugacityCoefficients[i][k]);
         }
         if (i == j) {
           double reg = 1.0e-3;
@@ -454,6 +511,78 @@ public class TPmultiflash extends TPflash {
       }
     }
     return Q;
+  }
+
+  /**
+   * Calculate the phase-split denominator and cache fugacity coefficients for the gradient and Hessian.
+   *
+   * <p>
+   * Retaining the original division sequence is intentional. Algebraically equivalent reciprocal multiplication changes
+   * rounding in repeated reservoir flashes and can alter accepted system-level trajectories.
+   * </p>
+   */
+  private void calcEAndCacheFugacityCoefficients() {
+    for (int component = 0; component < system.getPhase(0).getNumberOfComponents(); component++) {
+      // Removed ions must not enter the molecular beta equations. In particular, the
+      // divalent-ion coefficient can underflow on the ion-free trial and make its
+      // nominally negligible Hessian contribution evaluate as 0 / 0.
+      if (isIon(component) && getFlashOverallFraction(component) <= 1.0e-100) {
+        Erow[component] = 1.0;
+        for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+          fugacityCoefficients[phase][component] = 1.0;
+        }
+        continue;
+      }
+      Erow[component] = 0.0;
+      for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+        double fugacityCoefficient = system.getPhase(phase).getComponent(component).getFugacityCoefficient();
+        if (isCoupledReactiveHydrateFlash() && isIon(component)
+            && system.getPhase(phase).getType() != PhaseType.AQUEOUS) {
+          fugacityCoefficient = Double.POSITIVE_INFINITY;
+        }
+        fugacityCoefficients[phase][component] = fugacityCoefficient;
+        Erow[component] += system.getPhase(phase).getBeta() / fugacityCoefficient;
+      }
+      if (Erow[component] < 1e-100) {
+        Erow[component] = 1e-100;
+      }
+      if (Double.isNaN(Erow[component])) {
+        logger.error("Erow is NaN for component " + system.getPhase(0).getComponent(component).getName());
+        Erow[component] = 1e-100;
+      }
+    }
+  }
+
+  /**
+   * Return the current overall species fraction used by the phase-equilibrium equations.
+   *
+   * @param component component index
+   * @return reaction-adjusted fraction for a coupled reactive flash, otherwise the system fraction
+   */
+  private double getFlashOverallFraction(int component) {
+    if (reactiveOverallFractions != null && component >= 0 && component < reactiveOverallFractions.length) {
+      return reactiveOverallFractions[component];
+    }
+    return system.getPhase(0).getComponent(component).getz();
+  }
+
+  /**
+   * Return an allowed inverse fugacity coefficient.
+   *
+   * <p>
+   * Reactive ions are excluded exactly from gas and oil phases instead of relying on a large finite fugacity penalty.
+   * </p>
+   *
+   * @param phase phase index
+   * @param component component index
+   * @return inverse fugacity coefficient, or zero when an ion is excluded from the phase
+   */
+  private double inverseFugacityCoefficient(int phase, int component) {
+    if (isCoupledReactiveHydrateFlash() && isIon(component) && system.getPhase(phase).getType() != PhaseType.AQUEOUS) {
+      return 0.0;
+    }
+    double fugacityCoefficient = system.getPhase(phase).getComponent(component).getFugacityCoefficient();
+    return 1.0 / fugacityCoefficient;
   }
 
   /**
@@ -510,7 +639,7 @@ public class TPmultiflash extends TPflash {
 
       // The linear solve already returns a column vector. Apply it directly to avoid allocating
       // transposed, scaled, and subtracted temporary matrices in every beta iteration.
-      double betaStepScale = iter / (iter + 3.0);
+      double betaStepScale = limitBetaStepScale(iter / (iter + 3.0));
       removePhase = false;
       for (int k = 0; k < system.getNumberOfPhases(); k++) {
         double currBeta = system.getPhase(k).getBeta() - betaCorrection.get(k, 0) * betaStepScale;
@@ -556,7 +685,12 @@ public class TPmultiflash extends TPflash {
     } else if (removePhase && err > 1e-6) {
       lastSolveBetaStatus = SolveStatus.INVALID_PHASE_REMOVAL_DURING_ITERATION;
       lastSolveBetaMessage = "phase removal was requested by an unconverged phase-fraction iterate";
-      removePhase = false;
+      // The upstream dry-hydrocarbon active-set recovery needs the clamp signal to stop the outer iteration.
+      // It is not permission to purge a phase: the final-state diagnostic gate below still guards cleanup.
+      // Water-bearing and reactive systems retain the conservative personal recovery path.
+      if (!isNeutralHydrocarbonFeed()) {
+        removePhase = false;
+      }
     } else if (removePhase) {
       lastSolveBetaStatus = SolveStatus.PHASE_REMOVED_AT_CONVERGENCE;
       lastSolveBetaMessage = "phase fraction reached the removal limit in an accepted solve";
@@ -573,13 +707,45 @@ public class TPmultiflash extends TPflash {
   }
 
   /**
+   * Checks whether the feed is restricted to neutral hydrocarbons and inert components.
+   *
+   * @return true when the upstream dry-fluid active-set recovery applies
+   */
+  private boolean isNeutralHydrocarbonFeed() {
+    if (system.isChemicalSystem() || system.hasIons() || system.hasComponent("water")) {
+      return false;
+    }
+    for (int index = 0; index < system.getNumberOfComponents(); index++) {
+      ComponentInterface component = system.getPhase(0).getComponent(index);
+      if (component.getz() > 0.0 && !component.isHydrocarbon() && !component.isInert()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Allow a specialized fixed-topology solver to damp the common beta Newton step.
+   *
+   * <p>
+   * The default leaves the existing multiphase correction unchanged. Subclasses must return one common scale so the
+   * phase-fraction correction continues to preserve its simplex direction before normalization.
+   * </p>
+   *
+   * @param proposedScale iteration-dependent scale selected by the general solver
+   * @return scale applied to every phase-fraction correction
+   */
+  protected double limitBetaStepScale(double proposedScale) {
+    return proposedScale;
+  }
+
+  /**
    * Solve one beta Newton system and reject non-finite corrections.
    *
    * <p>
    * EJML's raw common-operations solve can report success for a singular matrix while writing NaN values to the
-   * correction vector. The former {@link SimpleMatrix#solve(SimpleMatrix)} path raised a singular-matrix exception in
-   * that case, allowing enhanced mode to regularize the Hessian and ordinary mode to stop without corrupting phase
-   * fractions.
+   * correction vector. The former {@code SimpleMatrix.solve(...)} path raised a singular-matrix exception in that case,
+   * allowing enhanced mode to regularize the Hessian and ordinary mode to stop without corrupting phase fractions.
    * </p>
    *
    * @param betaHessian beta-Hessian matrix
@@ -877,6 +1043,7 @@ public class TPmultiflash extends TPflash {
     // }
     minimumGibbsEnergySystem = system;
     clonedSystem.add(system.clone());
+    SystemInterface trialSystem = clonedSystem.get(0);
     /*
      * for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) { if
      * (system.getPhase(0).getComponent(i).getx() < 1e-100) { clonedSystem.add(null); continue; } double numb = 0;
@@ -957,7 +1124,12 @@ public class TPmultiflash extends TPflash {
     // O2: Early exit — if all K ≈ 1.0 the system is near/above critical.
     // Only skip Wilson K-based trials; still fall through to pure-component trials
     // which use independent initial guesses not affected by K ≈ 1.
-    boolean skipWilsonKTrials = (maxAbsLogK < 0.01);
+    // Furst-electrolyte and UMR-PRU-MC systems retain their established local
+    // pure-component stability path unless enhanced checking is explicitly requested.
+    // Other model families still require Wilson trials for water-rich and vapor-like splits.
+    boolean preserveLocalStabilityPath = !system.doEnhancedMultiPhaseCheck()
+        && (system instanceof SystemFurstElectrolyteEos || system instanceof SystemUMRPRUMCEos);
+    boolean skipWilsonKTrials = preserveLocalStabilityPath || maxAbsLogK < 0.01;
 
     // O3: Wilson K-based trial phases — liquid-like (z/K) first, then vapor-like (K·z)
     // Liquid-like trial runs first because most multi-phase systems have liquid-driven
@@ -1004,15 +1176,17 @@ public class TPmultiflash extends TPflash {
           oldDeltalogWi[i] = oldlogw[i] - oldoldlogw[i];
         }
         try {
-          clonedSystem.get(0).init(1, 1);
+          trialSystem.init(1, 1);
         } catch (Exception ex) {
           trialInitFailed = true;
           break;
         }
+        // Refresh the phase reference after initialization, which may change phase indexing.
+        PhaseInterface trialPhase = trialSystem.getPhase(1);
         for (int i = 0; i < numComp; i++) {
-          if (validComp[i]
-              && !Double.isInfinite(clonedSystem.get(0).getPhase(1).getComponent(i).getLogFugacityCoefficient())) {
-            logWi[i] = d[i] - clonedSystem.get(0).getPhase(1).getComponent(i).getLogFugacityCoefficient();
+          ComponentInterface trialComponent = trialPhase.getComponent(i);
+          if (validComp[i] && !Double.isInfinite(trialComponent.getLogFugacityCoefficient())) {
+            logWi[i] = d[i] - trialComponent.getLogFugacityCoefficient();
           }
           deltalogWi[i] = logWi[i] - oldlogw[i];
           err += Math.abs(deltalogWi[i]);
@@ -1046,7 +1220,7 @@ public class TPmultiflash extends TPflash {
 
         // Update trial phase composition
         for (int i = 0; i < numComp; i++) {
-          clonedSystem.get(0).getPhase(1).getComponent(i).setx(validComp[i] ? safeExp(logWi[i]) : 1e-50);
+          trialPhase.getComponent(i).setx(validComp[i] ? safeExp(logWi[i]) : 1e-50);
         }
       } while (!trialInitFailed && (Math.abs(err) > 1e-9 || err > errOld) && iter < maxiter);
 
@@ -1207,7 +1381,9 @@ public class TPmultiflash extends TPflash {
         iter++;
         err = 0;
 
-        if (iter <= maxsucssubiter || !system.isImplementedCompositionDeriativesofFugacity()) {
+        boolean successiveSubstitution = iter <= maxsucssubiter
+            || !system.isImplementedCompositionDeriativesofFugacity();
+        if (successiveSubstitution) {
           // DEM acceleration every 5th iteration (Michelsen 1982b, Risnes et al. 1981)
           // Uses dominant eigenvalue estimate: λ = (Δg_n · Δg_{n-1}) / (Δg_{n-1} ·
           // Δg_{n-1})
@@ -1244,16 +1420,19 @@ public class TPmultiflash extends TPflash {
               oldDeltalogWi[i] = oldlogw[i] - oldoldlogw[i];
             }
             try {
-              clonedSystem.get(0).init(1, 1);
+              trialSystem.init(1, 1);
             } catch (Exception ex) {
               pureTrialInitFailed = true;
               break;
             }
+            PhaseInterface trialPhase = trialSystem.getPhase(1);
+            PhaseInterface feedPhase = system.getPhase(0);
             for (int i = 0; i < nc; i++) {
-              if (!Double.isInfinite(clonedSystem.get(0).getPhase(1).getComponent(i).getLogFugacityCoefficient())
-                  && system.getPhase(0).getComponent(i).getz() > 1e-100) {
-                logWi[i] = d[i] - clonedSystem.get(0).getPhase(1).getComponent(i).getLogFugacityCoefficient();
-                if (clonedSystem.get(0).getPhase(1).getComponent(i).getIonicCharge() != 0) {
+              ComponentInterface trialComponent = trialPhase.getComponent(i);
+              if (!Double.isInfinite(trialComponent.getLogFugacityCoefficient())
+                  && feedPhase.getComponent(i).getz() > 1e-100) {
+                logWi[i] = d[i] - trialComponent.getLogFugacityCoefficient();
+                if (trialComponent.getIonicCharge() != 0) {
                   logWi[i] = -1000.0;
                 }
               }
@@ -1275,7 +1454,7 @@ public class TPmultiflash extends TPflash {
           }
           // Newton needs fugcoef + composition derivatives
           try {
-            clonedSystem.get(0).init(3, 1);
+            trialSystem.init(3, 1);
           } catch (Exception ex) {
             pureTrialInitFailed = true;
             break;
@@ -1287,18 +1466,21 @@ public class TPmultiflash extends TPflash {
           }
 
           // Build gradient and Jacobian using raw EJML (no SimpleMatrix allocation)
+          PhaseInterface derivativePhase = trialSystem.getPhases()[1];
+          PhaseInterface feedPhase = system.getPhase(0);
           for (int i = 0; i < nc; i++) {
-            if (system.getPhase(0).getComponent(i).getz() > 1e-100) {
-              newtonF.set(i, 0, Math.sqrt(Wi[j][i]) * (Math.log(Wi[j][i])
-                  + clonedSystem.get(0).getPhases()[1].getComponent(i).getLogFugacityCoefficient() - d[i]));
+            ComponentInterface feedComponent = feedPhase.getComponent(i);
+            ComponentInterface derivativeComponent = derivativePhase.getComponent(i);
+            if (feedComponent.getz() > 1e-100) {
+              newtonF.set(i, 0,
+                  Math.sqrt(Wi[j][i]) * (Math.log(Wi[j][i]) + derivativeComponent.getLogFugacityCoefficient() - d[i]));
             } else {
               newtonF.set(i, 0, 0.0);
             }
             for (int k = 0; k < nc; k++) {
               double kronDelt = (i == k) ? 1.0 : 0.0;
-              if (system.getPhase(0).getComponent(i).getz() > 1e-100) {
-                newtonJ.set(i, k, kronDelt
-                    + Math.sqrt(Wi[j][k] * Wi[j][i]) * clonedSystem.get(0).getPhases()[1].getComponent(i).getdfugdn(k));
+              if (feedComponent.getz() > 1e-100) {
+                newtonJ.set(i, k, kronDelt + Math.sqrt(Wi[j][k] * Wi[j][i]) * derivativeComponent.getdfugdn(k));
               } else {
                 newtonJ.set(i, k, 0.0);
               }
@@ -1332,13 +1514,19 @@ public class TPmultiflash extends TPflash {
         }
         // logger.info("err: " + err);
 
-        for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
-          if (system.getPhase(0).getComponent(i).getz() > 1e-100) {
-            clonedSystem.get(0).getPhase(1).getComponent(i).setx(safeExp(logWi[i]));
+        PhaseInterface feedPhase = system.getPhase(0);
+        PhaseInterface trialPhase = trialSystem.getPhase(1);
+        for (int i = 0; i < feedPhase.getNumberOfComponents(); i++) {
+          ComponentInterface feedComponent = feedPhase.getComponent(i);
+          ComponentInterface trialComponent = trialPhase.getComponent(i);
+          if (feedComponent.getz() > 1e-100) {
+            // Substitution already evaluated this exact logWi into Wi; accepted DEM updates
+            // both, and rejected DEM leaves both unchanged. Newton instead forms Wi by squaring,
+            // so retain its original exp(log(Wi)) rounding and ionic log-weight handling.
+            trialComponent.setx(successiveSubstitution ? Wi[j][i] : safeExp(logWi[i]));
           }
-          if (system.getPhase(0).getComponent(i).getIonicCharge() != 0
-              || system.getPhase(0).getComponent(i).isIsIon()) {
-            clonedSystem.get(0).getPhase(1).getComponent(i).setx(1e-50);
+          if (feedComponent.getIonicCharge() != 0 || feedComponent.isIsIon()) {
+            trialComponent.setx(1e-50);
           }
         }
       } while (!pureTrialInitFailed && (Math.abs(err) > 1e-9 || err > errOld) && iter < maxiter);
@@ -1690,6 +1878,25 @@ public class TPmultiflash extends TPflash {
     }
 
     system.normalizeBeta();
+  }
+
+  /**
+   * Returns a bounded initial fraction for a phase admitted by a Wilson-K stability trial.
+   *
+   * <p>
+   * A negative tangent-plane distance establishes that the current topology is unstable, but it does not determine the
+   * equilibrium amount of the new phase. Seeding beta from the trial's dominant overall component can therefore
+   * introduce an order-one material phase before the phase-fraction solve. Use the existing ordinary beta solver's
+   * regularization scale so the trial is incipient without being pinned below the solver's useful correction scale,
+   * then let the beta/equilibrium solve grow or remove it.
+   * </p>
+   *
+   * @param dominantComponent index of the largest component in the trial composition
+   * @return bounded incipient phase fraction
+   */
+  private double getIncipientWilsonPhaseFraction(int dominantComponent) {
+    double numericalSeed = Math.max(1.0e-3, 100.0 * phaseFractionMinimumLimit);
+    return Math.min(system.getPhase(0).getComponent(dominantComponent).getz(), numericalSeed);
   }
 
   /**
@@ -2540,12 +2747,16 @@ public class TPmultiflash extends TPflash {
       return; // Already have at most one aqueous phase
     }
 
-    // Find the phase with highest aqueous component content - this will be the true aqueous phase
+    // Hydrate and non-reactive electrolyte flashes select the aqueous phase containing the largest material amount of
+    // aqueous components. Weighting by beta prevents a salt-free numerical phase at the phase-fraction floor from
+    // replacing the material brine. Other reactive operations retain their established composition-only selection.
+    boolean useMaterialAqueousInventory = !system.isChemicalSystem() || isCoupledReactiveHydrateFlash();
     int bestAqueousPhase = -1;
-    double maxAqueousContent = 0.0;
+    double maxAqueousInventory = -1.0;
 
     for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
-      if (system.getPhase(phase).getType() == PhaseType.GAS) {
+      if ((useMaterialAqueousInventory && system.getPhase(phase).getType() != PhaseType.AQUEOUS)
+          || (!useMaterialAqueousInventory && system.getPhase(phase).getType() == PhaseType.GAS)) {
         continue;
       }
 
@@ -2561,8 +2772,9 @@ public class TPmultiflash extends TPflash {
         }
       }
 
-      if (aqueousContent > maxAqueousContent) {
-        maxAqueousContent = aqueousContent;
+      double aqueousInventory = useMaterialAqueousInventory ? system.getBeta(phase) * aqueousContent : aqueousContent;
+      if (aqueousInventory > maxAqueousInventory) {
+        maxAqueousInventory = aqueousInventory;
         bestAqueousPhase = phase;
       }
     }
@@ -2690,6 +2902,722 @@ public class TPmultiflash extends TPflash {
     return true;
   }
 
+  /**
+   * Evaluates the Wilson correlation for the vapour-liquid distribution coefficient of one component.
+   *
+   * @param component component whose critical constants are used
+   * @param temperature system temperature in K, must be positive
+   * @param pressure system pressure in bara, must be positive
+   * @return Wilson K-value, or {@code 1.0} when the critical constants are unusable
+   */
+  private static double wilsonKValue(ComponentInterface component, double temperature, double pressure) {
+    double criticalTemperature = component.getTC();
+    double criticalPressure = component.getPC();
+    if (criticalTemperature <= 0.0 || criticalPressure <= 0.0 || temperature <= 0.0 || pressure <= 0.0) {
+      return 1.0;
+    }
+    double acentricFactor = component.getAcentricFactor();
+    double kValue = (criticalPressure / pressure)
+        * Math.exp(5.373 * (1.0 + acentricFactor) * (1.0 - criticalTemperature / temperature));
+    return Math.max(kValue, 1.0e-20);
+  }
+
+  /**
+   * Decides whether a component belongs to the volatile sub-mixture used by the vapour-appearance screen.
+   *
+   * <p>
+   * Water, ions, glycols and alcohols are excluded so that the screen sees the hydrocarbon and inert-gas fraction that
+   * actually decides whether a vapour phase can form. Carbon dioxide, nitrogen and hydrogen sulphide are retained
+   * because they are genuine light constituents of the volatile sub-mixture.
+   * </p>
+   *
+   * @param component component to classify
+   * @return {@code true} when the component takes part in the volatile screen
+   */
+  private static boolean isVolatileScreeningComponent(ComponentInterface component) {
+    if (component.getIonicCharge() != 0 || component.isIsIon()) {
+      return false;
+    }
+    String name = component.getComponentName().toLowerCase();
+    return !("water".equals(name) || "meg".equals(name) || "deg".equals(name) || "teg".equals(name)
+        || "methanol".equals(name) || "ethanol".equals(name));
+  }
+
+  /**
+   * Seeds a hydrocarbon vapour phase when a water-rich feed has converged to a liquid-only split.
+   *
+   * <p>
+   * This is the vapour-side counterpart of {@link #seedHydrocarbonLiquidFromFeed()}. When the ordinary two-phase flash
+   * has already converged to OIL + AQUEOUS, the multiphase stability analysis starts from that endpoint and builds its
+   * Wilson trial compositions from the overall feed. For a water-dominated feed the hydrocarbons are a small minority
+   * of that feed, the vapour-like stationary point is missed, and the flash returns OIL + AQUEOUS even though the
+   * water-free hydrocarbon sub-mixture is unambiguously two-phase at the flash temperature and pressure. The reported
+   * endpoint then has a higher extensive Gibbs energy than the correct GAS + OIL + AQUEOUS split, and the gas phase
+   * disappears from an otherwise ordinary wellstream once the water cut becomes high enough.
+   * </p>
+   *
+   * <p>
+   * The trigger is a Rachford-Rice bracketing screen evaluated on the water-free, ion-free sub-composition instead of
+   * on the overall feed: {@code sum(K_i z_i) > 1} together with {@code sum(z_i / K_i) > 1} places the volatile
+   * sub-mixture between its bubble and dew point, so a vapour phase must coexist with the aqueous phase. Applying the
+   * same screen to the overall feed fails, because dilution by water drives {@code sum(K_i z_i)} below unity. The
+   * screen is pure arithmetic on critical constants and adds no equation-of-state evaluation. When it fires, a
+   * vapour-like trial phase is seeded from the Wilson K-values and the subsequent phase-fraction solve decides its
+   * fate: a spurious seed collapses below {@link #phaseFractionMinimumLimit} and is removed by the existing cleanup,
+   * exactly as for the liquid seeder.
+   * </p>
+   *
+   * @return {@code true} when a gas phase was seeded, otherwise {@code false}
+   */
+  /**
+   * Screens whether a converged OIL + AQUEOUS endpoint is missing a hydrocarbon vapour phase.
+   *
+   * <p>
+   * The multiphase stability analysis builds its trial compositions from the overall feed. When the feed is
+   * water-dominated the hydrocarbons are a small minority of that feed, the vapour stationary point is missed, and the
+   * hydrocarbon-liquid trial that is found instead is later merged away as a duplicate liquid root. The flash then
+   * returns OIL + AQUEOUS even though the water-free hydrocarbon sub-mixture is unambiguously two-phase at the flash
+   * temperature and pressure, and that endpoint has a higher extensive Gibbs energy than the correct GAS + OIL +
+   * AQUEOUS split. In practice the gas phase disappears from an ordinary wellstream once the water cut becomes high
+   * enough.
+   * </p>
+   *
+   * <p>
+   * The screen is a Rachford-Rice bracketing test evaluated on the water-free, ion-free sub-composition rather than on
+   * the overall feed: {@code sum(K_i z_i) > 1} together with {@code sum(z_i / K_i) > 1} places the volatile sub-mixture
+   * between its bubble and dew point, so a vapour phase must coexist with the aqueous phase. Applying the same test to
+   * the overall feed fails, because dilution by water drives {@code sum(K_i z_i)} below unity. Only Wilson K-values are
+   * used, so no equation-of-state evaluation is added. The guards are ordered cheapest-first: two field reads reject
+   * every single-phase and three-phase result and the aqueous test rejects every dry system, so the component loops are
+   * reached only for the rare water-rich liquid-only endpoint this repairs.
+   * </p>
+   *
+   * @return {@code true} when a vapour phase must exist alongside the converged liquid phases
+   */
+  private boolean hydrocarbonVapourShouldAppear() {
+    // Cheapest-first: two field reads reject every single-phase and three-phase result, and the
+    // aqueous test rejects every dry system, before any phase type or component loop is entered.
+    if (!system.doMultiPhaseCheck() || system.getNumberOfPhases() != 2 || !system.hasPhaseType(PhaseType.AQUEOUS)
+        || system.hasPhaseType(PhaseType.GAS) || !system.hasPhaseType(PhaseType.OIL) || system.isChemicalSystem()) {
+      return false;
+    }
+
+    int numberOfComponents = system.getPhase(0).getNumberOfComponents();
+    double temperature = system.getTemperature();
+    double pressure = system.getPressure();
+    double volatileTotal = 0.0;
+    for (int comp = 0; comp < numberOfComponents; comp++) {
+      ComponentInterface component = system.getPhase(0).getComponent(comp);
+      if (isVolatileScreeningComponent(component)) {
+        volatileTotal += Math.max(component.getz(), 0.0);
+      }
+    }
+    if (volatileTotal < 1.0e-6) {
+      return false;
+    }
+
+    double vapourSum = 0.0;
+    double liquidSum = 0.0;
+    for (int comp = 0; comp < numberOfComponents; comp++) {
+      ComponentInterface component = system.getPhase(0).getComponent(comp);
+      if (!isVolatileScreeningComponent(component)) {
+        continue;
+      }
+      double kValue = wilsonKValue(component, temperature, pressure);
+      double scaledZ = Math.max(component.getz(), 0.0) / volatileTotal;
+      vapourSum += scaledZ * kValue;
+      liquidSum += scaledZ / kValue;
+    }
+    return vapourSum > 1.0 + WILSON_TWO_PHASE_SCREEN_TOLERANCE && liquidSum > 1.0 + WILSON_TWO_PHASE_SCREEN_TOLERANCE;
+  }
+
+  /** Converged phase split retained so an unsuccessful multiphase restart can be undone. */
+  private static final class PhaseSplitSnapshot {
+    private final int numberOfPhases;
+    private final PhaseType[] phaseTypes;
+    /** Physical phase-array slot backing each logical phase, so a restore cannot re-map the phases. */
+    private final int[] phaseIndices;
+    private final double[] betas;
+    private final double[][] compositions;
+    private final double[] kValues;
+
+    private PhaseSplitSnapshot(SystemInterface source) {
+      numberOfPhases = source.getNumberOfPhases();
+      int numberOfComponents = source.getPhase(0).getNumberOfComponents();
+      phaseTypes = new PhaseType[numberOfPhases];
+      phaseIndices = new int[numberOfPhases];
+      betas = new double[numberOfPhases];
+      compositions = new double[numberOfPhases][numberOfComponents];
+      kValues = new double[numberOfComponents];
+      for (int phase = 0; phase < numberOfPhases; phase++) {
+        phaseTypes[phase] = source.getPhase(phase).getType();
+        phaseIndices[phase] = source.getPhaseIndex(phase);
+        betas[phase] = source.getBeta(phase);
+        for (int comp = 0; comp < numberOfComponents; comp++) {
+          compositions[phase][comp] = source.getPhase(phase).getComponent(comp).getx();
+        }
+      }
+      for (int comp = 0; comp < numberOfComponents; comp++) {
+        kValues[comp] = source.getPhase(0).getComponent(comp).getK();
+      }
+    }
+  }
+
+  /**
+   * Reinstates a retained phase split after a rejected multiphase restart.
+   *
+   * <p>
+   * The recorded phase-array slots are reinstated as well. Forcing the logical phases onto slots {@code 0..n-1} instead
+   * would move each phase onto a different physical phase object, and {@link SystemInterface#setPhaseType} is silently
+   * ignored when {@link SystemInterface#allowPhaseShift()} is false, so the compositions and the phase types could end
+   * up describing different phases.
+   * </p>
+   *
+   * @param snapshot converged split captured before the restart
+   */
+  private void restorePhaseSplit(PhaseSplitSnapshot snapshot) {
+    system.setNumberOfPhases(snapshot.numberOfPhases);
+    for (int phase = 0; phase < snapshot.numberOfPhases; phase++) {
+      system.setPhaseIndex(phase, snapshot.phaseIndices[phase]);
+      system.setPhaseType(phase, snapshot.phaseTypes[phase]);
+      system.setBeta(phase, snapshot.betas[phase]);
+      for (int comp = 0; comp < snapshot.compositions[phase].length; comp++) {
+        system.getPhase(phase).getComponent(comp).setx(snapshot.compositions[phase][comp]);
+        system.getPhase(phase).getComponent(comp).setK(snapshot.kValues[comp]);
+      }
+    }
+    system.normalizeBeta();
+    system.init(1);
+  }
+
+  /**
+   * Checks that an adopted restart endpoint is at least as good as the split it replaced.
+   *
+   * @param referenceGibbs extensive Gibbs energy of the converged endpoint before the restart, in J
+   * @return {@code true} when the adopted split still holds a gas phase and a finite, not worse Gibbs energy
+   */
+  private boolean adoptedSplitIsUsable(double referenceGibbs) {
+    try {
+      if (!system.hasPhaseType(PhaseType.GAS)) {
+        return false;
+      }
+      double gibbs = system.getGibbsEnergy();
+      return !Double.isNaN(gibbs) && !Double.isInfinite(gibbs) && gibbs <= referenceGibbs;
+    } catch (Exception ex) {
+      logger.debug("Vapour-appearance restart verification failed: {}", ex.getMessage());
+      return false;
+    }
+  }
+
+  /**
+   * Repeats the multiphase calculation from a fresh initial estimate and keeps the better endpoint.
+   *
+   * <p>
+   * The stability analysis is started from whatever split the ordinary two-phase flash converged to, and its trial
+   * compositions are built from the overall feed. For a water-rich feed that combination is what loses the vapour
+   * phase, so the repair is to discard the biased starting point rather than to inject a phase into it: seeding cannot
+   * be relied upon here because {@link SystemInterface#addPhase()} only exposes a stale phase slot and the requested
+   * phase type is not guaranteed to survive initialization. Recomputing the initial estimate with {@code init(0)}
+   * restores the unbiased Wilson start that finds the correct three-phase split.
+   * </p>
+   *
+   * <p>
+   * The restart is accepted only when it keeps every phase type the converged endpoint already had, adds a gas phase,
+   * and lowers the extensive Gibbs energy. The restart runs on a clone, so a rejected restart leaves the converged
+   * split untouched rather than rewriting it. The repair can therefore only ever add the missing vapour, never trade an
+   * existing liquid phase for it, and the endpoint can never become worse than the one already converged. Recursion is
+   * blocked on two levels: the caller sets the one-shot {@code vapourPhaseSeedAttempted} flag before entry, and
+   * {@link #VAPOUR_RESTART_ACTIVE} stops the nested {@link TPmultiflash} instance created below from starting a restart
+   * of its own.
+   * </p>
+   */
+  private void restartMultiphaseFromFreshEstimate() {
+    // Adoption re-types phases, which setPhaseType silently refuses to do when phase shifts are
+    // disallowed; the repair would then leave compositions and phase types describing different phases.
+    if (!system.allowPhaseShift()) {
+      return;
+    }
+    double referenceGibbs;
+    PhaseSplitSnapshot snapshot;
+    try {
+      referenceGibbs = system.getGibbsEnergy();
+      snapshot = new PhaseSplitSnapshot(system);
+    } catch (Exception ex) {
+      logger.debug("Vapour-appearance restart snapshot failed: {}", ex.getMessage());
+      return;
+    }
+    boolean convergedSplitReplaced = false;
+    try {
+      SystemInterface trial = system.clone();
+      trial.setNumberOfPhases(2);
+      trial.setPhaseIndex(0, 0);
+      trial.setPhaseIndex(1, 1);
+      trial.setPhaseType(0, PhaseType.GAS);
+      trial.setPhaseType(1, snapshot.phaseTypes[snapshot.numberOfPhases - 1]);
+      trial.init(0);
+      trial.init(1);
+      VAPOUR_RESTART_ACTIVE.set(Boolean.TRUE);
+      try {
+        new TPmultiflash(trial, solidCheck).run();
+      } finally {
+        VAPOUR_RESTART_ACTIVE.set(Boolean.FALSE);
+      }
+      trial.init(1);
+      boolean retainsOriginalPhases = true;
+      for (int phase = 0; phase < snapshot.numberOfPhases; phase++) {
+        if (!trial.hasPhaseType(snapshot.phaseTypes[phase])) {
+          retainsOriginalPhases = false;
+          break;
+        }
+      }
+      if (retainsOriginalPhases && trial.hasPhaseType(PhaseType.GAS) && trial.getGibbsEnergy() < referenceGibbs
+          && trial.getNumberOfPhases() <= system.getMaxNumberOfPhases()) {
+        if (logger.isDebugEnabled()) {
+          logger.debug("Vapour-appearance restart recovered a gas phase: G {} -> {} J", referenceGibbs,
+              trial.getGibbsEnergy());
+        }
+        convergedSplitReplaced = true;
+        restorePhaseSplit(new PhaseSplitSnapshot(trial));
+        if (!adoptedSplitIsUsable(referenceGibbs)) {
+          logger.debug("Vapour-appearance restart did not survive adoption; keeping the converged endpoint");
+          restorePhaseSplit(snapshot);
+        }
+      }
+    } catch (Exception ex) {
+      logger.debug("Vapour-appearance restart failed: {}", ex.getMessage());
+      if (convergedSplitReplaced) {
+        restorePhaseSplit(snapshot);
+      }
+    }
+  }
+
+  /**
+   * Restores ions after phase stability has been evaluated on the ion-free molecular fluid.
+   *
+   * <p>
+   * The ion-free flash returns phase fractions on a molecular-feed basis. Adding the conserved ion inventory to the
+   * aqueous phase therefore requires both a phase-fraction transformation and a composition transformation. Assigning
+   * an ion mole fraction directly from its overall composition violates {@code z_i = beta_aqueous x_i} and dilutes the
+   * brine whenever the aqueous phase occupies less than the complete feed. The transformation below preserves every
+   * molecular component, confines ions to one aqueous phase, and keeps both phase fractions and compositions
+   * normalized.
+   * </p>
+   *
+   * @param overallZ overall mole fractions captured before the ion-free flash calculation
+   * @return index of the aqueous phase that received the ion inventory, or {@code -1} when no aqueous phase exists
+   */
+  private int restoreIonsToAqueousPhase(double[] overallZ) {
+    int aqueousPhase = findPreferredAqueousPhase();
+    if (aqueousPhase < 0) {
+      logger.warn("Cannot restore ionic inventory because the flash has no aqueous phase");
+      return -1;
+    }
+
+    double ionicFraction = 0.0;
+    for (int component = 0; component < system.getPhase(0).getNumberOfComponents(); component++) {
+      if (isIon(component)) {
+        ionicFraction += Math.max(overallZ[component], 0.0);
+      }
+    }
+    if (ionicFraction <= 0.0) {
+      return aqueousPhase;
+    }
+    if (ionicFraction >= 1.0) {
+      throw new IllegalStateException("Overall ionic mole fraction must be smaller than one");
+    }
+
+    double molecularFraction = 1.0 - ionicFraction;
+    double ionFreeAqueousBeta = system.getBeta(aqueousPhase);
+    double aqueousBeta = ionFreeAqueousBeta * molecularFraction + ionicFraction;
+    double aqueousMolecularScale = ionFreeAqueousBeta * molecularFraction / aqueousBeta;
+
+    for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+      double phaseBeta = system.getBeta(phase);
+      system.setBeta(phase, phase == aqueousPhase ? aqueousBeta : phaseBeta * molecularFraction);
+
+      for (int component = 0; component < system.getPhase(phase).getNumberOfComponents(); component++) {
+        ComponentInterface phaseComponent = system.getPhase(phase).getComponent(component);
+        phaseComponent.setz(overallZ[component]);
+        if (isIon(component)) {
+          phaseComponent.setx(phase == aqueousPhase ? overallZ[component] / aqueousBeta : 1.0e-50);
+        } else if (phase == aqueousPhase) {
+          phaseComponent.setx(phaseComponent.getx() * aqueousMolecularScale);
+        }
+      }
+    }
+
+    system.normalizeBeta();
+    try {
+      system.init(1);
+    } catch (Exception ex) {
+      throw new IllegalStateException("Failed to initialize the ion-restored phase inventory", ex);
+    }
+    return aqueousPhase;
+  }
+
+  /**
+   * Project the reaction-adjusted overall inventory onto the current material phase topology.
+   *
+   * <p>
+   * Reactions are confined to the aqueous phase. The non-aqueous phase compositions and phase fractions therefore
+   * retain the converged phase-equilibrium state, while the aqueous amount of every species is obtained from the exact
+   * balance {@code z_i = sum(beta_p x_i,p)}. This projection keeps fixed salts and generated ions out of gas and oil,
+   * closes every final species balance, and provides the next aqueous-activity state for chemical equilibrium.
+   * </p>
+   *
+   * @return maximum absolute species-balance residual
+   */
+  private double projectReactiveInventoryOntoCurrentPhases() {
+    int aqueousPhase = findPreferredAqueousPhase();
+    if (aqueousPhase < 0) {
+      throw new IllegalStateException("Reactive multiphase equilibrium requires an aqueous phase");
+    }
+    system.normalizeBeta();
+    for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+      if (phase != aqueousPhase) {
+        system.getPhase(phase).normalize();
+      }
+    }
+
+    double aqueousBeta = system.getBeta(aqueousPhase);
+    if (!(aqueousBeta > phaseFractionMinimumLimit)) {
+      throw new IllegalStateException("Reactive aqueous phase has an invalid phase fraction: " + aqueousBeta);
+    }
+    for (int component = 0; component < reactiveOverallFractions.length; component++) {
+      double nonAqueousContribution = 0.0;
+      for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+        ComponentInterface phaseComponent = system.getPhase(phase).getComponent(component);
+        if (phase == aqueousPhase) {
+          continue;
+        }
+        if (isIon(component)) {
+          phaseComponent.setx(1.0e-50);
+        }
+        nonAqueousContribution += system.getBeta(phase) * phaseComponent.getx();
+      }
+      double aqueousFraction = (reactiveOverallFractions[component] - nonAqueousContribution) / aqueousBeta;
+      if (!Double.isFinite(aqueousFraction) || aqueousFraction < -1.0e-10) {
+        throw new IllegalStateException("Reactive phase projection produced an invalid aqueous amount for "
+            + system.getPhase(0).getComponent(component).getComponentName() + ": " + aqueousFraction);
+      }
+      system.getPhase(aqueousPhase).getComponent(component).setx(Math.max(aqueousFraction, 1.0e-50));
+    }
+
+    double aqueousSum = 0.0;
+    for (int component = 0; component < reactiveOverallFractions.length; component++) {
+      aqueousSum += system.getPhase(aqueousPhase).getComponent(component).getx();
+    }
+    if (Math.abs(aqueousSum - 1.0) > 1.0e-8) {
+      throw new IllegalStateException("Reactive aqueous composition is not normalized after projection: " + aqueousSum);
+    }
+    system.getPhase(aqueousPhase).normalize();
+    system.init(1);
+
+    double maximumResidual = 0.0;
+    for (int component = 0; component < reactiveOverallFractions.length; component++) {
+      double recoveredFraction = 0.0;
+      for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+        recoveredFraction += system.getBeta(phase) * system.getPhase(phase).getComponent(component).getx();
+      }
+      maximumResidual = Math.max(maximumResidual, Math.abs(reactiveOverallFractions[component] - recoveredFraction));
+    }
+    return maximumResidual;
+  }
+
+  /**
+   * Finds the active aqueous phase containing the largest material amount of water.
+   *
+   * <p>
+   * Multiplying water composition by phase fraction prevents a salt-free numerical phase at the beta floor from being
+   * selected ahead of the material brine.
+   * </p>
+   *
+   * @return active aqueous phase index, or {@code -1} when none exists
+   */
+  private int findPreferredAqueousPhase() {
+    int aqueousPhase = -1;
+    double highestWaterInventory = -1.0;
+    for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+      if (system.getPhase(phase).getType() != PhaseType.AQUEOUS) {
+        continue;
+      }
+      double waterFraction = system.getPhase(phase).hasComponent("water")
+          ? system.getPhase(phase).getComponent("water").getx()
+          : 0.0;
+      double waterInventory = system.getBeta(phase) * waterFraction;
+      if (waterInventory > highestWaterInventory) {
+        highestWaterInventory = waterInventory;
+        aqueousPhase = phase;
+      }
+    }
+    return aqueousPhase;
+  }
+
+  /**
+   * Removes phases left at the numerical beta floor before ions are restored.
+   *
+   * <p>
+   * Ion-free stability analysis can leave a third gas, oil, or duplicate aqueous phase with a fraction of only a few
+   * times {@link neqsim.thermo.ThermodynamicModelSettings#phaseFractionMinimumLimit}. Such a phase is below the
+   * incipient-phase seed used by this flash and can make generic aqueous-phase lookup select the wrong liquid. The
+   * material aqueous phase is always retained. Material gas-oil-aqueous topology is preserved, while two aqueous phases
+   * can collapse to one when the second phase is only numerical storage.
+   * </p>
+   *
+   * @return {@code true} when a numerical phase was removed
+   */
+  private boolean removeNumericalTracePhasesForIonicFlash() {
+    if (!system.hasIons() || system.getNumberOfPhases() <= 1) {
+      return false;
+    }
+
+    int preferredAqueousPhase = findPreferredAqueousPhase();
+    boolean removedPhase = false;
+    for (int phase = system.getNumberOfPhases() - 1; phase >= 0 && system.getNumberOfPhases() > 1; phase--) {
+      boolean duplicateAqueousPhase = phase != preferredAqueousPhase
+          && system.getPhase(phase).getType() == PhaseType.AQUEOUS;
+      if ((!duplicateAqueousPhase && system.getNumberOfPhases() <= 2) || phase == preferredAqueousPhase
+          || system.getBeta(phase) >= 100.0 * phaseFractionMinimumLimit) {
+        continue;
+      }
+      system.removePhaseKeepTotalComposition(phase);
+      removedPhase = true;
+      if (phase < preferredAqueousPhase) {
+        preferredAqueousPhase--;
+      }
+    }
+
+    if (removedPhase) {
+      system.normalizeBeta();
+      system.init(1);
+    }
+    return removedPhase;
+  }
+
+  /**
+   * Checks whether a component is ionic in the active thermodynamic model.
+   *
+   * @param component component index
+   * @return {@code true} for charged or explicitly tagged ion components
+   */
+  private boolean isIon(int component) {
+    ComponentInterface feedComponent = system.getPhase(0).getComponent(component);
+    return feedComponent.getIonicCharge() != 0 || feedComponent.isIsIon();
+  }
+
+  /**
+   * Return whether this flash owns coupled phase and reaction equilibrium for an electrolyte hydrate calculation.
+   *
+   * @return {@code true} for reactive hydrate flashes
+   */
+  private boolean isCoupledReactiveHydrateFlash() {
+    return system.isChemicalSystem() && system.getHydrateCheck();
+  }
+
+  /**
+   * Capture the exact overall species inventory before coupled phase and chemical equilibrium.
+   */
+  private void initializeReactiveOverallInventory() {
+    int numberOfComponents = system.getPhase(0).getNumberOfComponents();
+    if (reactiveOverallMoles != null && reactiveOverallMoles.length == numberOfComponents) {
+      return;
+    }
+    reactiveOverallMoles = new double[numberOfComponents];
+    reactiveOverallFractions = new double[numberOfComponents];
+    double systemTotalMoles = system.getNumberOfMoles();
+    double totalMoles = 0.0;
+    for (int component = 0; component < numberOfComponents; component++) {
+      double moles = systemTotalMoles * system.getPhase(0).getComponent(component).getz();
+      if (!Double.isFinite(moles) || moles < 0.0) {
+        throw new IllegalStateException("Invalid reactive feed amount for "
+            + system.getPhase(0).getComponent(component).getComponentName() + ": " + moles);
+      }
+      reactiveOverallMoles[component] = moles;
+      totalMoles += moles;
+    }
+    if (!(totalMoles > 0.0) || !Double.isFinite(totalMoles)) {
+      throw new IllegalStateException("Reactive flash requires a finite, positive species inventory");
+    }
+    for (int component = 0; component < numberOfComponents; component++) {
+      reactiveOverallFractions[component] = reactiveOverallMoles[component] / totalMoles;
+    }
+  }
+
+  /**
+   * Solve aqueous chemical equilibrium and propagate its conservative species changes to the overall flash inventory.
+   *
+   * @param aqueousPhase active aqueous phase index
+   * @param initialise whether to request the chemical solver's initial-estimate stage
+   * @return sum of absolute aqueous mole-fraction changes
+   */
+  private double solveReactiveAqueousEquilibrium(int aqueousPhase, boolean initialise) {
+    if (aqueousPhase < 0 || aqueousPhase >= system.getNumberOfPhases()) {
+      return 0.0;
+    }
+    initializeReactiveOverallInventory();
+    int numberOfComponents = system.getPhase(aqueousPhase).getNumberOfComponents();
+    double[] oldComposition = new double[numberOfComponents];
+    double[] oldAqueousMoles = new double[numberOfComponents];
+    for (int component = 0; component < numberOfComponents; component++) {
+      ComponentInterface phaseComponent = system.getPhase(aqueousPhase).getComponent(component);
+      oldComposition[component] = phaseComponent.getx();
+      oldAqueousMoles[component] = phaseComponent.getNumberOfMolesInPhase();
+    }
+
+    if (initialise) {
+      system.getChemicalReactionOperations().solveChemEq(aqueousPhase, 0);
+    }
+    system.getChemicalReactionOperations().solveChemEq(aqueousPhase, 1);
+
+    double[] reactionDeltas = getConservativeReactionDeltas(aqueousPhase, oldAqueousMoles);
+    double[] updatedOverallMoles = new double[numberOfComponents];
+    for (int component = 0; component < numberOfComponents; component++) {
+      updatedOverallMoles[component] = reactiveOverallMoles[component] + reactionDeltas[component];
+      if (!Double.isFinite(updatedOverallMoles[component]) || updatedOverallMoles[component] < -1.0e-9) {
+        throw new IllegalStateException("Aqueous chemical equilibrium produced an invalid overall amount for "
+            + system.getPhase(0).getComponent(component).getComponentName() + ": " + updatedOverallMoles[component]);
+      }
+      updatedOverallMoles[component] = Math.max(MINIMUM_REACTIVE_COMPONENT_MOLES, updatedOverallMoles[component]);
+    }
+    for (int component = 0; component < numberOfComponents; component++) {
+      double appliedDelta = updatedOverallMoles[component] - reactiveOverallMoles[component];
+      double projectedAqueousMoles = oldAqueousMoles[component] + appliedDelta;
+      ComponentInterface phaseComponent = system.getPhase(aqueousPhase).getComponent(component);
+      system.getPhase(aqueousPhase).addMoles(component,
+          projectedAqueousMoles - phaseComponent.getNumberOfMolesInPhase());
+      reactiveOverallMoles[component] = updatedOverallMoles[component];
+    }
+    synchronizeReactiveOverallComposition();
+
+    double chemicalDeviation = 0.0;
+    for (int component = 0; component < numberOfComponents; component++) {
+      double moleFraction = system.getPhase(aqueousPhase).getComponent(component).getx();
+      if (!Double.isFinite(moleFraction) || moleFraction < 0.0) {
+        return Double.POSITIVE_INFINITY;
+      }
+      chemicalDeviation += Math.abs(oldComposition[component] - moleFraction);
+    }
+    return chemicalDeviation;
+  }
+
+  /**
+   * Preserve the established chemical-equilibrium iteration for non-hydrate multiphase calculations.
+   *
+   * @param aqueousPhase active aqueous phase index
+   * @param initialise whether to request the chemical solver's initial-estimate stage
+   * @return sum of absolute aqueous mole-fraction changes
+   */
+  private double solveLegacyAqueousEquilibrium(int aqueousPhase, boolean initialise) {
+    if (aqueousPhase < 0 || aqueousPhase >= system.getNumberOfPhases()) {
+      return 0.0;
+    }
+    int numberOfComponents = system.getPhase(aqueousPhase).getNumberOfComponents();
+    double[] oldComposition = new double[numberOfComponents];
+    for (int component = 0; component < numberOfComponents; component++) {
+      oldComposition[component] = system.getPhase(aqueousPhase).getComponent(component).getx();
+    }
+    if (initialise) {
+      system.getChemicalReactionOperations().solveChemEq(aqueousPhase, 0);
+    }
+    system.getChemicalReactionOperations().solveChemEq(aqueousPhase, 1);
+
+    double chemicalDeviation = 0.0;
+    for (int component = 0; component < numberOfComponents; component++) {
+      chemicalDeviation += Math
+          .abs(oldComposition[component] - system.getPhase(aqueousPhase).getComponent(component).getx());
+    }
+    return chemicalDeviation;
+  }
+
+  /**
+   * Project a chemical-solver update onto the element-and-charge conservation null space.
+   *
+   * @param aqueousPhase active aqueous phase index
+   * @param oldAqueousMoles aqueous species amounts before chemical equilibrium
+   * @return conservative overall species changes
+   */
+  private double[] getConservativeReactionDeltas(int aqueousPhase, double[] oldAqueousMoles) {
+    ComponentInterface[] reactiveComponents = system.getChemicalReactionOperations().getComponents();
+    double[][] conservationArray = system.getChemicalReactionOperations().getAmatrix();
+    double[] reactionDeltas = new double[system.getPhase(0).getNumberOfComponents()];
+    if (reactiveComponents == null || reactiveComponents.length == 0 || conservationArray == null
+        || conservationArray.length == 0) {
+      return reactionDeltas;
+    }
+
+    SimpleMatrix rawDelta = new SimpleMatrix(reactiveComponents.length, 1);
+    for (int reactiveIndex = 0; reactiveIndex < reactiveComponents.length; reactiveIndex++) {
+      int component = reactiveComponents[reactiveIndex].getComponentNumber();
+      double newMoles = system.getPhase(aqueousPhase).getComponent(component).getNumberOfMolesInPhase();
+      rawDelta.set(reactiveIndex, 0, newMoles - oldAqueousMoles[component]);
+    }
+    SimpleMatrix conservationMatrix = new SimpleMatrix(conservationArray);
+    SimpleMatrix conservativeDelta = rawDelta
+        .minus(conservationMatrix.pseudoInverse().mult(conservationMatrix).mult(rawDelta));
+    SimpleMatrix conservationPseudoInverse = conservationMatrix.pseudoInverse();
+    for (int iteration = 0; iteration < 100; iteration++) {
+      boolean satisfiesLowerBounds = true;
+      for (int reactiveIndex = 0; reactiveIndex < reactiveComponents.length; reactiveIndex++) {
+        int component = reactiveComponents[reactiveIndex].getComponentNumber();
+        double lowerBound = MINIMUM_REACTIVE_COMPONENT_MOLES - reactiveOverallMoles[component];
+        if (conservativeDelta.get(reactiveIndex, 0) < lowerBound) {
+          conservativeDelta.set(reactiveIndex, 0, lowerBound);
+          satisfiesLowerBounds = false;
+        }
+      }
+      SimpleMatrix conservationResidual = conservationMatrix.mult(conservativeDelta);
+      if (satisfiesLowerBounds && conservationResidual.normF() <= 1.0e-12) {
+        break;
+      }
+      conservativeDelta = conservativeDelta.minus(conservationPseudoInverse.mult(conservationResidual));
+    }
+
+    boolean feasible = conservationMatrix.mult(conservativeDelta).normF() <= 1.0e-10;
+    for (int reactiveIndex = 0; reactiveIndex < reactiveComponents.length; reactiveIndex++) {
+      int component = reactiveComponents[reactiveIndex].getComponentNumber();
+      feasible = feasible && reactiveOverallMoles[component] + conservativeDelta.get(reactiveIndex, 0) >= -1.0e-12;
+    }
+    if (!feasible) {
+      logger.warn("Discarding an infeasible reactive species update after element-and-charge projection");
+      conservativeDelta = new SimpleMatrix(reactiveComponents.length, 1);
+    }
+    for (int reactiveIndex = 0; reactiveIndex < reactiveComponents.length; reactiveIndex++) {
+      reactionDeltas[reactiveComponents[reactiveIndex].getComponentNumber()] = conservativeDelta.get(reactiveIndex, 0);
+    }
+    return reactionDeltas;
+  }
+
+  /**
+   * Synchronize exact reaction-adjusted species amounts and normalized fractions across all allocated phase objects.
+   */
+  private void synchronizeReactiveOverallComposition() {
+    reactiveOverallFractions = new double[reactiveOverallMoles.length];
+    double totalMoles = 0.0;
+    for (double componentMoles : reactiveOverallMoles) {
+      totalMoles += componentMoles;
+    }
+    if (!(totalMoles > 0.0) || !Double.isFinite(totalMoles)) {
+      throw new IllegalStateException("Reactive species inventory has an invalid total amount: " + totalMoles);
+    }
+
+    system.setTotalNumberOfMoles(totalMoles);
+    for (int component = 0; component < reactiveOverallMoles.length; component++) {
+      reactiveOverallFractions[component] = reactiveOverallMoles[component] / totalMoles;
+    }
+    for (int phase = 0; phase < system.getMaxNumberOfPhases(); phase++) {
+      if (!system.isPhase(phase)) {
+        continue;
+      }
+      for (int component = 0; component < reactiveOverallMoles.length; component++) {
+        ComponentInterface phaseComponent = system.getPhase(phase).getComponent(component);
+        phaseComponent.setNumberOfmoles(reactiveOverallMoles[component]);
+        phaseComponent.setz(reactiveOverallFractions[component]);
+      }
+    }
+    system.initBeta();
+    system.normalizeBeta();
+  }
+
   /** {@inheritDoc} */
   @Override
   public void run() {
@@ -2714,28 +3642,65 @@ public class TPmultiflash extends TPflash {
     int aqueousPhaseNumber = 0;
     enhancedStabilityChecked = false;
     betaSolveStalled = false;
+    if (isCoupledReactiveHydrateFlash()) {
+      initializeReactiveOverallInventory();
+    }
     if (prepareWaterRichSplitForBetaRepair()) {
       multiPhaseTest = true;
       doStabilityAnalysis = false;
     }
     // logger.info("Starting multiphase-flash....");
 
-    // For systems with ions, temporarily remove ions before stability analysis
-    // This allows proper oil-water-gas phase separation without ion interference
-    // Ions will be restored to aqueous phase(s) after stability analysis
-    // Note: This must be done for ANY system with ions, not just chemical reaction systems
-    double[] ionicZ = null;
+    // For systems with ions, temporarily remove ions before stability analysis.
+    // Non-reactive electrolyte systems remain on a normalized molecular-feed basis until the complete multiphase
+    // calculation has converged. Reactive systems restore the ions after phase discovery and then couple the
+    // reaction-adjusted species inventory to the phase-fraction solve.
+    double[] ionFreeOverallZ = null;
+    double[] legacyIonicZ = null;
     boolean hasIons = system.hasIons();
+    boolean useIonFreeFlash = hasIons && (!system.isChemicalSystem() || isCoupledReactiveHydrateFlash());
 
-    // Store ion compositions and temporarily remove them for stability analysis
-    if (hasIons) {
-      ionicZ = new double[system.getPhase(0).getNumberOfComponents()];
+    // Hydrate and non-reactive electrolyte flashes stay on a normalized molecular basis until conservative ion
+    // restoration. Other reactive operations retain the established ion stripping/restoration path because their
+    // component inventories may be intentionally changed by specialized operations such as salt saturation.
+    if (useIonFreeFlash) {
+      ionFreeOverallZ = new double[system.getPhase(0).getNumberOfComponents()];
+      double ionicFraction = 0.0;
       for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
+        ionFreeOverallZ[i] = getFlashOverallFraction(i);
         if (system.getPhase(0).getComponent(i).getIonicCharge() != 0 || system.getPhase(0).getComponent(i).isIsIon()) {
-          ionicZ[i] = system.getPhase(0).getComponent(i).getz();
+          ionicFraction += Math.max(ionFreeOverallZ[i], 0.0);
           // Temporarily set ion z to near-zero for stability analysis
           for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
             system.getPhase(phase).getComponent(i).setz(1e-100);
+            system.getPhase(phase).getComponent(i).setx(1e-50);
+          }
+        }
+      }
+      if (ionicFraction >= 1.0) {
+        throw new IllegalStateException("Overall ionic mole fraction must be smaller than one");
+      }
+      double molecularFraction = 1.0 - ionicFraction;
+      for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+        for (int component = 0; component < system.getPhase(phase).getNumberOfComponents(); component++) {
+          if (!isIon(component)) {
+            system.getPhase(phase).getComponent(component).setz(ionFreeOverallZ[component] / molecularFraction);
+          }
+        }
+        system.getPhase(phase).normalize();
+      }
+      try {
+        system.init(1);
+      } catch (Exception ex) {
+        logger.warn("Ion-stripping init failed: " + ex.getMessage());
+      }
+    } else if (hasIons) {
+      legacyIonicZ = new double[system.getPhase(0).getNumberOfComponents()];
+      for (int component = 0; component < system.getPhase(0).getNumberOfComponents(); component++) {
+        if (isIon(component)) {
+          legacyIonicZ[component] = system.getPhase(0).getComponent(component).getz();
+          for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+            system.getPhase(phase).getComponent(component).setz(1.0e-100);
           }
         }
       }
@@ -2839,25 +3804,18 @@ public class TPmultiflash extends TPflash {
       }
     }
 
-    // Restore ions to aqueous phase(s) after stability analysis
-    if (hasIons && ionicZ != null) {
-      aqueousPhaseNumber = system.hasPhaseType(PhaseType.AQUEOUS) ? system.getPhaseNumberOfPhase("aqueous") : -1;
-      for (int i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
-        if ((system.getPhase(0).getComponent(i).getIonicCharge() != 0 || system.getPhase(0).getComponent(i).isIsIon())
-            && ionicZ[i] > 1e-100) {
-          // Restore z values
-          for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
-            system.getPhase(phase).getComponent(i).setz(ionicZ[i]);
-            // Set ions only in aqueous phase, near-zero in others
-            if (system.getPhase(phase).getType() == PhaseType.AQUEOUS) {
-              system.getPhase(phase).getComponent(i).setx(ionicZ[i]);
-            } else {
-              system.getPhase(phase).getComponent(i).setx(1e-50);
-            }
-          }
+    if (hasIons && !useIonFreeFlash && legacyIonicZ != null) {
+      for (int component = 0; component < system.getPhase(0).getNumberOfComponents(); component++) {
+        if (!isIon(component) || legacyIonicZ[component] <= 1.0e-100) {
+          continue;
+        }
+        for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+          ComponentInterface phaseComponent = system.getPhase(phase).getComponent(component);
+          phaseComponent.setz(legacyIonicZ[component]);
+          phaseComponent
+              .setx(system.getPhase(phase).getType() == PhaseType.AQUEOUS ? legacyIonicZ[component] : 1.0e-50);
         }
       }
-      // Normalize aqueous phase and reinitialize
       for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
         system.getPhase(phase).normalize();
       }
@@ -2868,12 +3826,24 @@ public class TPmultiflash extends TPflash {
       }
     }
 
+    // Reactive hydrate systems require the complete ionic inventory before chemical equilibrium is solved. The
+    // conservative restore transforms the ion-free phase fractions back to the full species basis.
+    if (system.isChemicalSystem() && useIonFreeFlash && ionFreeOverallZ != null) {
+      aqueousPhaseNumber = restoreIonsToAqueousPhase(ionFreeOverallZ);
+      if (isCoupledReactiveHydrateFlash()) {
+        synchronizeReactiveOverallComposition();
+      }
+    }
+
     // system.init(1);
     // system.display();
     aqueousPhaseNumber = system.hasPhaseType(PhaseType.AQUEOUS) ? system.getPhaseNumberOfPhase("aqueous") : -1;
     if (system.isChemicalSystem() && aqueousPhaseNumber >= 0) {
-      system.getChemicalReactionOperations().solveChemEq(aqueousPhaseNumber, 0);
-      system.getChemicalReactionOperations().solveChemEq(aqueousPhaseNumber, 1);
+      if (isCoupledReactiveHydrateFlash()) {
+        solveReactiveAqueousEquilibrium(aqueousPhaseNumber, true);
+      } else {
+        solveLegacyAqueousEquilibrium(aqueousPhaseNumber, true);
+      }
     }
 
     int iterations = 0;
@@ -2889,28 +3859,22 @@ public class TPmultiflash extends TPflash {
         iterOut++;
         if (system.isChemicalSystem() && system.hasPhaseType(PhaseType.AQUEOUS)) {
           int currentAqueousPhase = system.getPhaseNumberOfPhase("aqueous");
+          boolean initialiseChemistry = false;
           if (currentAqueousPhase != aqueousPhaseNumber) {
             aqueousPhaseNumber = currentAqueousPhase;
-            system.getChemicalReactionOperations().solveChemEq(aqueousPhaseNumber, 0);
+            initialiseChemistry = true;
           }
 
           if (aqueousPhaseNumber >= 0 && aqueousPhaseNumber < system.getNumberOfPhases()) {
-            chemdev = 0.0;
-            double[] xchem = new double[system.getPhase(aqueousPhaseNumber).getNumberOfComponents()];
-
-            for (i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
-              xchem[i] = system.getPhase(aqueousPhaseNumber).getComponent(i).getx();
-            }
-
             try {
               system.init(1);
-              system.getChemicalReactionOperations().solveChemEq(aqueousPhaseNumber, 1);
-
-              for (i = 0; i < system.getPhase(0).getNumberOfComponents(); i++) {
-                chemdev += Math.abs(xchem[i] - system.getPhase(aqueousPhaseNumber).getComponent(i).getx());
+              if (isCoupledReactiveHydrateFlash()) {
+                chemdev = solveReactiveAqueousEquilibrium(aqueousPhaseNumber, initialiseChemistry);
+              } else {
+                chemdev = solveLegacyAqueousEquilibrium(aqueousPhaseNumber, initialiseChemistry);
               }
             } catch (Exception ex) {
-              logger.warn("Chemical equilibrium init failed: " + ex.getMessage());
+              logger.warn("Chemical equilibrium init failed: {}", ex.getMessage());
               chemdev = 0.0;
             }
           }
@@ -2936,6 +3900,9 @@ public class TPmultiflash extends TPflash {
           logger.error(
               "diff " + diff + " temperaure " + system.getTemperature("C") + " pressure " + system.getPressure("bara"));
           diff = this.solveBeta();
+        }
+        if (isCoupledReactiveHydrateFlash()) {
+          diff = Math.max(diff, projectReactiveInventoryOntoCurrentPhases());
         }
       } while ((Math.abs(chemdev) > 1e-10 && iterOut < 100)
           || (iterOut < 3 && system.isChemicalSystem() && system.hasPhaseType(PhaseType.AQUEOUS)));
@@ -3196,10 +4163,10 @@ public class TPmultiflash extends TPflash {
       // avoids removing legitimate near-critical V/L pairs (issue #1980).
       //
       // CPA-family models may produce duplicate phases at material phase fractions
-      // (issue #2117). Cubic EOS can also retain an already-disappeared phase just
-      // above the generic beta-removal threshold. Extend the composition test to
-      // every model only for such trace phases; this cannot collapse a material
-      // near-critical V/L pair and still requires the same PhaseType and composition.
+      // (issue #2117). A neutral cubic-EOS aqueous trial can also converge two
+      // material liquid fractions to the same hydrocarbon root. Such a three-phase
+      // state is a two-phase equilibrium with duplicated phase storage. Chemical and
+      // ionic models keep the prior conservative trace-phase restriction.
       String modelName = system.getModelName();
       boolean isCpaModel = modelName != null && modelName.contains("CPA");
       boolean hasTracePhase = false;
@@ -3209,7 +4176,9 @@ public class TPmultiflash extends TPflash {
           break;
         }
       }
-      if (isCpaModel || hasTracePhase) {
+      boolean neutralAqueousThreePhaseDuplicate = system.getNumberOfPhases() == 3
+          && system.hasPhaseType(PhaseType.AQUEOUS) && !system.isChemicalSystem() && !hasIons;
+      if (isCpaModel || hasTracePhase || neutralAqueousThreePhaseDuplicate) {
         for (int i = 0; i < system.getNumberOfPhases() - 1; i++) {
           for (int j = i + 1; j < system.getNumberOfPhases(); j++) {
             if (system.getPhase(i).getType() != system.getPhase(j).getType()) {
@@ -3222,7 +4191,7 @@ public class TPmultiflash extends TPflash {
             }
             boolean traceDuplicatePair = Math.min(system.getBeta(i), system.getBeta(j)) < 10.0
                 * phaseFractionMinimumLimit;
-            if (maxCompDiff < 1.0e-6 && (isCpaModel || traceDuplicatePair)) {
+            if (maxCompDiff < 1.0e-6 && (isCpaModel || traceDuplicatePair || neutralAqueousThreePhaseDuplicate)) {
               mergeAndRemoveDuplicatePhase(i, j);
               doStabilityAnalysis = false;
               hasRemovedPhase = true;
@@ -3242,9 +4211,147 @@ public class TPmultiflash extends TPflash {
         requestBoundedRerun();
       }
 
+      // A water-rich feed can settle on OIL+AQUEOUS even though the hydrocarbon sub-mixture is
+      // two-phase: the stability trials are built from a water-dominated overall composition, so
+      // the vapour stationary point is missed and the duplicate-liquid trial is merged away above.
+      if (!vapourPhaseSeedAttempted && hydrocarbonVapourShouldAppear() && !VAPOUR_RESTART_ACTIVE.get().booleanValue()) {
+        vapourPhaseSeedAttempted = true;
+        restartMultiphaseFromFreshEstimate();
+      }
+
       /*
        * if (!secondTime) { secondTime = true; doStabilityAnalysis = false; run(); }
        */
+    }
+
+    // A warm-started reactive flash can retain the existing phase topology, leaving multiPhaseTest false. Chemistry
+    // still changes the overall species inventory, so couple it to the beta equations even when no new phase was found.
+    if (isCoupledReactiveHydrateFlash() && !multiPhaseTest && system.getNumberOfPhases() > 1
+        && system.hasPhaseType(PhaseType.AQUEOUS)) {
+      aqueousPhaseNumber = system.getPhaseNumberOfPhase("aqueous");
+      for (int outerIteration = 0; outerIteration < 100; outerIteration++) {
+        double chemicalDeviation = solveReactiveAqueousEquilibrium(aqueousPhaseNumber, false);
+        setDoubleArrays();
+        double phaseEquilibriumResidual = solveBeta();
+        double betaResidual = projectReactiveInventoryOntoCurrentPhases();
+        if (outerIteration >= 2 && chemicalDeviation <= 1.0e-10 && phaseEquilibriumResidual <= 1.0e-10
+            && betaResidual <= 1.0e-10) {
+          break;
+        }
+      }
+    }
+
+    // Always leave a reactive multiphase flash on the phase-equilibrium projection of its final reaction-adjusted
+    // species inventory. This is required after phase removal or bounded reruns, whose last operation can be chemistry.
+    if (isCoupledReactiveHydrateFlash() && system.getNumberOfPhases() > 1) {
+      projectReactiveInventoryOntoCurrentPhases();
+    }
+
+    if (useIonFreeFlash && !system.isChemicalSystem() && ionFreeOverallZ != null) {
+      removeNumericalTracePhasesForIonicFlash();
+      if (system.getNumberOfPhases() > 1) {
+        setDoubleArrays();
+        for (int refinement = 0; refinement < 50; refinement++) {
+          if (solveBeta() < 1.0e-10) {
+            break;
+          }
+        }
+      }
+      if (removeNumericalTracePhasesForIonicFlash() && system.getNumberOfPhases() > 1) {
+        setDoubleArrays();
+        for (int refinement = 0; refinement < 50; refinement++) {
+          if (solveBeta() < 1.0e-10) {
+            break;
+          }
+        }
+      }
+      restoreIonsToAqueousPhase(ionFreeOverallZ);
+    }
+  }
+
+  /**
+   * Tests a water-rich OIL or GAS/OIL endpoint against a seeded aqueous active set at the same T and P.
+   *
+   * <p>
+   * Stability trials or phase cleanup can lose the water-rich minimum after the hydrocarbon split has converged,
+   * including collapse to a single oil phase near the bubble point. The incumbent may satisfy gas/oil fugacity equality
+   * yet have a much higher Gibbs energy than OIL/AQUEOUS. Start a material-balanced oil/aqueous active set on a clone
+   * and replace the incumbent only after solving equilibrium and checking component conservation and fugacities. Never
+   * accept the raw aqueous seed itself.
+   * </p>
+   */
+  void rescueMetastableOilMissingAqueous() {
+    boolean singleOil = system.getNumberOfPhases() == 1 && system.hasPhaseType(PhaseType.OIL);
+    boolean gasOil = system.getNumberOfPhases() == 2 && system.hasPhaseType(PhaseType.GAS)
+        && system.hasPhaseType(PhaseType.OIL);
+    if (!system.doMultiPhaseCheck() || (!singleOil && !gasOil) || system.getMaxNumberOfPhases() < 3
+        || !system.allowPhaseShift() || system.isChemicalSystem() || system.hasIons() || system.doSolidPhaseCheck()
+        || system.isMultiphaseWaxCheck() || !system.hasComponent("water")
+        || system.getComponent("water").getz() < 0.05) {
+      return;
+    }
+    boolean validReference = isFeasiblePhaseEquilibrium(system);
+    double referenceGibbs = system.getGibbsEnergy();
+    double gibbsTolerance = Math.max(1.0e-6, Math.abs(referenceGibbs) * 1.0e-8);
+    try {
+      SystemInterface candidate = system.clone();
+      int oil = candidate.getPhaseNumberOfPhase("oil");
+      if (singleOil) {
+        // Phase removal can leave inactive logical indices pointing to an active physical slot.
+        // Rebuild unused indices before adding a trial, preserving the existing oil phase object.
+        int oilSlot = candidate.getPhaseIndex(oil);
+        int freeSlot = 0;
+        for (int phase = 1; phase < candidate.getMaxNumberOfPhases(); phase++) {
+          if (freeSlot == oilSlot) {
+            freeSlot++;
+          }
+          candidate.setPhaseIndex(phase, freeSlot++);
+        }
+        candidate.addPhase();
+      }
+      int aqueous = singleOil ? candidate.getNumberOfPhases() - 1 : candidate.getPhaseNumberOfPhase("gas");
+      candidate.setPhaseType(aqueous, PhaseType.AQUEOUS);
+      for (int component = 0; component < candidate.getNumberOfComponents(); component++) {
+        candidate.getPhase(aqueous).getComponent(component).setx(
+            "water".equals(candidate.getPhase(aqueous).getComponent(component).getComponentName()) ? 1.0 : 1.0e-16);
+      }
+      candidate.getPhase(aqueous).normalize();
+      double aqueousSeed = Math.min(0.05, 0.5 * candidate.getComponent("water").getz());
+      candidate.setBeta(aqueous, aqueousSeed);
+      candidate.setBeta(oil, 1.0 - aqueousSeed);
+      for (int component = 0; component < candidate.getNumberOfComponents(); component++) {
+        double feed = candidate.getPhase(oil).getComponent(component).getz();
+        double waterPhase = candidate.getPhase(aqueous).getComponent(component).getx();
+        candidate.getPhase(oil).getComponent(component)
+            .setx(Math.max(0.0, (feed - aqueousSeed * waterPhase) / (1.0 - aqueousSeed)));
+      }
+      candidate.getPhase(oil).normalize();
+      candidate.normalizeBeta();
+      candidate.init(1);
+
+      TPmultiflash solver = new TPmultiflash(candidate, false);
+      solver.doStabilityAnalysis = false;
+      solver.multiPhaseTest = true;
+      solver.run();
+      candidate.init(1);
+      if (!candidate.hasPhaseType(PhaseType.AQUEOUS) || !isFeasiblePhaseEquilibrium(candidate)
+          || (validReference && !(candidate.getGibbsEnergy() < referenceGibbs - gibbsTolerance))) {
+        return;
+      }
+
+      PhaseSplitSnapshot original = new PhaseSplitSnapshot(system);
+      try {
+        restorePhaseSplit(new PhaseSplitSnapshot(candidate));
+        if (!isFeasiblePhaseEquilibrium(system)
+            || (validReference && system.getGibbsEnergy() >= referenceGibbs - gibbsTolerance)) {
+          restorePhaseSplit(original);
+        }
+      } catch (Exception ex) {
+        restorePhaseSplit(original);
+        logger.debug("Aqueous active-set adoption failed: {}", ex.getMessage());
+      }
+    } catch (Exception ex) {
+      logger.debug("Aqueous active-set trial failed: {}", ex.getMessage());
     }
   }
 
@@ -3255,13 +4362,20 @@ public class TPmultiflash extends TPflash {
    * The bounded active-set fallback tests each possible phase removal on a clone, accepts only a normalized,
    * material-balanced, fugacity-equal candidate, and selects the lowest-Gibbs candidate. The live system changes only
    * when that candidate also lowers Gibbs energy relative to the stalled three-phase state. Chemical, electrolyte,
-   * solid, wax, and already-converged three-phase systems retain their existing paths.
+   * active solid, wax, and already-converged three-phase systems retain their existing paths. A pending solid check
+   * does not disable fluid-phase recovery: the enclosing TPflash checks the selected solids after the fluid solve.
    * </p>
    */
   private void rescueStalledThreePhaseEndpoint() {
     if (!betaSolveStalled || system.getNumberOfPhases() != 3 || system.isChemicalSystem() || system.hasIons()
-        || system.doSolidPhaseCheck() || system.isMultiphaseWaxCheck() || isFeasiblePhaseEquilibrium(system)) {
+        || system.isMultiphaseWaxCheck() || isFeasiblePhaseEquilibrium(system)) {
       return;
+    }
+    for (int phaseIndex = 0; phaseIndex < system.getNumberOfPhases(); phaseIndex++) {
+      PhaseType type = system.getPhase(phaseIndex).getType();
+      if (type != PhaseType.GAS && type != PhaseType.LIQUID && type != PhaseType.OIL && type != PhaseType.AQUEOUS) {
+        return;
+      }
     }
 
     system.init(1);

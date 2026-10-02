@@ -203,12 +203,14 @@ public class FluidMagicInput implements Serializable {
       gasPhase = stdFluid.phaseToSystem("gas");
       gasPhase.setTemperature(STD_TEMPERATURE_K);
       gasPhase.setPressure(STD_PRESSURE_BARA);
-      gasPhase.init(0);
+      // phaseToSystem retains the separated equilibrium composition and phase type.
+      // init(0) would replace it with a two-phase initialization and corrupt its volume.
+      gasPhase.init(3);
       gasPhase.initPhysicalProperties();
 
       // Calculate standard gas volume
       gasStdVolume = gasPhase.getVolume("m3");
-      logger.info("Gas phase extracted: {} components, {:.4f} m3 at std conditions", gasPhase.getNumberOfComponents(),
+      logger.info("Gas phase extracted: {} components, {} m3 at std conditions", gasPhase.getNumberOfComponents(),
           gasStdVolume);
     } else {
       logger.warn("No gas phase found in reference fluid at standard conditions");
@@ -219,12 +221,12 @@ public class FluidMagicInput implements Serializable {
       oilPhase = stdFluid.phaseToSystem("oil");
       oilPhase.setTemperature(STD_TEMPERATURE_K);
       oilPhase.setPressure(STD_PRESSURE_BARA);
-      oilPhase.init(0);
+      oilPhase.init(3);
       oilPhase.initPhysicalProperties();
 
       // Calculate standard oil volume
       oilStdVolume = oilPhase.getVolume("m3");
-      logger.info("Oil phase extracted: {} components, {:.4f} m3 at std conditions", oilPhase.getNumberOfComponents(),
+      logger.info("Oil phase extracted: {} components, {} m3 at std conditions", oilPhase.getNumberOfComponents(),
           oilStdVolume);
     } else {
       logger.warn("No oil phase found in reference fluid at standard conditions");
@@ -233,7 +235,7 @@ public class FluidMagicInput implements Serializable {
     // Calculate base case GOR
     if (gasStdVolume > 0 && oilStdVolume > 0) {
       baseCaseGOR = gasStdVolume / oilStdVolume;
-      logger.info("Base case GOR: {:.1f} Sm3/Sm3", baseCaseGOR);
+      logger.info("Base case GOR: {} Sm3/Sm3", baseCaseGOR);
     }
 
     // Create water phase (pure water or brine based on salinity)
@@ -253,12 +255,12 @@ public class FluidMagicInput implements Serializable {
     waterPhase = new SystemSrkEos(STD_TEMPERATURE_K, STD_PRESSURE_BARA);
     waterPhase.addComponent("water", 1.0);
     waterPhase.setMixingRule("classic");
-    waterPhase.init(0);
+    new ThermodynamicOperations(waterPhase).TPflash();
     waterPhase.initPhysicalProperties();
 
-    // Calculate standard water volume (1 kmol at std conditions)
+    // Calculate the reference volume for one mol of water at standard conditions.
     waterStdVolume = waterPhase.getVolume("m3");
-    logger.info("Water phase created: {:.4f} m3/kmol at std conditions", waterStdVolume);
+    logger.info("Water phase created: {} m3/mol at std conditions", waterStdVolume);
   }
 
   /**
@@ -566,7 +568,7 @@ public class FluidMagicInput implements Serializable {
   /**
    * Get standard water volume.
    *
-   * @return water volume at standard conditions in m3/kmol
+   * @return volume of the one-mol water reference at standard conditions in m3
    */
   public double getWaterStdVolume() {
     return waterStdVolume;

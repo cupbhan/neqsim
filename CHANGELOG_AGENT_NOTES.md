@@ -9,6 +9,663 @@
 
 ---
 
+## 2026-09-26 — Gibbs reactor conservation and recycle Wegstein corrections (#3986)
+
+- `GibbsReactor` uses total component feed inventories across all inlet phases,
+  then performs homogeneous reaction equilibrium followed by the outlet flash.
+  This does not add simultaneous multiphase reactive equilibrium.
+- Element diagnostics now include sodium: **O, N, C, H, S, Ar, Z, Na**. Existing
+  indices 0–6 keep their names; read `getElementNames()` instead of assuming seven
+  entries. Argon, sodium, and signed charge map to distinct CSV columns.
+  Independent charge constraints remain active for neutral feeds.
+- Corrected the fallback Gibbs integration constant to satisfy the
+  Gibbs–Helmholtz identity. Direct polynomial data retain their existing route.
+- Regularization is applied before the Newton solve. The objective reads
+  fugacity from the state being evaluated. An exhausted unconverged solve now
+  returns `false`; callers of `run()` must still inspect `hasConverged()`.
+- The final outlet flash receives mole fractions consistent with the component
+  inventory. This corrects stale `getz()` ppm reporting in the CO2 scenarios
+  without changing their numerical baselines. The CO2 wrapper refreshes the
+  working fugacity state after each iteration; the generic reactor retains its
+  historical iteration behavior pending independent adiabatic qualification.
+- `Recycle` uses `q*x + (1-q)*g(x)` with `q=s/(s-1)`, making `q=0` direct
+  substitution and recovering affine fixed points. Legacy mixed-unit flow
+  tolerances are unchanged and explicitly documented, including the OR semantics
+  of the optional absolute tolerance.
+- Updated reactor/recycle guides and Javadocs. Reaction-engineering and process
+  examples should use the named balance columns and check convergence status.
+
+---
+
+## 2026-09-26 — Optional formation-referenced enthalpy (#3991)
+
+`SystemInterface.setUseIdealGasEnthalpyOfFormation(true)` enables gas-phase
+formation enthalpy at 298.15 K plus the existing Cp integral and EOS departure.
+The default remains the legacy sensible reference at 273.15 K. `getHID(T, true)`
+also provides explicit component evaluation; availability and source getters
+distinguish reviewed zero values from placeholders. `COMP.csv` stores 13 sourced
+entries, including the correction of helium's -242000 J/mol placeholder to zero;
+the extended loader copies reviewed value/source pairs. Updated tabulated values
+also affect existing direct consumers of formation data, including reactive
+equilibrium calculations, even when the new stream option is not enabled.
+
+Reactive PH avoids double-counting when formation heat is already in stream
+enthalpy. Recompute numerical PH targets after switching reference, and select
+the same convention for every connected stream. Native caloric models and
+aqueous ionic/solid references are outside this option. See the
+[reference guide](docs/thermo/reading_fluid_properties.md#formation-enthalpy-reference).
+## 2026-09-26 — Living tasks use the general task root; user guide added
+
+- Every `neqsim task-*` command accepts a `<task>` path **or** a folder name inside
+  the task root (`neqsim --show-task-root`), from any directory. An existing path wins.
+- `neqsim task-status` without a folder lists every living task in the task root;
+  `neqsim task-reference-case` without a folder creates the reference case there.
+- New user guide `docs/development/CONTINUOUS_TASK_SOLVING.md` (setup, goal and plan
+  reference, stage scripts, backtest, scheduling, headless agents, ledger, promotion),
+  introduced in `TASK_SOLVING_GUIDE.md` § "Keeping a Task Alive".
+- Updated: skill `neqsim-continuous-task-improvement`, agent `continuous-improvement`,
+  community `continuous-task-improvement-agent`, enterprise
+  `enterprise-continuous-improvement-agent` workflow.
+
+## 2026-09-25 — `RotorUnbalanceAssessment`: coupling/rotor unbalance and shaft-vibration criteria
+
+New `neqsim.process.mechanicaldesign.compressor.RotorUnbalanceAssessment` (static helpers + `evaluate(...)`
+returning a `Result` with `toJson()`), added while diagnosing a coupling drive-bolt fracture on an LP
+recompression train:
+
+* `unbalanceFromMass(massG, radiusMm)` — U = m r (g mm) for a lost/added mass (bolt fragment, balance weight, deposit).
+* `apiAllowableUnbalance(planeMassKg, mcsRpm, applyApi671Floor)` — API 617/671 `6350 W/N` g mm, optional 7.2 g mm floor.
+* `isoPermissibleUnbalance(G, rotorMassKg, rpm)` — ISO 21940-11.
+* `centrifugalForce(unbalanceGmm, rpm)`, `apiShaftVibrationLimit(mcsRpm)` (API 617, capped 25.4 um),
+  `isoZoneBoundaries(rpm)` (ISO 7919-3 shaft relative A/B, B/C, C/D), `significantChangeThreshold(rpm)`
+  (ISO 20816-1, 25 % of B/C), `vectorChange(...)` (1X vector difference), `influenceCoefficient(...)`.
+* Tests: `RotorUnbalanceAssessmentTest` (hand-calculated values). No existing API changed.
+
+---
+
+## 2026-09-18 — MCP tool contracts: schema coverage gate, `validateInput` for every tool, no more silent "success"
+
+An end-to-end probe of the packaged MCP server (`tools/list` + four task chains) found that
+breadth was fine (71 tools) but a model working blind lost turns to three contract defects.
+All three are fixed and gated:
+
+* **Every calculation tool has a real input schema.** `SchemaCatalog` now ships hand-written
+  input schemas for `run_relief`, `run_flare_network`, `run_lopa`, `run_sil`, `run_risk_matrix`,
+  `run_chemistry`, `design_utilities`, `run_hazop_scenario` and `run_parametric_study`; field
+  names and units mirror the runners exactly (`massFlowRate_kg_s`, `setPressure_bara`, …).
+  `SchemaCatalog.hasDetailedInputSchema(tool)` + `SchemaCatalogTest.testEveryCalculationToolHasDetailedInputSchema`
+  fail CI when a new `run_*` / `size_equipment` / `design_utilities` / `calculate_standard`
+  tool is added without one (orchestration tools are listed explicitly). `getSchema` accepts
+  `runRelief`, `run-relief` and `run_relief` (`SchemaCatalog.normalizeToolName`).
+* **`validateInput` validates any tool, not just flash/process.** Wrap the input as
+  `{"tool": "runRelief", "input": {...}}`; `Validator` checks it against the catalog schema with
+  the new dependency-free `neqsim.mcp.catalog.SchemaChecker` (type/required/enum/const/
+  minItems/allOf/anyOf/oneOf/if-then) and returns `SCHEMA_VIOLATION` issues naming the missing
+  or wrong field. Flash/process inputs nested under `input`/`processJson`/… are unwrapped.
+* **Process JSON pre-flight is now strict about the two mistakes that used to run silently.**
+  `UNRESOLVED_INLET` (error): an `inlet`/`inlets` entry that names no unit in the `process`
+  array (forward refs and `unit.port` aliases resolve; `interAreaLinks` targets are exempt).
+  `MISPLACED_UNIT_PARAMETERS` (error): keys beside `properties` on a unit (e.g.
+  `outletPressure_bara`) that the builder ignores. `UNRECOGNIZED_INPUT_SHAPE` (error): an
+  object with `fluid`/`units`/`equipment`/… but no `process`/`areas`/`components`, instead of
+  the misleading `MISSING_COMPONENTS`. `ProcessRunner` additionally refuses to report
+  `status: success` when the builder emitted an `Unresolved inlet` warning (`UNRESOLVED_INLET`).
+* **Hydrate risk never reports NaN as LOW.** `HydrateRiskMapper.RiskLevel.UNKNOWN` replaces the
+  old "assume safe if calculation failed"; the mapper now sets `setHydrateCheck(true)` on the
+  clone (the reason every MCP call returned NaN), refuses fluids without `water`, and exposes
+  `getFailureReasons()` / `getUnknownPointCount()` (also in `toJson()` as `failureReasons`,
+  `unknownPointCount`; `minimumSubcooling_C` is NaN, not `Double.MAX_VALUE`, when nothing
+  converged). `FlowAssuranceRunner` returns `status: error` / `RESULT_NOT_AVAILABLE` with the
+  partial data when a hydrateRiskMap (or waxAppearance) headline result is unavailable.
+  Callers that switched on `RiskLevel` must handle `UNKNOWN`.
+* **CPA fluids built from JSON default to the CPA mixing rule.** Every MCP runner and
+  `JsonProcessBuilder` fell back to `"classic"` (SRK kij database) for `model: "CPA"`, which gave a
+  wet-gas hydrate temperature of −0.04 °C at 100 bara where the CPA rule gives 15.7 °C (SRK
+  classic: 16.3 °C) — a silent wrong answer, not an error. New
+  `EosMixingRuleType.defaultForModel(model)` (→ `CLASSIC_TX_CPA` for any model containing "CPA",
+  `CLASSIC` otherwise) and `neqsim.mcp.runners.FluidDefaults.resolveMixingRule(input, model)` are
+  used by `FlashRunner`, `PVTRunner`, `FlowAssuranceRunner`, `PhaseEnvelopeRunner`,
+  `PropertyTableRunner`, `PipelineRunner`, `ReservoirRunner`, `StandardsRunner`,
+  `EquipmentSizingRunner` and `JsonProcessBuilder`. An explicit `mixingRule` is always honoured;
+  results of CPA inputs that omitted it will change (to the correct value).
+
+Agents: prefer `getSchema(<tool>, input)` → `validateInput({tool, input})` → run. Skills
+`neqsim-flow-assurance` and `neqsim-process-modeling` should mention the `{tool, input}`
+validation form and that a `hydrateRiskMap` fluid must contain water.
+
+---
+
+Preparation for packaging NeqSim skills, agents and the MCP server as
+[VS Code Agent Plugins 1.0](https://code.visualstudio.com/docs/agent-customization/agent-plugins).
+Plugin loaders silently skip a skill whose folder name differs from its frontmatter `name`
+or whose name is not kebab-case, and marketplaces reject dotted agent ids, so the source
+repos were normalised:
+
+* **Core skills renamed** to kebab-case (`analyze_convergence` → `analyze-convergence`,
+  `paperlab_*` → `paperlab-*`, `neqsim_in_writing` → `neqsim-in-writing`, …), in both
+  `.github/skills/` and `neqsim-paperlab/skills/` (`devtools/rename_underscore_skills.py`).
+  `figure_discussion` (paperlab-internal duplicate of `figure-discussion`, and a results.json key)
+  is left as-is.
+* **Core agent files renamed** `<a.b>.agent.md` → `<a-b>.agent.md`; the `@handle` is now
+  the kebab id (`@solve-task`, `@capability-scout`, `@process-model`, …). Display `name:`
+  is unchanged (`devtools/rename_dotted_agents.py`).
+* **`required_skills:` frontmatter** is now the canonical skill declaration on every core agent
+  (the prose `Loaded skills:` line stays for run-time loading). `devtools/agent_frontmatter.py`
+  is the single reader used by `install_agent.py`, `agent_search.py`, `paperlab_install.py`,
+  `generate_agent_skill_map.py` and `verify_skills_agents.py`; keep the two in sync with
+  `devtools/sync_agent_required_skills.py --apply` (CI runs `--check`).
+* **Canonical MCP definition** at `.github/mcp/mcp.json` (Agent Plugins `mcpServers` format);
+  `.vscode/mcp.json` must mirror it (linted: same `command`, canonical args as prefix with
+  `${PLUGIN_ROOT}` → `${workspaceFolder}/.github/mcp`). **The server now starts from the release
+  jar, not Docker:** `command: java`, `args: [${PLUGIN_ROOT}/servers/NeqsimMcpLauncher.java]`.
+  The launcher (`.github/mcp/servers/NeqsimMcpLauncher.java`, Java source-launch, JDK 21+)
+  downloads `neqsim-mcp-server-<version>-runner.jar` + `.sha256` from the GitHub release named
+  in `servers/neqsim-mcp-server.properties` (written by the builder; default `version=latest`,
+  pin with `--mcp-version X.Y.Z` or `pom`) into `${PLUGIN_DATA}`, verifies it, and runs it with
+  stdio inherited, UTF-8 forced and HTTP transport disabled. **`latest` tracking:** the launcher
+  resolves the tag behind `releases/latest` (HEAD, at most once per 24 h, stamp
+  `latest-release.txt`), fetches a newer jar when needed, prunes superseded jars and falls back
+  to the cached version offline. `--prefetch` resolves + downloads without starting the server;
+  the plugin's `SessionStart` hook runs it detached so the first-session download overlaps the
+  user's first prompt and new releases are fetched a day ahead (a `.lock` beside the jar makes a
+  concurrent server start wait instead of downloading twice). Env: `NEQSIM_MCP_JAR`,
+  `NEQSIM_MCP_VERSION` (`X.Y.Z` or `latest`), `NEQSIM_MCP_LATEST_TTL_HOURS`,
+  `NEQSIM_MCP_JAVA_OPTS`. Verified: first start downloads ~89 MB, later starts `initialize` in
+  ~2 s, 71 tools listed. The marketplace repo ships `scripts/install.{ps1,sh}` that registers the
+  marketplace, enables `extensions.autoUpdate` and installs all three plugins via the bundled
+  Copilot CLI in one step. **Offline bundle:** a `neqsim-mcp-server-*-runner.jar` (+ `.sha256`)
+  placed beside the launcher in `servers/` seeds the jar cache (`seedFromBundle`), and the hook
+  installs from `${PLUGIN_ROOT}/wheels` with `pip --no-index` before falling back to PyPI; the
+  marketplace repo's `scripts/make_offline_bundle.py` + `offline_bundle.yml` build and publish
+  such a zip on every plugin change / NeqSim release (`release_with_jars.yml` dispatches
+  `neqsim-release` when `NEQSIM_PLUGIN_DISPATCH_TOKEN` is set).
+* **`devtools/build_agent_plugin.py`** emits `neqsim`, `neqsim-community` and
+  `neqsim-enterprise` plugins plus a `marketplace.json`, with a content-hash version gate
+  (`--bump patch|minor|major`) and a `SessionStart` hook that `pip install -e` the skills repo.
+  The hook is portable: `sh` / PowerShell launchers resolve the interpreter at run time
+  (`NEQSIM_PYTHON`, then PATH); nothing from the build machine is baked in unless `--python`
+  (or `NEQSIM_PLUGIN_PYTHON`) pins a site-specific fallback. `install_agent.render_vscode_agent()` is the shared renderer.
+* Companion changes: community skill folders renamed to their `neqsim-*` manifest names,
+  enterprise agents carry the `enterprise-` prefix in `agent.yaml`, and both skills repos
+  install all skill packages with one `pip install -e .` (root `setup.py`, which discovers
+  packages at both `skills/<category>/<skill>/src` and the plugin's flat `skills/<skill>/src`).
+* **Published marketplace:** `equinor/neqsim-copilot-plugin` (internal) is the generated output —
+  never hand-edit it. Release procedure from a checkout with the four sibling repos beside `neqsim`:
+  `python devtools/build_agent_plugin.py --out ../neqsim-copilot-plugin --bump patch`, then
+  `python devtools/validate_agent_plugin.py ../neqsim-copilot-plugin`, then commit + push there.
+  Users add `"chat.plugins.marketplaces": ["equinor/neqsim-copilot-plugin"]`.
+
+**Agents/skills to update:** anything that hard-codes an old `@a.b` handle, a
+`skills/<category>/<unprefixed>` community path, or an underscore paperlab skill name.
+
+### 2026-09-18 (later) — `@solve-task` split, agent eval harness, BM25 retrieval, description cap
+
+* **`solve-task.agent.md` is now a 16 KB orchestrator** (was 141 KB). Sections 1–10 — the
+  phase-by-phase workflow, quality gates, benchmark/uncertainty procedure, task-type guidance,
+  NIPs, interpretation rules, critical rules, lessons learned — moved verbatim into the new core
+  skill **`neqsim-task-workflow`** (section numbers preserved). The agent keeps the mandatory
+  first action, purpose, and section 0 (proportionality, validation, assumption, intent,
+  continuous-improvement rules, deliverable matrix, quick fast path). Quick tasks no longer pay
+  the 141 KB context cost; Standard/Comprehensive load the skill.
+* **`devtools/agent_eval.py` + `agent_eval_cases.json`** — deterministic agent evaluation:
+  12 routing golden prompts (expected agent in top-3, skills in top-5) and 5 `results.json`
+  contract cases; `test_agent_eval.py` runs in `skills_agents_lint.yml`. Sibling-repo
+  expectations are enforced only when those repos are checked out.
+* **`devtools/bm25.py`** replaces the optional scikit-learn / Jaccard scorers in `agent_search`
+  and `skill_search` (dependency-free BM25 with stemming, stopwords, coverage term), so dev and
+  CI rank identically. Agent haystacks include `required_skills`.
+* **SKILL.md `description` capped at 1024 chars** (`maxLength` in the shared manifest schema +
+  `verify_skills_agents.py`); 12 over-long descriptions rewritten. Clients truncate beyond
+  1024 and silently drop the routing vocabulary.
+* **Plugin-mode fitness for the task workflow.** `devtools/` is now a complete pip package
+  (`neqsim-dev-setup` 0.2.0: `neqsim` CLI, `neqsim_dev_setup`, `new_task`, `neqsim_runner`,
+  validators, consistency checker, work record, report generator + `task_template/`) that
+  depends on the `neqsim` wheel. The core agent plugin's SessionStart hook installs it
+  (`pip install "neqsim-dev-setup @ git+https://github.com/equinor/neqsim.git@<ref>#subdirectory=devtools"`,
+  ref from `build_agent_plugin.py --toolkit-ref`). `neqsim_dev_setup.neqsim_init()` falls back
+  to the packaged JAR when no `pom.xml` is reachable (`ns.JAR_MODE`, `ns.MISSING_CLASSES` for
+  classes newer than the JAR; `NEQSIM_JAR` overrides). `@solve-task` Step 0 now detects
+  Workspace / Toolkit / Chat-only and the `neqsim-task-workflow` skill §0.6 says what each step
+  needs. Verified end to end in a fresh venv with no checkout: `neqsim new-task`, JAR-mode
+  flash, validator, `neqsim report` (docx + html + work record).
+
+---
+
+## 2026-09-14 — `ChemicalInteractionRule` environment rules no longer fire on unsupplied conditions
+
+**Bug fix** in `neqsim.process.chemistry.ChemicalInteractionRule.environmentMatches`.
+
+A `material_carbon_steel` environment rule whose threshold was not temperature-keyed fell through
+to an unconditional `return true`. The bundled rule set carries such rules keyed on variables the
+assessor does not carry — `velocity>5mps` (NORSOK M-506), `O2<10ppb` (NACE TM0169) — so they fired
+for **every** carbon-steel study regardless of the actual operating condition. The effect was not
+cosmetic: the spurious `velocity>5mps` rule is `HIGH`, so it set `getHighestSeverity()`, pushed
+`getVerdict()` to `INCOMPATIBLE`, and through that raised a `CHEMICAL_INCOMPATIBILITY` candidate in
+`RootCauseAnalyser`. A static chemical-injection cabinet at 25 °C was reported as having a
+flow-induced corrosion problem.
+
+Material rules now route through a private `materialThresholdMatches(String, double)` helper:
+
+* `*` or an empty spec still matches (e.g. `ACID,HF,material_carbon_steel,*`);
+* a `T…` spec still gates on temperature (`T>60C`, `T>120C`, `T>150C`, `T>175C`);
+* any other keyed spec no longer matches, because the condition variable was never supplied.
+
+**Migration:** none for callers. A study that previously reported a velocity- or oxygen-keyed
+carbon-steel issue without supplying a velocity or an oxygen level will now report one fewer issue
+and may drop from `INCOMPATIBLE` to `CAUTION`. That is the corrected result.
+
+**Known remaining gap:** `environmentMatches` still has no branch for `material_316L`,
+`water_high_h2s`, `water_high_chloride`, `water_high_barium`, `water_low_water_cut`,
+`gas_lift_high_co2` or `operating_low_temperature`, so those bundled rules are unreachable.
+Closing that needs a conditions-object signature change and its own regression baseline.
+
+**Tests:** `src/test/java/neqsim/process/chemistry/ChemicalInteractionRuleEnvironmentTest.java`
+(5 cases). Full chemistry suite re-run: 44 tests, 0 failures.
+
+**Agents/skills affected:** `neqsim-production-chemistry` (compatibility screening verdicts),
+`production.chemistry` agent, and any study that calls `ChemicalCompatibilityAssessor` with a
+carbon-steel material.
+
+---
+
+## 2026-09-12 — New `ChemicalInjectionNozzlePerformance` for gas-phase chemical injection
+
+**New class** `neqsim.process.chemistry.injection.ChemicalInjectionNozzlePerformance`.
+
+NeqSim could size the chemistry of a gas-phase chemical treatment
+(`chemistry.scavenger.H2SScavengerPerformance`) and could apply a mixing efficiency to a scavenger
+unit (`equipment.absorber.H2SScavenger.setMixingEfficiency`), but nothing computed what mixing
+efficiency an injection arrangement actually delivers. `setMixingEfficiency` was a free input. That
+made the common field question — a bare injection quill was replaced by an atomizing nozzle, is the
+chemical now in contact with the gas? — unanswerable with the library.
+
+The new class closes that gap for any liquid chemical injected into a flowing gas line: H2S
+scavenger, corrosion inhibitor, methanol or MEG sprayed into a gas stream.
+
+```java
+ChemicalInjectionNozzlePerformance nozzle = new ChemicalInjectionNozzlePerformance();
+nozzle.setInjectionDevice(ChemicalInjectionNozzlePerformance.InjectionDevice.FULL_CONE_NOZZLE);
+nozzle.setPipeInnerDiameter(0.4889);
+nozzle.setGasVolumeFlow(2.21);          // m3/s at line conditions
+nozzle.setGasDensity(11.76);            // from a flashed NeqSim stream
+nozzle.setGasViscosity(1.229e-5);
+nozzle.setChemicalVolumeFlow(235.0);    // l/h
+nozzle.setChemicalDensity(1080.0);
+nozzle.setChemicalViscosity(8.0e-3);
+nozzle.setSurfaceTension(0.040);
+nozzle.setNozzleDifferentialPressure(6.5);   // bar
+nozzle.setSprayConeAngle(90.0);
+nozzle.setInsertionDepth(0.135);        // from the pipe wall; piping specs limit this
+nozzle.evaluate();
+
+double smd = nozzle.getSauterMeanDiameterMicron();
+double area = nozzle.getInterfacialArea();            // m2/m3
+double reach = nozzle.getWallImpingementLength();     // m before the drops deposit
+double index = nozzle.getDispersionIndex();           // 0-1, feeds setMixingEfficiency
+```
+
+Correlations are all from the open literature: Lefebvre's pressure-swirl Sauter mean diameter for a
+nozzle, the critical-Weber aerodynamic breakup limit (We = 12) for a bare quill, Stokes settling
+with a Schiller-Naumann drag correction, and `a = 6 Q_L / (SMD Q_G)` for the interfacial area. The
+off-centre term is the part specific to real installations: chemical-injection piping
+specifications limit insertion length, so on a large line the nozzle cannot reach the centreline and
+the drop flight path before wall contact is correspondingly shorter.
+
+Named warnings (`gas_velocity_below_quill_limit`, `droplets_too_coarse`, `mist_carryover_risk`,
+`early_wall_impingement`, `partial_cross_section_coverage`, `off_centre_injection`) make a screening
+verdict explainable instead of a single number.
+
+**Agents and skills to update:** `production.chemistry` agent and the
+`neqsim-production-chemistry` skill should reference the class for injection-point placement and
+nozzle-versus-quill questions.
+
+**Tests:** `ChemicalInjectionNozzlePerformanceTest`, 6 tests.
+## 2026-09-12 — Automatic recycle insertion: `makeRecycles()` and `setAutoRecycles(...)`
+
+A feedback loop wired straight back into an upstream mixer, with no `Recycle` unit in it, is an
+implicit tear: it converges only because the surrounding sweep re-evaluates it, so it has no
+tolerance, no acceleration and no convergence report of its own. Across `ProcessModel` areas it is
+worse - a stream produced by an area that runs after its consumer can only be closed by the outer
+Gauss-Seidel pass, which has no relaxation setting, so the plant residual sits on a floor that no
+tolerance setting reaches.
+
+**New `neqsim.process.processmodel.AutoRecycleBuilder`** finds those loops and closes them, exposed as:
+
+- `ProcessSystem.makeRecycles()` / `makeRecycles(double tolerance)` — strongly connected components
+  of one flowsheet.
+- `ProcessModel.makeRecycles()` / `makeRecycles(double tolerance)` — cross-area feedback streams
+  first, then every area.
+- `setAutoRecycles(boolean)` on both — do it automatically inside `run()` and therefore inside every
+  `runUntilConverged(...)` overload.
+
+The tear point is the inlet with the smallest recycle ratio (tear flow / total inlet flow of the
+consuming unit), because that ratio sets the contraction rate of a direct-substitution tear. One
+edge is torn per round and the loop structure is recomputed afterwards, so nested cycles get the
+minimum number of tears. Each generated recycle starts on direct substitution with
+`setAdaptiveAcceleration(true)` and gets an absolute flow tolerance at 1e-6 of the largest flow in
+its area.
+
+- **No migration needed.** `setAutoRecycles` defaults to **false**, so nothing changes for an
+  existing model; inserting a tear changes how a flowsheet iterates and must be opted into.
+- `makeRecycles()` seeds itself - it runs the flowsheet once when streams have no fluid yet - and is
+  idempotent, so the old "run, then insert, then run again" ordering is no longer the caller's
+  problem.
+- Only `Mixer` and `Manifold` inlets can be torn (they expose `replaceStream(int, StreamInterface)`).
+  A loop closing on any other equipment is logged and left untouched rather than mis-wired.
+- Replaces hand-written tear helpers in notebooks (a `Stream` clone + `Recycle` per cross-area
+  stream). Documented in
+  [docs/process/controllers.md#automatic-recycle-insertion](docs/process/controllers.md#automatic-recycle-insertion).
+
+---
+
+## 2026-08-24 — Component name resolution, parameterised component lookup, COMP_EXT superset fix
+
+Three related changes around how a component name reaches the component database.
+
+**1. New `neqsim.thermo.component.ComponentNameResolver`.**
+`addComponent(...)` previously mapped names through an 18-entry hardcoded map of reservoir
+shorthand (`C1`, `nC4`, `H2O`), matched case-sensitively. Nothing else was recognised, so a
+systematic or trivial name from a laboratory report failed with "not found in database" even when
+the component was present under the in-house shorthand.
+
+The resolver now recognises, in this order: any database name regardless of letter case; the
+reservoir shorthand as before; a 148-entry synonym table covering systematic names
+(`2,2,4-trimethylpentane` → `224-TM-C5`) and trivial names (`isopentane` → `i-pentane`,
+`cyclohexane` → `c-hexane`); and inverted CAS index names as printed by chromatography software
+(`Cyclohexane, 1,2,4-trimethyl-` → `1.2.4-TMcyC6`). A `.` between two digits is accepted wherever
+the database writes a locant separator, so `1,2,3-TM-Benzene` and `1.2.3-TM-Benzene` both work.
+
+Stereochemistry is never guessed. Where the database holds both partners of a cis/trans pair
+(the 1,2- and 1,3-dimethylcyclopentanes, the 1,2- and 1,4-dimethylcyclohexanes, 2-butene), the
+unqualified parent name is deliberately absent from the synonym table and is passed through
+unchanged rather than silently resolved to one of the two.
+
+- **No migration needed.** `ComponentInterface.getComponentNameFromAlias(String)` keeps its
+  signature and delegates to the resolver, so all ~28 existing call sites gain the new behaviour.
+  Every previously accepted name still resolves to the same component.
+- `ComponentInterface.getComponentNameMap()` is **deprecated**; use
+  `ComponentNameResolver.getSynonyms()`.
+- Unknown names are still returned unchanged, so components that exist only in the extended
+  database are unaffected.
+
+**2. `NeqSimDataBase.hasComponent` / `hasTempComponent` now use a prepared statement.**
+The query was assembled as `"... WHERE NAME='" + name + "'"`. A name containing an apostrophe
+produced invalid SQL — 2,061 names in the extended database contain one, for example
+`4'-hydroxyacetophenone`, so those components could never be looked up. Both methods now bind the
+name as a parameter and return `false` for `null` instead of reaching the database.
+
+**3. `COMP_EXT.csv` is now genuinely a superset of `COMP.csv`.**
+The documentation stated that the extended database contains every standard component; eleven were
+missing (`NO2-`, `H2O2`, `NaNO2`, `NH2SO3H`, `NH2SO3-`, `NaHSO4`, `N2O4`, `N2O4-`, `asphaltene`,
+`MEA+`, `MEACOO-`). Because `useExtendedComponentDatabase(true)` replaces the `COMP` table, calling
+it silently removed those components from any fluid built afterwards. The rows are copied verbatim
+from `COMP.csv`, and the relationship is now enforced by a test.
+
+**Documentation:** `docs/thermo/component_list.md` gains a "Component Name Resolution" section,
+corrects the component counts (257 standard, 76,704 extended — it claimed "~250" and "50,000+"),
+and records that the provenance of the extended database is undocumented and its parameters are
+unvalidated against a primary source.
+
+**Tests:** `ComponentNameResolverTest` (14 tests, including a check that every database name
+resolves to itself and that every synonym target exists) and
+`NeqSimDataBaseComponentLookupTest` (4 tests).
+
+---
+
+## 2026-08-15 — Beggs and Brill correlation corrected in `PipeBeggsAndBrills`
+## 2026-08-20 — Gas-turbine water-wash planning: `GasTurbineWashPlanner` + partial on-line wash
+
+`GasTurbineDegradation` could only model a wash as `offlineWash()`, a full reset of the recoverable
+penalty, and nothing turned a *measured* corrected-efficiency trend into a wash decision. Both gaps
+are now closed in `neqsim.process.equipment.powergeneration.gasturbine`.
+
+**New: `GasTurbineWashPlanner`.** Screening-level planner for compressor water-wash programmes.
+
+- Steady-state sawtooth with **partial** recovery: a wash removing a fraction `e` of the accumulated
+  loss leaves a residual `L0 = (1-e)*r*T/e` at the start of every cycle, so an imperfect on-line wash
+  never returns the machine to clean.
+- The extra-fuel fraction `1/(1-L) - 1` is **integrated over the cycle**, not evaluated at the mean
+  loss.
+- `evaluate(intervalHours)` returns a `WashPlan` with washes/year, mean efficiency loss, extra fuel
+  (Sm3/yr), extra CO2 (t/yr), and the fuel / CO2 / wash / outage cost split.
+- `optimize(min, max, step)` scans for the lowest total annual cost;
+  `paybackYears(capex, reference, withPermanentSystem)` gives the payback of a permanent
+  installation (`POSITIVE_INFINITY` when it does not save money).
+- `lossRateFromCorrectedEfficiencyTrend(ppPer1000FiredHours, cleanEfficiencyPercent)` converts the
+  "corrected turbine efficiency" KPI that energy-management systems trend into the fractional loss
+  rate the planner needs — the bridge from plant data to the model.
+
+**Extended: `GasTurbineDegradation.onlineWash(double effectiveness)`** — partial recovery of the
+recoverable penalty (clamped to 0–1; 1.0 is equivalent to `offlineWash()`).
+
+Tests: `GasTurbineWashPlannerTest` (9 tests). Skill updated: `neqsim-power-generation` gained a
+"Water-wash interval and permanent-wash business case" section with the usage pattern and the
+gotchas (deferment cost dominates an off-line case; an off-line optimum at the scan bound means
+annual crank washing is already right and on-line washing is the lever).
+
+
+
+Four defects in the Beggs and Brill (1973) implementation, found by auditing the correlation term
+by term against a clean-room reimplementation of the published equations and cross-checking a 74 km
+gas-export line against a single-phase Darcy-Weisbach integration. All four now have regression
+tests in `PipeBeggsAndBrillsCorrelationTest`.
+
+**1. The pipe angle was converted from degrees to radians twice.**
+`convertSystemUnitToImperial()` already converts `angle` to radians, but the inclination
+correction then evaluated `Math.sin(1.8 * angle * 0.01745329)`. The correction was suppressed by
+roughly a factor of 57, so liquid holdup barely responded to inclination — the correction factor
+came out as 1.011 where the published correlation gives 2.00 at +4 degrees.
+
+- **Impact:** every inclined two-phase result. Holdup, mixture density and the hydrostatic term
+  were all wrong on any non-horizontal segment, and elevation profiles were effectively ignored.
+  Horizontal lines were unaffected. Re-run any inclined or undulating pipeline case.
+
+**2. The distributed-regime boundary tested `L4` instead of `L1`.**
+For a no-slip liquid fraction below 0.4 the published map gives distributed flow when
+`Fr >= L1`. Testing `L4` — which is astronomically large at low liquid fraction — made the branch
+unreachable, and such points fell through to a `Fr > 110` catch-all and were reported as
+intermittent. The branch order is now segregated, transition, intermittent, distributed, because
+`L1` and `L3` cross near a liquid fraction of 0.01; the two ad-hoc catch-alls that were masking the
+gap have been removed.
+
+- **Impact:** flow regime, holdup and the two-phase friction multiplier for high-Froude flow at
+  liquid fractions below 0.4. `BeggsAndBrillsPipeTest.testPipeLineBeggsAndBrills2` now reports
+  `DISTRIBUTED` at the outlet instead of `INTERMITTENT`.
+
+**3. The liquid velocity number counted gravity twice.**
+`N_LV = 1.938 * vsl * (rho_L / sigma)^0.25`; the 1.938 prefactor already absorbs the gravitational
+acceleration and the field-unit conversion. The code divided by a further 32.2.
+
+**4. A volume-corrected density was mixed with an uncorrected one in the same formula.**
+The specific gravity feeding the surface-tension correlation used
+`getPhase(1).getDensity("lb/ft3")`, but the liquid velocity number used the no-argument
+`getPhase(1).getDensity()`. **These are not the same number when volume correction is on** — 558.0
+against 675.4 kg/m3 for a lean methane/n-decane liquid, a 21 % difference. Both now use the
+explicit-unit accessor.
+
+- **General rule for agents:** treat `phase.getDensity()` and `phase.getDensity("kg/m3")` as
+  different quantities and never mix them inside one calculation.
+
+Minor: the API gravity constant was `141.5/SG - 131.0`, corrected to the standard `- 131.5`, and
+the two-phase friction `S` coefficients `3.18` / `0.872` are now the published `3.182` / `0.8725`.
+
+**Still not modelled:** the Payne et al. (1979) holdup correction is not applied. Note, however, that
+it would *not* have explained the residual difference against a transient two-fluid code on a large-bore
+gas line: the Beggs and Brill `S` factor is monotonically increasing in `y = lambda_L / H_L^2` over that
+range, so lowering the holdup *raises* the friction multiplier. On a 74 km 14-inch line at a mean
+no-slip liquid fraction of 0.009 the multiplier was 1.42 and accounted for the entire gap; removing it
+brought the correlation from 124 bar to 87 bar against 78 bar from OLGA and 84 bar from a single-phase
+Darcy check. Beggs and Brill is calibrated for no-slip liquid fractions down to roughly 0.01-0.02, so
+below that the two-phase friction multiplier is an extrapolation. State this as a correlation
+applicability limit when reporting.
+
+---
+
+## 2026-08-14 — Component clone keeps its attractive term, and E300 export keeps the volume shift
+
+Two defects that together made EOS regression results disagree with the Eclipse file they were
+exported to. Both surfaced while characterising a gas condensate and both now have regression tests.
+
+**1. `ComponentEos.clone()` left the cloned attractive term bound to the original component.**
+The alpha function reads `Tc`, `Pc` and the acentric factor live from `getComponent()`, so the
+usual regression pattern — clone a base fluid, then adjust critical properties on the clone — only
+changed the `a` parameter while `alpha(T)` kept evaluating against the untuned critical temperature.
+The tuning was silently half-applied.
+
+- `AttractiveTermInterface.setComponent(ComponentEosInterface)` is now public, and
+  `ComponentEos.clone()` re-points the cloned term at the cloned component.
+- **Impact:** any tuning applied to a *clone* via `setTC` / `setPC` / `setAcentricFactor` was
+  partly ignored. Tuning applied to a freshly built fluid was always correct. Re-run regressions
+  that used the clone-then-tune pattern.
+- Regression test: `ComponentEosCloneAttractiveTermTest`.
+
+**2. `EclipseFluidReadWrite.write` wrote `SSHIFT`/`SSHIFTS` as zero for characterised fractions.**
+It emitted `getVolumeCorrectionConst()`, which is only populated when a shift is set explicitly.
+TBP and plus fractions derive their Péneloux translation from the Rackett compressibility instead,
+so the translation was dropped on export — condensate liquid density came back ~14 % too high, both
+on NeqSim read-back and in Eclipse.
+
+- Now writes the effective dimensionless shift `getVolumeCorrection() / getb()`, matching the
+  Eclipse convention `v = v_EOS − s·b`. The reader reproduces the original molar volume exactly.
+- **Impact:** E300 files written before this change carry `SSHIFT = 0` for pseudo-components and
+  will give untranslated PR liquid densities. Re-export them.
+- Regression test: `EclipseFluidReadWriteVolumeShiftTest`.
+
+**Agent-facing notes** (also added to the `neqsim-eos-regression` skill):
+
+- Apply per-component tuning by iterating `fluid.getPhases()` (skipping nulls), **not**
+  `getPhase(i)` — the latter resolves through the phase-index map and can return the same phase
+  object several times while leaving other phase objects untuned.
+- `dewPointPressureFlash()` / `dewPointPressureFlashHC()` can return the initial guess on
+  near-critical fluids. Verify against a pressure scan or `calcPTphaseEnvelope` before using them
+  as a regression target.
+
+---
+
+## 2026-08-13 — FIV fluid-viscosity factor corrected, and dead-leg pulsation screening added
+
+**Breaking behaviour change.** `FlowInducedVibrationAnalyser` evaluated the Energy Institute
+fluid-viscosity factor for void fraction above 0.99 as `sqrt(mu / sqrt(0.001))` while
+`PipeBeggsAndBrills.getSegmentMixtureViscosity(int)` already returns **centipoise**. The extra
+square root combined with a Pa·s / cP unit mismatch inflated the dry-gas `F_VF` by a factor 5.6
+and produced an *upward* jump across the GVF = 0.99 boundary, so removing liquid from a wet-gas
+line appeared to *raise* the vibration driver. The governing form is `FVF = sqrt(mu_gas / 1e-3)`
+with the viscosity in Pa·s, i.e. `sqrt(mu_cP / 1 cP)`.
+
+- Corrected to `Math.sqrt(viscosity_cP / REFERENCE_VISCOSITY_CP)`, with
+  `FlowInducedVibrationAnalyser.REFERENCE_VISCOSITY_CP = 1.0` exposed as a public constant.
+- **Impact:** any single-phase-gas LOF computed before this change is a factor 5.6 too high.
+  Two-phase results (GVF ≤ 0.99) and liquid results are unaffected. Re-run gas-dominated cases.
+- Sanity rule for agents: `F_VF` must *fall* as the void fraction goes to 1. The wet-gas branch
+  reaches 0.268 at GVF = 0.99, so a single-phase gas must come out below that (~0.11 for a
+  hydrocarbon gas). At equal standard rate and pressure the wet-over-dry driver ratio is ~3–4.
+- Regression tests: `FlowInducedVibrationAnalyserTest#testDryGasLofBelowWetGasLof` and
+  `#testDryGasFluidViscosityFactorReferencedToOneCentipoise`.
+
+**New capability.** `neqsim.process.safety.vibration.FlowInducedPulsationScreening` and
+`FlowInducedPulsationResult` screen closed side branches (dead legs) for acoustic lock-in — the
+tonal mechanism that governs when a wet-gas line is converted to dry-gas service and that
+main-line FIV screening does not cover.
+
+- Acoustic length runs to the *first acoustic boundary*; **no end correction** is applied.
+- Modes: `f_n = (2n+1)c/(4L)` for `AcousticTermination.CLOSED`, `(n+1)c/(2L)` for `OPEN`, n from 0.
+- Shedding: `f_s = Sr·U0/W_eff` with `W_eff = pi·d_s/4 + r_eff` (the effective mouth width, **not**
+  the branch diameter); `DEFAULT_STROUHAL_MODE_A = 0.37`, `DEFAULT_STROUHAL_MODE_C = 0.20`.
+- Resonance when `0.8 f_n <= f_s <= 1.2 f_n` (`LOCK_IN_ENVELOPE_FRACTION = 0.20`).
+- Helpers `effectiveWidth(...)` and `eigenFrequency(...)` allow length or velocity windows to be
+  built without a full screening.
+- Verified against a published worked example: 3 m closed branch at c = 400 m/s gives
+  33.3 / 100 / 166.7 Hz.
+- Docs: `docs/safety/mah_bowtie_fiv_screening.md`; examples executed by
+  `MahBowTieFivScreeningDocExamplesTest`.
+
+## 2026-08-13 — Independent stagnant inner HTC for TwoFluidPipe cooldown
+
+- `TwoFluidPipe.setStagnantInnerHeatTransferCoefficient(...)` and its getter now own the zero-local-throughput
+  fluid-to-wall coefficient used by the multi-layer transient model. The documented default is 50 W/(m²·K).
+- `setHeatTransferCoefficient(...)` remains the simple-model or configuration-level overall U-value and no longer
+  becomes the closed-flow inner film coefficient. Multi-layer shutdown results are therefore independent of whether
+  that overall coefficient is set before or after radial-layer configuration.
+- Migration: replace post-configuration `setHeatTransferCoefficient(value)` workarounds that intended to set the
+  stagnant fluid film with `setStagnantInnerHeatTransferCoefficient(value)`.
+
+## 2026-08-12 — Reversible ProcessModel operating actions
+
+- `ProcessModelOperatingAction` adds immutable, serializable action identity, area-qualified
+  automation address, unit, provenance, and strict continuous or enumerated-discrete semantics.
+- `inspectCapability`, `capture`, `apply`, and `restore` provide explicit diagnostics,
+  write/read-back verification and identity-bound restoration without running the process model.
+- `registerWith(ProcessModelSimulationEvaluator)` exposes bounded continuous actions and exact
+  discrete-value discovery to Java and JPype/Python optimizers. Intermediate discrete values fail
+  closed and evaluator callbacks must be re-registered after deserialization.
+- The API does not mutate topology, solve mixed-integer decisions, infer feasibility, rank actions,
+  or approve an operating change. Candidate process runs and all engineering constraints remain
+  explicit.
+
+## 2026-08-12 — Explicit constraint scaling and candidate-active diagnostics
+
+- `ConstraintActivityAnalyzer` consumes an immutable `SensitivityQualityResult` and performs no
+  process evaluations. It reports dimensionless base margins, normalized constraint-margin
+  derivatives, violations and conservative candidate-active/inactive classifications.
+- Every `ConstraintScale` is positive, uses the constraint's declared unit, records provenance and
+  is bound to exact immutable identity: index, name, type, bounds/tolerance, hard/soft semantics,
+  penalty and capacity origin. Missing, duplicate, unitless or stale scales fail closed.
+- `ActivityPolicy` retains the dimensionless activity tolerance, local sensitivity qualification
+  policy and soft-constraint choice. Assessments and policies are immutable and serializable for
+  Java and JPype/Python workflows.
+- A scaled derivative remains linked to its complete raw evidence and must pass `isUsable()` before
+  consumption. `CANDIDATE_ACTIVE` is only a feasible near-boundary diagnostic—not cross-unit
+  ranking, optimizer active-set proof, a KKT multiplier, economic shadow price or engineering
+  approval.
+
+## 2026-08-11 — Evidence-qualified local ProcessModel constraint sensitivities
+
+- `SensitivityQualityResult.assessConstraintSensitivities(policy)` now binds each constraint row
+  and parameter column to pair-specific numerical evidence, immutable engineering identity, raw
+  and minimizer objective derivatives, the constraint-margin derivative, declared derivative
+  units, and actionable diagnostics without rerunning the process model.
+- `SensitivityQualificationPolicy` explicitly controls relative-disagreement tolerance, base and
+  perturbation feasibility requirements, and acceptance of one-sided stencils. Convergence
+  failures, evaluation errors, non-finite derivatives, unstable refinement, and fixed parameters
+  always reject a pair.
+- `getEvidenceFlags()` retains cautions even when a policy permits them;
+  `getRejectionReasons()` explains why a pair is refused. The accepted-only convenience getter
+  must not replace archiving the complete assessment when auditability matters.
+- The API deliberately performs no cross-unit ranking, scaling, active-set inference, KKT
+  multiplier calculation, shadow-price claim, or engineering approval.
+
+## 2026-08-11 — Self-describing ProcessModel sensitivity snapshots
+
+- `SensitivityQualityResult` now includes immutable parameter, selected-objective, and constraint
+  snapshots that bind derivative columns and rows to their engineering identity.
+- Parameter snapshots retain index, name, automation address, unit, bounds, and bounded base
+  value. The objective snapshot retains direction, unit, weight, raw and minimizer base values,
+  and its gradient. Constraint snapshots retain type, unit, hard/soft semantics, penalty, bounds,
+  equality tolerance, capacity area/equipment origin, base value, base margin, and the matching
+  Jacobian row.
+- The snapshots are serializable, defensively copy derivative arrays, and remain unchanged after
+  evaluator definitions mutate or another process point runs. Existing matrix getters and
+  sensitivity evaluation cost are unchanged.
+- Agents must preserve these records when archiving or explaining sensitivities and must not rank
+  unlike raw margins or derivatives without explicit engineering scaling.
+
+---
+
+## 2026-08-10 — ProcessModel sensitivity-quality evidence
+
+- `ProcessModelSimulationEvaluator.estimateSensitivitiesWithQuality(...)` now evaluates one coarse
+  and one halved finite-difference step, reusing each process run for the selected objective and
+  every constraint-margin derivative.
+- The immutable result returns the fine-step gradient/Jacobian and records each parameter's actual
+  bounded stencil, requested/coarse/fine steps, scale-independent coarse/fine disagreement, and
+  every perturbation's parameter value, convergence, hard-constraint feasibility, and error.
+- `isNumericallyStable(tolerance)` is deliberately a numerical consistency check. Agents must
+  inspect feasibility and active equipment/control regimes separately and must not label the
+  derivative a shadow price without optimizer-specific KKT evidence.
+- Existing gradient/Jacobian methods and their lower evaluation cost remain unchanged.
+
+---
+
 ## 2026-08-09 — Bound-aware ProcessModel finite-difference sensitivities
 
 - `ProcessModelSimulationEvaluator` objective gradients and constraint Jacobians now divide by the
@@ -90,8 +747,8 @@ enabled; a half-neutralised DEA buffer in `SystemFurstElectrolyteEos` returns pH
 (`SystemElectrolyteCPAstatoil`) remains unreliable for amine buffers — pre-existing, and
 affects MDEA equally.
 
-**New skill:** `neqsim-flow-accelerated-corrosion`. Loaded by `@flow.assurance` and
-`@root.cause`.
+**New skill:** `neqsim-flow-accelerated-corrosion`. Loaded by `@flow-assurance` and
+`@root-cause`.
 
 ---
 
@@ -139,8 +796,8 @@ involving a glycol was wrong (TEG heat of combustion was ~25.4 MJ/kg, now
 ~22.2 MJ/kg). Normal enthalpy calculations were unaffected, because the formation
 term is multiplied by zero in that path.
 
-**New skill:** `neqsim-self-heating-ignition`. Loaded by `@safety.depressuring` and
-`@reaction.engineering`; routed from `@router` on "self-ignition, spontaneous
+**New skill:** `neqsim-self-heating-ignition`. Loaded by `@safety-depressuring` and
+`@reaction-engineering`; routed from `@router` on "self-ignition, spontaneous
 combustion, lagging fire, fire with no ignition source".
 
 ---
@@ -1405,6 +2062,15 @@ Set<ProcessEquipmentInterface> seen =
     Collections.newSetFromMap(new IdentityHashMap<ProcessEquipmentInterface, Boolean>());
 ```
 
+**Caveat — persisted fields.** Use these for locals and `transient` fields only. XStream has no
+converter for `IdentityHashMap` or `Collections.newSetFromMap(...)` and falls back to reflecting
+into `java.util`, which the JDK module system blocks. Maven Surefire passes
+`--add-opens java.base/java.util=ALL-UNNAMED` so Java tests never see it, but embedded hosts such
+as neqsim-python do not, and `save_neqsim` then fails with "No converter available" and writes a
+truncated file. For a non-transient field, store the identity set as a `List` scanned with `==`
+(see `RecycleController.acceptedRecycleSeeds`).
+`ProcessSystemXStreamPortabilityTest` walks a run `ProcessSystem` and fails on any such field.
+
 To compare two models **by value**, use `ProcessModelState.compare(oldState, newState)` rather
 than `equals()`.
 
@@ -2079,7 +2745,7 @@ behaviour; a clean valve keeps `foulingFraction = 0`.
 
 - `neqsim-flow-assurance` skill — new "Valve scale drift" and "Scale / precipitation
   remediation" subsections (section 5-scale) + description keywords.
-- `@flow.assurance` agent — corrosion+scale section references the valve-plugging
+- `@flow-assurance` agent — corrosion+scale section references the valve-plugging
   and remediation-advisor classes.
 
 ---
@@ -2251,7 +2917,7 @@ NeqSim physics change.
   (was `neqsim-*`-backtick only), clearing two false positives
   (`dynamic.equipment.agent`, `paperlab.agent`).
 - **Wired two genuinely-orphaned skills**: `neqsim-wax-calculations` →
-  `flow.assurance.agent`, `neqsim_standard_requirement_extraction` →
+  `flow.assurance.agent`, `neqsim-standard-requirement-extraction` →
   `standards.review.agent`.
 - **`USE WHEN:` trigger check is now case-insensitive** (`Use when:` was missed),
   clearing 65 false NO-TRIGGER warnings. Fixed the one native skill missing a
@@ -2351,7 +3017,7 @@ community + enterprise agent/skill repos gets utilized. No NeqSim physics change
 
 ### Agents/skills to update
 
-- `solve.task.agent.md`, `capability.scout.agent.md`, `router.agent.md`,
+- `solve-task.agent.md`, `capability-scout.agent.md`, `router.agent.md`,
   `neqsim-professional-reporting` — updated in this change.
 
 ---
@@ -3381,7 +4047,7 @@ single `ProcessAutomation` facade.
 
 - `neqsim-api-patterns` — add batch/introspection patterns.
 - `neqsim-pid-process-operations`, `neqsim-plant-data` — recommend `setVariableValueAndRun`.
-- `@process.simulation`, `@plant.data` — note cached facade and dirty tracking.
+- `@process.simulation`, `@plant-data` — note cached facade and dirty tracking.
 
 ---
 
@@ -3684,7 +4350,7 @@ metadata, column internals, skipped utilities, or unsupported types.
 ### Affected Guidance
 
 - `.github/skills/neqsim-unisim-reader/SKILL.md`
-- `.github/agents/unisim.reader.agent.md`
+- `.github/agents/unisim-reader.agent.md`
 - `docs/process/unisim-to-neqsim-conversion.md`
 - `devtools/README.md`
 - `AGENTS.md`
@@ -3715,7 +4381,7 @@ Pc, and normal boiling point.
 ### Affected Guidance
 
 - `.github/skills/neqsim-unisim-reader/SKILL.md`
-- `.github/agents/unisim.reader.agent.md`
+- `.github/agents/unisim-reader.agent.md`
 - `docs/process/unisim-to-neqsim-conversion.md`
 - `devtools/README.md`
 
@@ -4177,8 +4843,8 @@ process variables simultaneously.
 
 - `neqsim-api-patterns` skill — add rate-based absorber, SQP optimizer, flow correlation, multi-variable adjuster patterns
 - `neqsim-capability-map` skill — update mass transfer, optimization, and multiphase flow sections
-- `@solve.process` agent — can now use RateBasedAbsorber and MultiVariableAdjuster
-- `@mechanical.design` agent — PipeHagedornBrown/PipeMukherjeeAndBrill for well tubing design
+- `@solve-process` agent — can now use RateBasedAbsorber and MultiVariableAdjuster
+- `@mechanical-design` agent — PipeHagedornBrown/PipeMukherjeeAndBrill for well tubing design
 
 ---
 
@@ -4779,7 +5445,7 @@ UniSim COM attributes (`Orientation`, `VesselOrientation`, `SeparatorOrientation
 ### Affected Files
 - `devtools/unisim_reader.py` — `resolve_neqsim_type()` method, orientation extraction
 - `.github/skills/neqsim-unisim-reader/SKILL.md`
-- `.github/agents/unisim.reader.agent.md`
+- `.github/agents/unisim-reader.agent.md`
 - `AGENTS.md`
 
 ---
@@ -4936,7 +5602,7 @@ UniSim COM attributes (`Orientation`, `VesselOrientation`, `SeparatorOrientation
 ### Affected Files
 - `devtools/unisim_reader.py` — `resolve_neqsim_type()` method, orientation extraction
 - `.github/skills/neqsim-unisim-reader/SKILL.md`
-- `.github/agents/unisim.reader.agent.md`
+- `.github/agents/unisim-reader.agent.md`
 - `AGENTS.md`
 
 ---
@@ -5278,7 +5944,7 @@ with open("my_process.py", "w") as f:
     f.write(python_code)
 ```
 
-**Agents/skills updated:** `unisim.reader.agent.md`, `neqsim-unisim-reader/SKILL.md`,
+**Agents/skills updated:** `unisim-reader.agent.md`, `neqsim-unisim-reader/SKILL.md`,
 `PR_DESCRIPTION_PROCESS_EXTRACTION.md`, `devtools/README.md`.
 
 ---
@@ -5675,8 +6341,8 @@ InstrumentScheduleGenerator instrSchedule = pkg.getInstrumentSchedule();
 
 - `neqsim-capability-map` SKILL — Expanded Measurement Devices table, added Engineering Deliverables subsection
 - `neqsim-api-patterns` SKILL — Added Engineering Deliverables section with instrument schedule pattern
-- `engineering.deliverables.agent.md` — Added instrument schedule deliverable section and code examples
-- `field.development.agent.md` — Added item 17 (instrument schedule), updated StudyClass table and class map
+- `engineering-deliverables.agent.md` — Added instrument schedule deliverable section and code examples
+- `field-development.agent.md` — Added item 17 (instrument schedule), updated StudyClass table and class map
 - `AGENTS.md` — Updated key paths table
 - `CONTEXT.md` — Updated repo map and key locations table
 
@@ -5836,7 +6502,7 @@ behave identically (steady-state) or more correctly (transient now evolves).
 
 ### New Agent
 
-- **`@field.development`** (`.github/agents/field.development.agent.md`) — Expert agent for oil & gas field development workflows: concept selection, subsea tieback, production forecasting, and project economics (NPV/IRR). Orchestrates concept screening through final investment decision.
+- **`@field-development`** (`.github/agents/field-development.agent.md`) — Expert agent for oil & gas field development workflows: concept selection, subsea tieback, production forecasting, and project economics (NPV/IRR). Orchestrates concept screening through final investment decision.
 
 ### New Skills (4)
 
@@ -5851,7 +6517,7 @@ behave identically (steady-state) or more correctly (transient now evolves).
 - `CONTEXT.md` — Updated agent/skill counts (16 agents, 14 skills)
 - `.github/agents/router.agent.md` — Added field development routing
 - `.github/agents/README.md` — Added field development section
-- `.github/agents/solve.task.agent.md` — Added `@field.development` to delegation table
+- `.github/agents/solve-task.agent.md` — Added `@field-development` to delegation table
 - `docs/integration/ai_agents_reference.md` — Added agent entry, 4 skill entries, updated cross-reference tables
 - `docs/integration/ai_agentic_programming_intro.md` — Updated count and added agent to catalog
 - `docs/integration/ai_workflow_examples.md` — Added Example 8: Field Development Concept Selection
@@ -5860,7 +6526,7 @@ behave identically (steady-state) or more correctly (transient now evolves).
 
 ### Migration
 
-No code changes needed. Use `@field.development` for field development tasks that were previously handled by `@solve.task`.
+No code changes needed. Use `@field-development` for field development tasks that were previously handled by `@solve-task`.
 
 ---
 
@@ -6072,7 +6738,7 @@ report.toJson();
 ## 2026-03-21 — Capability Scout Agent and Capability Map Skill
 
 ### New Agent
-- **`@capability.scout`** — Analyzes engineering tasks, identifies required capabilities,
+- **`@capability-scout`** — Analyzes engineering tasks, identifies required capabilities,
   checks NeqSim coverage, identifies gaps, writes NIPs, recommends skills and agent pipelines.
   Use before starting complex multi-discipline tasks.
 
@@ -6082,7 +6748,7 @@ report.toJson();
 | `neqsim-capability-map` | Structured inventory of all NeqSim capabilities by discipline (EOS, equipment, PVT, standards, mechanical design, flow assurance, safety, economics) |
 
 ### Updated Files
-- `solve.task.agent.md` — Phase 1.5 Section 7b.3 now recommends invoking `@capability.scout` for comprehensive tasks
+- `solve-task.agent.md` — Phase 1.5 Section 7b.3 now recommends invoking `@capability-scout` for comprehensive tasks
 - `router.agent.md` — Added capability scout to routing table and Pattern 6 (Capability Assessment + Implementation)
 - `README.md` — Added capability scout to Routing & Help section and capability-map to Skills table
 - `AGENTS.md` — Added capability scout to Key Paths and capability-map to Skills Reference
@@ -6107,7 +6773,7 @@ report.toJson();
 | `neqsim-performance-guide`    | Simulation time estimates and optimization strategies (in notebook-patterns skill)    |
 
 ### Updated Files
-- `solve.task.agent.md` — Added auto-search past solutions (Phase 0, Step 1.5) and cross-discipline consistency gate
+- `solve-task.agent.md` — Added auto-search past solutions (Phase 0, Step 1.5) and cross-discipline consistency gate
 - `README.md` — Updated with new router agent, skills table, and cross-references
 - `neqsim-notebook-patterns/SKILL.md` — Added performance estimation table and optimization tips
 

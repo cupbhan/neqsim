@@ -18,6 +18,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import neqsim.thermo.ThermodynamicConstantsInterface;
 import neqsim.thermo.component.ComponentEos;
+import neqsim.thermo.component.ComponentEosInterface;
+import neqsim.thermo.component.ComponentInterface;
 import neqsim.thermo.phase.PhaseEosInterface;
 import neqsim.thermo.system.SystemInterface;
 
@@ -393,6 +395,27 @@ public class EclipseFluidReadWrite {
   }
 
   /**
+   * Reads the optional Peng-Robinson correction keyword that may follow the EOS keyword. A plain (1976) PR file carries
+   * no correction keyword, so the line is only consumed when it actually is PRCORR or PRLKCORR.
+   *
+   * @param br the BufferedReader positioned just after the EOS value line
+   * @return "PRCORR", "PRLKCORR" or null when no correction keyword is present
+   * @throws IOException if an I/O error occurs
+   */
+  private static String readCorrectionKeyword(BufferedReader br) throws IOException {
+    br.mark(4096);
+    String line = br.readLine();
+    if (line != null) {
+      String corr = line.trim().replace("/", "").trim();
+      if ("PRCORR".equals(corr) || "PRLKCORR".equals(corr)) {
+        return corr;
+      }
+    }
+    br.reset();
+    return null;
+  }
+
+  /**
    * Internal implementation. If {@code forcedFluid} is non-null it is used as the target (EOS keyword in file is
    * ignored). Otherwise the EOS keyword drives fluid creation.
    *
@@ -466,15 +489,11 @@ public class EclipseFluidReadWrite {
             if (EOS.contains("SRK")) {
               fluid = new neqsim.thermo.system.SystemSrkEos(288.15, ThermodynamicConstantsInterface.referencePressure);
             } else if (EOS.contains("PR")) {
-              String corrLine = br.readLine();
-              if (corrLine == null) {
-                break;
-              }
-              String corr = corrLine.trim().replace("/", "");
-              if (corr.equals("PRLKCORR")) {
+              String corr = readCorrectionKeyword(br);
+              if ("PRLKCORR".equals(corr)) {
                 fluid = new neqsim.thermo.system.SystemPrLeeKeslerEos(288.15,
                     ThermodynamicConstantsInterface.referencePressure);
-              } else if (corr.equals("PRCORR")) {
+              } else if ("PRCORR".equals(corr)) {
                 fluid = new neqsim.thermo.system.SystemPrEos1978(288.15,
                     ThermodynamicConstantsInterface.referencePressure);
               } else {
@@ -484,8 +503,8 @@ public class EclipseFluidReadWrite {
               fluid = new neqsim.thermo.system.SystemPrEos(288.15, ThermodynamicConstantsInterface.referencePressure);
             }
           } else if (EOS.contains("PR")) {
-            // Skip the PRCORR / PRLKCORR line so the reader stays in sync.
-            br.readLine();
+            // Consume the PRCORR / PRLKCORR line, if present, so the reader stays in sync.
+            readCorrectionKeyword(br);
           }
         }
         if (st.trim().equals("CNAMES")) {
@@ -1070,11 +1089,11 @@ public class EclipseFluidReadWrite {
           if (EOS.contains("SRK")) {
             fluid = new neqsim.thermo.system.SystemSrkEos(288.15, ThermodynamicConstantsInterface.referencePressure);
           } else if (EOS.contains("PR")) {
-            String corr = br.readLine().trim().replace("/", "");
-            if (corr.equals("PRLKCORR")) {
+            String corr = readCorrectionKeyword(br);
+            if ("PRLKCORR".equals(corr)) {
               fluid = new neqsim.thermo.system.SystemPrLeeKeslerEos(288.15,
                   ThermodynamicConstantsInterface.referencePressure);
-            } else if (corr.equals("PRCORR")) {
+            } else if ("PRCORR".equals(corr)) {
               fluid = new neqsim.thermo.system.SystemPrEos1978(288.15,
                   ThermodynamicConstantsInterface.referencePressure);
             } else {
@@ -1633,15 +1652,16 @@ public class EclipseFluidReadWrite {
     writer.write("-- Equation of state\n");
     writer.write("EOS\n");
     String eosType = getEOSType(fluid);
-    // PR-LK is written as "PR" in the EOS line (same family), distinguished by
-    // PRLKCORR
-    String eosLine = "PR-LK".equals(eosType) ? "PR" : eosType;
+    // PR-LK and PR-1978 are written as "PR" in the EOS line (same family) and are
+    // distinguished by the following PRLKCORR / PRCORR keyword.
+    String eosLine = eosType.startsWith("PR") ? "PR" : eosType;
     writer.write(eosLine + " /\n");
 
-    // Correction keyword for Peng-Robinson variants
+    // Correction keyword for Peng-Robinson variants. A plain (1976) PR fluid gets
+    // no correction keyword - writing PRCORR there would read back as PR-1978.
     if ("PR-LK".equals(eosType)) {
       writer.write("PRLKCORR\n");
-    } else if ("PR".equals(eosType)) {
+    } else if ("PR-1978".equals(eosType)) {
       writer.write("PRCORR\n");
     }
 
@@ -1691,7 +1711,7 @@ public class EclipseFluidReadWrite {
     // OmegaA EOS parameter — use per-component override when available
     writer.write("-- OmegaA\n");
     writer.write("OMEGAA\n");
-    double omegaADefault = ("PR".equals(eosType) || "PR-LK".equals(eosType)) ? 0.45724 : 0.42748;
+    double omegaADefault = eosType.startsWith("PR") ? 0.45724 : 0.42748;
     for (int i = 0; i < nComps; i++) {
       double omegaAVal = omegaADefault;
       if (fluid.getComponent(i) instanceof ComponentEos) {
@@ -1707,7 +1727,7 @@ public class EclipseFluidReadWrite {
     // OmegaB EOS parameter
     writer.write("-- OmegaB\n");
     writer.write("OMEGAB\n");
-    double omegaB = ("PR".equals(eosType) || "PR-LK".equals(eosType)) ? 0.07780 : 0.08664;
+    double omegaB = eosType.startsWith("PR") ? 0.07780 : 0.08664;
     for (int i = 0; i < nComps; i++) {
       writer.write(String.format(java.util.Locale.US, "     %.5f\n", omegaB));
     }
@@ -1754,7 +1774,7 @@ public class EclipseFluidReadWrite {
     writer.write("-- Volume Translation\n");
     writer.write("SSHIFT\n");
     for (int i = 0; i < nComps; i++) {
-      writer.write(String.format(java.util.Locale.US, "   %.6f\n", fluid.getComponent(i).getVolumeCorrectionConst()));
+      writer.write(String.format(java.util.Locale.US, "   %.6f\n", getDimensionlessVolumeShift(fluid, i)));
     }
     writer.write("/\n");
 
@@ -1809,7 +1829,7 @@ public class EclipseFluidReadWrite {
     writer.write("-- Volume translation at surface conditions\n");
     writer.write("SSHIFTS\n");
     for (int i = 0; i < nComps; i++) {
-      writer.write(String.format(java.util.Locale.US, "   %.6f\n", fluid.getComponent(i).getVolumeCorrectionConst()));
+      writer.write(String.format(java.util.Locale.US, "   %.6f\n", getDimensionlessVolumeShift(fluid, i)));
     }
     writer.write("/\n");
 
@@ -1824,6 +1844,33 @@ public class EclipseFluidReadWrite {
       }
       writer.write(lbcLine.toString().trim() + " /\n");
     }
+  }
+
+  /**
+   * Effective dimensionless Peneloux volume shift of a component, in the Eclipse SSHIFT convention v = v_EOS - s * b.
+   *
+   * <p>
+   * The component's own {@code volumeCorrectionConst} is only populated when a shift has been set explicitly.
+   * Characterised TBP and plus fractions instead derive their volume translation from the Rackett compressibility of
+   * the characterisation, so reading the constant back would write SSHIFT = 0 and silently drop the translation.
+   * Dividing the applied volume correction by the covolume recovers the dimensionless shift in both cases, and the
+   * reader reproduces the original molar volume exactly.
+   * </p>
+   *
+   * @param fluid the fluid being written
+   * @param i index of the component
+   * @return the dimensionless volume shift, or zero when the component has no covolume
+   */
+  private static double getDimensionlessVolumeShift(SystemInterface fluid, int i) {
+    ComponentInterface component = fluid.getComponent(i);
+    if (!(component instanceof ComponentEosInterface)) {
+      return component.getVolumeCorrectionConst();
+    }
+    double covolume = ((ComponentEosInterface) component).getb();
+    if (Math.abs(covolume) < 1.0e-12) {
+      return component.getVolumeCorrectionConst();
+    }
+    return component.getVolumeCorrection() / covolume;
   }
 
   /**
@@ -1859,7 +1906,7 @@ public class EclipseFluidReadWrite {
     } else if (className.contains("leekes") || className.contains("leekesler")) {
       return "PR-LK";
     } else if (className.contains("pr")) {
-      return "PR";
+      return className.contains("1978") ? "PR-1978" : "PR";
     } else {
       return "SRK"; // Default
     }

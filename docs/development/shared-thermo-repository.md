@@ -1,3 +1,8 @@
+---
+title: "公共组分物性内核的仓库管理"
+description: "个人增强 NeqSim 的源码、验证、上游同步及共享运行包规则"
+---
+
 # 公共组分物性内核的仓库管理
 
 本文确定 Guoqing Han 各模拟平台共用的组分物性内核的源码、验证和发布规则。算法以 `cupbhan/neqsim` 为唯一维护主仓库，持续接收 `equinor/neqsim` 更新；各产品使用具有明确版本和来源的发行包。本文是仓库维护规范，不代表任何新模型已通过现场验证。
@@ -28,6 +33,10 @@
 官方更新先进入 `sync` 分支，完成源代码合并、数值比较和发行包验证后再合入主线。共享主线不强制推送，不通过重写历史消除个人补丁。每项个人改进记录目的、原始提交、对应测试、模型适用范围和上游接收情况。已由官方吸收的实现经对比后撤去重复补丁。
 
 定期检查上游可以自动化；产品升级必须依赖通过检查的固定发行版。一次内核整合与一次官方大幅升级分开进行，便于定位数值变化。
+
+自动检测和手动准备同步分支现由 `upstream_sync.yml` 实现，详见
+[官方版本同步工作流](shared-thermo-upstream-sync.md)。当前官方基线以
+`distribution/cupbhan/upstream.json` 为准，实际使用的运行包以 `runtime.json` 为准。
 
 ## 版本与构建产物
 
@@ -75,6 +84,7 @@
 ## 相关记录
 
 - [本轮统一记录](shared-thermo-unification.md)
+- [官方版本同步工作流](shared-thermo-upstream-sync.md)
 - [源码基线清单](../../distribution/cupbhan/source-baseline.json)
 - [GitHub fork 同步说明](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/syncing-a-fork)
 - [GitHub 不可变发行版](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)

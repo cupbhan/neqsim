@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Disabled;
@@ -42,6 +46,16 @@ public class ColumnSpecificationTest {
     ColumnSpecification refluxSpec = new ColumnSpecification(ColumnSpecification.SpecificationType.REFLUX_RATIO,
         ColumnSpecification.ProductLocation.TOP, 3.0);
     assertEquals(3.0, refluxSpec.getTargetValue(), 1e-10);
+
+    ColumnSpecification legacyFlowSpec = new ColumnSpecification(
+        ColumnSpecification.SpecificationType.PRODUCT_FLOW_RATE, ColumnSpecification.ProductLocation.TOP, 25.0);
+    assertEquals("mol/hr", legacyFlowSpec.getTargetUnit());
+    ColumnSpecification massFlowSpec = new ColumnSpecification(ColumnSpecification.SpecificationType.PRODUCT_FLOW_RATE,
+        ColumnSpecification.ProductLocation.BOTTOM, 25.0, null, "kg/hr");
+    assertEquals("kg/hr", massFlowSpec.getTargetUnit());
+    assertThrows(IllegalArgumentException.class,
+        () -> new ColumnSpecification(ColumnSpecification.SpecificationType.PRODUCT_FLOW_RATE,
+            ColumnSpecification.ProductLocation.TOP, 25.0, null, ""));
 
     // Purity spec without component name should throw
     assertThrows(IllegalArgumentException.class,
@@ -90,6 +104,33 @@ public class ColumnSpecificationTest {
     long bbSignature = ((Long) signatureMethod.invoke(column)).longValue();
 
     assertNotEquals(aaSignature, bbSignature, "warm-state signatures must retain full component-name content");
+  }
+
+  /**
+   * Test that an explicit product-flow unit survives Java serialization.
+   *
+   * @throws Exception if serialization fails
+   */
+  @Test
+  public void productFlowTargetUnitSurvivesSerialization() throws Exception {
+    ColumnSpecification original = new ColumnSpecification(ColumnSpecification.SpecificationType.PRODUCT_FLOW_RATE,
+        ColumnSpecification.ProductLocation.TOP, 125.0, null, "kg/hr");
+    original.setTolerance(0.01);
+    original.setMaxIterations(12);
+
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream output = new ObjectOutputStream(bytes)) {
+      output.writeObject(original);
+    }
+    ColumnSpecification restored;
+    try (ObjectInputStream input = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      restored = (ColumnSpecification) input.readObject();
+    }
+
+    assertEquals("kg/hr", restored.getTargetUnit());
+    assertEquals(125.0, restored.getTargetValue(), 0.0);
+    assertEquals(0.01, restored.getTolerance(), 0.0);
+    assertEquals(12, restored.getMaxIterations());
   }
 
   /**
@@ -182,8 +223,9 @@ public class ColumnSpecificationTest {
     assertEquals(ColumnSpecification.SpecificationType.COMPONENT_RECOVERY, column.getTopSpecification().getType());
 
     // Test product flow rate convenience
-    column.setBottomProductFlowRate(50.0, "mol/hr");
+    column.setBottomProductFlowRate(50.0, "kg/hr");
     assertEquals(ColumnSpecification.SpecificationType.PRODUCT_FLOW_RATE, column.getBottomSpecification().getType());
+    assertEquals("kg/hr", column.getBottomSpecification().getTargetUnit());
   }
 
   /**
@@ -230,10 +272,10 @@ public class ColumnSpecificationTest {
   }
 
   /**
-   * Test that validation warns when an adjustable top specification has no condenser handle.
+   * Test that validation rejects an adjustable top specification with no condenser handle.
    */
   @Test
-  public void validateSetupWarnsWhenTopSpecHasNoCondenser() {
+  public void validateSetupRejectsTopSpecWithoutCondenser() {
     SystemSrkEos testSystem = new SystemSrkEos(273.15 + 25.0, 15.0);
     testSystem.addComponent("methane", 0.7);
     testSystem.addComponent("ethane", 0.3);
@@ -250,9 +292,10 @@ public class ColumnSpecificationTest {
 
     ValidationResult result = column.validateSetup();
 
-    assertTrue(result.isValid());
-    assertTrue(result.hasWarnings());
-    assertTrue(result.getReport().contains("condenser/reboiler handle"));
+    assertFalse(result.isValid());
+    assertTrue(result.getErrors().stream().anyMatch(error -> error.getCategory().equals("specification.hardware")));
+    IllegalStateException exception = assertThrows(IllegalStateException.class, column::run);
+    assertTrue(exception.getMessage().contains("requires a condenser"));
   }
 
   /**
@@ -279,6 +322,33 @@ public class ColumnSpecificationTest {
   }
 
   /**
+   * Test that product-flow feasibility screening uses the supplied mass-flow unit.
+   */
+  @Test
+  public void validateSpecificationsUsesProductFlowTargetUnit() {
+    SystemSrkEos testSystem = new SystemSrkEos(273.15 + 25.0, 15.0);
+    testSystem.addComponent("methane", 0.60);
+    testSystem.addComponent("ethane", 0.20);
+    testSystem.addComponent("propane", 0.10);
+    testSystem.addComponent("n-butane", 0.07);
+    testSystem.addComponent("n-pentane", 0.03);
+    testSystem.setMixingRule("classic");
+
+    Stream feed = new Stream("mass flow validation feed", testSystem);
+    feed.setFlowRate(100.0, "kg/hr");
+
+    DistillationColumn column = new DistillationColumn("MassFlowValidationColumn", 6, true, true);
+    column.addFeedStream(feed, 3);
+    column.setBottomProductFlowRate(150.0, "kg/hr");
+
+    ValidationResult result = column.validateSpecifications();
+
+    assertEquals("kg/hr", column.getBottomSpecification().getTargetUnit());
+    assertFalse(result.isValid());
+    assertTrue(result.getReport().contains("exceeds total feed flow in kg/hr"));
+  }
+
+  /**
    * Test that paired top and bottom flow specifications cannot exceed total feed flow.
    */
   @Test
@@ -300,6 +370,176 @@ public class ColumnSpecificationTest {
 
     assertFalse(result.isValid());
     assertTrue(result.getReport().contains("Top and bottom product-flow targets"));
+  }
+
+  /**
+   * Test that matching terminal recoveries are dependent without a side draw.
+   */
+  @Test
+  public void validateSpecificationsRejectsDependentSameComponentRecoveries() {
+    SystemSrkEos testSystem = new SystemSrkEos(273.15 + 35.0, 12.0);
+    testSystem.addComponent("methane", 0.55);
+    testSystem.addComponent("ethane", 0.25);
+    testSystem.addComponent("propane", 0.12);
+    testSystem.addComponent("n-butane", 0.08);
+    testSystem.setMixingRule("classic");
+
+    Stream feed = new Stream("recovery independence feed", testSystem);
+    feed.setFlowRate(180.0, "kg/hr");
+
+    DistillationColumn column = new DistillationColumn("RecoveryIndependenceColumn", 6, true, true);
+    column.addFeedStream(feed, 3);
+    column.setTopComponentRecovery("methane", 0.70);
+    column.setBottomComponentRecovery("methane", 0.30);
+
+    ValidationResult result = column.validateSpecifications();
+
+    assertFalse(result.isValid());
+    assertTrue(result.getReport().contains("component balance makes the terminal recoveries dependent"));
+    IllegalStateException exception = assertThrows(IllegalStateException.class, column::run);
+    assertTrue(exception.getMessage().contains("component balance makes the terminal recoveries dependent"));
+
+    column.setBottomComponentRecovery("n-butane", 0.80);
+    assertTrue(column.validateSpecifications().isValid());
+  }
+
+  /**
+   * Test recovery inventory screening when a side draw makes terminal recoveries structurally independent.
+   */
+  @Test
+  public void validateSpecificationsScreensPairedRecoveriesWithSideDraw() {
+    SystemSrkEos testSystem = new SystemSrkEos(273.15 + 35.0, 12.0);
+    testSystem.addComponent("methane", 0.55);
+    testSystem.addComponent("ethane", 0.25);
+    testSystem.addComponent("propane", 0.12);
+    testSystem.addComponent("n-butane", 0.08);
+    testSystem.setMixingRule("classic");
+
+    Stream feed = new Stream("side draw recovery feed", testSystem);
+    feed.setFlowRate(180.0, "kg/hr");
+
+    DistillationColumn column = new DistillationColumn("SideDrawRecoveryColumn", 6, true, true);
+    column.addFeedStream(feed, 3);
+    column.setLiquidSideDrawFraction(2, 0.10);
+    column.setTopComponentRecovery("methane", 0.80);
+    column.setBottomComponentRecovery("methane", 0.30);
+
+    ValidationResult excessiveResult = column.validateSpecifications();
+
+    assertFalse(excessiveResult.isValid());
+    assertTrue(excessiveResult.getReport().contains("exceed the available feed component"));
+    assertFalse(excessiveResult.getReport().contains("terminal recoveries dependent"));
+
+    column.setBottomComponentRecovery("methane", 0.20);
+    assertTrue(column.validateSpecifications().isValid());
+  }
+
+  /**
+   * Test mass-unit product-flow control, conservation, physical bounds, repeatability, an equivalent molar target, and
+   * rejection of conservation-linked terminal flow controls without disturbing an accepted warm state.
+   */
+  @Test
+  public void multicomponentProductFlowSpecificationHonorsMassUnit() {
+    SystemSrkEos testSystem = new SystemSrkEos(273.15 + 45.0, 10.0);
+    testSystem.addComponent("methane", 0.05);
+    testSystem.addComponent("ethane", 0.15);
+    testSystem.addComponent("propane", 0.35);
+    testSystem.addComponent("n-butane", 0.30);
+    testSystem.addComponent("n-pentane", 0.15);
+    testSystem.setMixingRule("classic");
+
+    Stream feed = new Stream("unit aware flow feed", testSystem);
+    feed.setFlowRate(250.0, "kg/hr");
+    feed.run();
+
+    DistillationColumn column = new DistillationColumn("UnitAwareFlowColumn", 7, true, true);
+    column.addFeedStream(feed, 3);
+    column.setTopPressure(10.0);
+    column.setBottomPressure(10.5);
+    column.getCondenser().setOutletTemperature(273.15 + 15.0);
+    column.getReboiler().setOutletTemperature(273.15 + 85.0);
+    column.setTemperatureTolerance(5.0e-2);
+    column.setMassBalanceTolerance(5.0e-2);
+    column.setEnthalpyBalanceTolerance(5.0e-2);
+    column.setMaxNumberOfIterations(80);
+
+    column.run();
+    assertTrue(column.solved(), column.getConvergenceDiagnostics());
+    double targetKgPerHour = column.getGasOutStream().getFlowRate("kg/hr");
+    double equivalentMolPerHour = column.getGasOutStream().getFlowRate("mol/hr");
+    assertTrue(targetKgPerHour > 0.0 && targetKgPerHour < feed.getFlowRate("kg/hr"));
+
+    column.setTopProductFlowRate(targetKgPerHour, "kg/hr");
+    column.getTopSpecification().setTolerance(Math.max(1.0e-4, targetKgPerHour * 1.0e-4));
+    column.getTopSpecification().setMaxIterations(8);
+    column.run();
+
+    assertTrue(column.solved(), column.getConvergenceDiagnostics());
+    assertEquals("kg/hr", column.getTopSpecification().getTargetUnit());
+    assertEquals(targetKgPerHour, column.getGasOutStream().getFlowRate("kg/hr"),
+        column.getTopSpecification().getTolerance());
+    assertTrue(Math.abs(column.getLastTopSpecificationResidual()) <= column.getTopSpecification().getTolerance());
+    assertColumnFlowSpecificationBalances(column, feed);
+
+    double repeatedKgPerHour = column.getGasOutStream().getFlowRate("kg/hr");
+    column.run();
+    assertTrue(column.solved(), column.getConvergenceDiagnostics());
+    assertEquals(repeatedKgPerHour, column.getGasOutStream().getFlowRate("kg/hr"),
+        column.getTopSpecification().getTolerance());
+
+    column.setTopProductFlowRate(equivalentMolPerHour, "mol/hr");
+    column.getTopSpecification().setTolerance(Math.max(1.0e-3, equivalentMolPerHour * 1.0e-4));
+    column.getTopSpecification().setMaxIterations(8);
+    column.run();
+
+    assertTrue(column.solved(), column.getConvergenceDiagnostics());
+    assertEquals(equivalentMolPerHour, column.getGasOutStream().getFlowRate("mol/hr"),
+        column.getTopSpecification().getTolerance());
+    assertColumnFlowSpecificationBalances(column, feed);
+
+    double acceptedTopMolPerHour = column.getGasOutStream().getFlowRate("mol/hr");
+    double acceptedBottomMolPerHour = column.getLiquidOutStream().getFlowRate("mol/hr");
+    column.setBottomProductFlowRate(acceptedBottomMolPerHour, "mol/hr");
+
+    ValidationResult dependentFlowResult = column.validateSpecifications();
+
+    assertFalse(dependentFlowResult.isValid());
+    assertTrue(dependentFlowResult.getReport().contains("total material balance makes the terminal flows dependent"));
+    IllegalStateException exception = assertThrows(IllegalStateException.class, column::run);
+    assertTrue(exception.getMessage().contains("total material balance makes the terminal flows dependent"));
+    assertEquals(acceptedTopMolPerHour, column.getGasOutStream().getFlowRate("mol/hr"), 0.0);
+    assertEquals(acceptedBottomMolPerHour, column.getLiquidOutStream().getFlowRate("mol/hr"), 0.0);
+
+    column.setBottomSpecification(null);
+    column.run();
+
+    assertTrue(column.solved(), column.getConvergenceDiagnostics());
+    assertEquals(equivalentMolPerHour, column.getGasOutStream().getFlowRate("mol/hr"),
+        column.getTopSpecification().getTolerance());
+    assertColumnFlowSpecificationBalances(column, feed);
+  }
+
+  /**
+   * Assert engineering balances and physical product bounds for the unit-aware flow regression.
+   *
+   * @param column solved column
+   * @param feed external feed
+   */
+  private void assertColumnFlowSpecificationBalances(DistillationColumn column, Stream feed) {
+    double feedFlow = feed.getFlowRate("kg/hr");
+    assertTrue(Math.abs(column.getMassBalance("kg/hr")) <= feedFlow * column.getMassBalanceTolerance());
+    assertTrue(column.getLastEnergyResidual() <= column.getEnthalpyBalanceTolerance());
+    assertTrue(column.getGasOutStream().getFlowRate("kg/hr") >= 0.0);
+    assertTrue(column.getLiquidOutStream().getFlowRate("kg/hr") >= 0.0);
+    assertTrue(column.getGasOutStream().getTemperature("K") > 0.0);
+    assertTrue(column.getLiquidOutStream().getTemperature("K") > 0.0);
+    for (String componentName : feed.getFluid().getComponentNames()) {
+      double feedComponentFlow = feed.getFluid().getComponent(componentName).getTotalFlowRate("mol/hr");
+      double productComponentFlow = column.getGasOutStream().getFluid().getComponent(componentName).getTotalFlowRate(
+          "mol/hr") + column.getLiquidOutStream().getFluid().getComponent(componentName).getTotalFlowRate("mol/hr");
+      assertEquals(feedComponentFlow, productComponentFlow, Math.max(1.0e-8, feedComponentFlow * 5.0e-2),
+          componentName);
+    }
   }
 
   /**
@@ -389,8 +629,8 @@ public class ColumnSpecificationTest {
 
     // Use condenser reflux ratio spec and reboiler temperature
     column.setCondenserRefluxRatio(2.0);
-    column.getCondenser().setOutTemperature(273.15 + 25.0);
-    column.getReboiler().setOutTemperature(273.15 + 75.0);
+    column.getCondenser().setOutletTemperature(273.15 + 25.0);
+    column.getReboiler().setOutletTemperature(273.15 + 75.0);
     column.setMaxNumberOfIterations(50);
     column.setTemperatureTolerance(1.0e-1);
     column.setMassBalanceTolerance(1.0e-1);
@@ -422,8 +662,8 @@ public class ColumnSpecificationTest {
     column.addFeedStream(feed, 3);
     column.setTopPressure(12.0);
     column.setBottomPressure(12.2);
-    column.getCondenser().setOutTemperature(273.15 + 35.0);
-    column.getReboiler().setOutTemperature(273.15 + 90.0);
+    column.getCondenser().setOutletTemperature(273.15 + 35.0);
+    column.getReboiler().setOutletTemperature(273.15 + 90.0);
     column.setCondenserRefluxRatio(1.5);
     column.setSolverType(DistillationColumn.SolverType.AUTO);
     column.setMaxNumberOfIterations(40);
@@ -465,8 +705,8 @@ public class ColumnSpecificationTest {
     column.addFeedStream(feed, 3);
     column.setTopPressure(12.0);
     column.setBottomPressure(12.2);
-    column.getCondenser().setOutTemperature(273.15 + 35.0);
-    column.getReboiler().setOutTemperature(273.15 + 90.0);
+    column.getCondenser().setOutletTemperature(273.15 + 35.0);
+    column.getReboiler().setOutletTemperature(273.15 + 90.0);
     column.setCondenserRefluxRatio(1.5);
     column.setSolverType(DistillationColumn.SolverType.AUTO);
     column.setMaxNumberOfIterations(40);
@@ -511,7 +751,7 @@ public class ColumnSpecificationTest {
   }
 
   /**
-   * Test that Naphtali-Sandholm classifies its numerical Jacobian work accurately.
+   * Test that Naphtali-Sandholm classifies its numerical Jacobian and converged K-value work accurately.
    */
   @Test
   public void naphtaliSandholmTelemetryRecordsJacobianWork() {
@@ -522,14 +762,27 @@ public class ColumnSpecificationTest {
 
     column.run();
 
-    assertTrue(column.getGasOutStream().getFlowRate("kg/hr") >= 0.0);
+    double gasFlow = column.getGasOutStream().getFlowRate("kg/hr");
+    double liquidFlow = column.getLiquidOutStream().getFlowRate("kg/hr");
+    assertTrue(gasFlow >= 0.0);
+    assertTrue(liquidFlow >= 0.0);
+    assertEquals(237.6597295390127, gasFlow, 1.0e-8);
+    assertEquals(12.34027046098738, liquidFlow, 1.0e-8);
+    assertEquals(250.0, gasFlow + liquidFlow, 1.0e-8);
     assertEquals(0, column.getLastNaphtaliAnalyticJacobianColumns(),
         "the current implementation does not analytically differentiate any Jacobian column");
     assertEquals(800, column.getLastNaphtaliFiniteDifferenceJacobianColumns(),
         "eight stages times five variables times twenty Jacobian builds must all be finite-difference columns");
     assertTrue(column.getLastNaphtaliThermoEvaluationCount() > 0);
-    assertEquals(2 * column.getLastNaphtaliThermoEvaluationCount(), column.getLastNaphtaliThermoKValueIterationCount(),
-        "the current evaluator performs two forced-root fugacity sweeps per tray evaluation");
+    assertTrue(column.getLastNaphtaliThermoEvaluationCount() < 16000,
+        () -> "accepted line-search trials should be reused without restoring and reevaluating the same Newton step: "
+            + column.getLastNaphtaliThermoEvaluationCount());
+    assertTrue(column.getLastNaphtaliThermoKValueIterationCount() >= column.getLastNaphtaliThermoEvaluationCount(),
+        "each successful tray evaluation must perform at least one forced-root fugacity sweep");
+    assertTrue(column.getLastNaphtaliThermoKValueIterationCount() < 2 * column.getLastNaphtaliThermoEvaluationCount(),
+        () -> "already-converged tray evaluations should avoid a redundant second sweep: evaluations="
+            + column.getLastNaphtaliThermoEvaluationCount() + ", K-value iterations="
+            + column.getLastNaphtaliThermoKValueIterationCount());
     assertTrue(column.getLastNaphtaliThermoKValueNonConvergedCount() > 0,
         "this difficult case must expose two-sweep evaluations that remain above the log-K tolerance");
     assertTrue(column.getLastNaphtaliThermoKValueNonConvergedCount() <= column.getLastNaphtaliThermoEvaluationCount());
@@ -550,7 +803,7 @@ public class ColumnSpecificationTest {
   }
 
   /**
-   * Test that K-value work diagnostics and physical products repeat at a nearby feed temperature.
+   * Test that adaptive K-value work diagnostics and physical products repeat at a nearby feed temperature.
    */
   @Test
   public void naphtaliKValueTelemetryIsRepeatableAtNearbyOperatingPoint() {
@@ -567,12 +820,18 @@ public class ColumnSpecificationTest {
     second.run();
 
     assertEquals(first.getLastNaphtaliThermoEvaluationCount(), second.getLastNaphtaliThermoEvaluationCount());
+    assertTrue(first.getLastNaphtaliThermoEvaluationCount() < 16000,
+        () -> "the nearby case should also reuse accepted line-search evaluations: "
+            + first.getLastNaphtaliThermoEvaluationCount());
     assertEquals(first.getLastNaphtaliThermoKValueIterationCount(), second.getLastNaphtaliThermoKValueIterationCount());
     assertEquals(first.getLastNaphtaliThermoKValueNonConvergedCount(),
         second.getLastNaphtaliThermoKValueNonConvergedCount());
     assertEquals(first.getLastNaphtaliThermoMaxLogKValueUpdate(), second.getLastNaphtaliThermoMaxLogKValueUpdate());
     assertEquals(first.getLastMeshResidualNorm(), second.getLastMeshResidualNorm());
     assertEquals(first.getLastEnergyResidual(), second.getLastEnergyResidual());
+    assertTrue(first.getLastNaphtaliThermoKValueIterationCount() >= first.getLastNaphtaliThermoEvaluationCount());
+    assertTrue(first.getLastNaphtaliThermoKValueIterationCount() < 2 * first.getLastNaphtaliThermoEvaluationCount(),
+        "the nearby operating point should also avoid already-converged second fugacity sweeps");
 
     double firstGas = first.getGasOutStream().getFlowRate("kg/hr");
     double firstLiquid = first.getLiquidOutStream().getFlowRate("kg/hr");
@@ -673,11 +932,11 @@ public class ColumnSpecificationTest {
     feed.setFlowRate(100.0, "kg/hr");
     feed.run();
 
-    DistillationColumn column = new DistillationColumn("Deethanizer", 7, true, false);
+    DistillationColumn column = new DistillationColumn("Deethanizer", 7, true, true);
     column.addFeedStream(feed, 4);
     column.setTopPressure(30.0);
     column.setBottomPressure(31.0);
-    column.getReboiler().setOutTemperature(273.15 + 100.0);
+    column.getReboiler().setOutletTemperature(273.15 + 100.0);
     column.setTemperatureTolerance(1.0e-2);
     column.setMassBalanceTolerance(1.0e-1);
     column.setEnthalpyBalanceTolerance(1.0e-1);
@@ -718,7 +977,7 @@ public class ColumnSpecificationTest {
     column.addFeedStream(feed, 3);
     column.setTopPressure(10.0);
     column.setBottomPressure(10.0);
-    column.getReboiler().setOutTemperature(273.15 + 75.0);
+    column.getReboiler().setOutletTemperature(273.15 + 75.0);
     column.setTopProductPurity("propane", 0.8);
     column.getTopSpecification().setTolerance(1.0);
     column.getTopSpecification().setMaxIterations(3);
@@ -755,7 +1014,7 @@ public class ColumnSpecificationTest {
     column.addFeedStream(feed, 3);
     column.setTopPressure(10.0);
     column.setBottomPressure(10.0);
-    column.getReboiler().setOutTemperature(273.15 + 75.0);
+    column.getReboiler().setOutletTemperature(273.15 + 75.0);
     column.setTopProductPurity("propane", 0.8);
     column.getTopSpecification().setTolerance(1.0);
     column.getTopSpecification().setMaxIterations(3);
@@ -792,7 +1051,7 @@ public class ColumnSpecificationTest {
     column.addFeedStream(feed, 3);
     column.setTopPressure(10.0);
     column.setBottomPressure(10.0);
-    column.getReboiler().setOutTemperature(273.15 + 75.0);
+    column.getReboiler().setOutletTemperature(273.15 + 75.0);
     column.setTopProductPurity("propane", 0.8);
     column.getTopSpecification().setTolerance(1.0);
     column.getTopSpecification().setMaxIterations(3);
@@ -895,46 +1154,46 @@ public class ColumnSpecificationTest {
    */
   private CommercialCase[] commercialCaseBank() {
     return new CommercialCase[] {
-        commercialCase("total condenser C3-C5", new String[] { "propane", "n-butane", "n-pentane" },
-            new double[] { 0.35, 0.45, 0.20 }, 318.15, 10.0, 6, true, true, false, false, false),
-        commercialCase("partial condenser C1-C4", new String[] { "methane", "ethane", "propane", "n-butane" },
-            new double[] { 0.30, 0.25, 0.25, 0.20 }, 250.0, 28.0, 8, true, true, false, false, false),
-        commercialCase("absorber no condenser reboiler", new String[] { "methane", "ethane", "propane" },
-            new double[] { 0.70, 0.20, 0.10 }, 298.15, 50.0, 5, false, false, false, false, false),
-        commercialCase("stripper no condenser", new String[] { "propane", "n-butane", "n-pentane" },
-            new double[] { 0.20, 0.50, 0.30 }, 350.0, 8.0, 6, false, true, false, false, false),
-        commercialCase("narrow butane pentane", new String[] { "i-butane", "n-butane", "n-pentane" },
-            new double[] { 0.25, 0.45, 0.30 }, 330.0, 6.0, 8, true, true, false, false, false),
-        commercialCase("wide boiling C1-C7", new String[] { "methane", "propane", "n-hexane", "n-heptane" },
-            new double[] { 0.40, 0.30, 0.20, 0.10 }, 310.0, 35.0, 10, true, true, false, false, false),
-        commercialCase("sour gas trace H2S", new String[] { "methane", "CO2", "H2S", "ethane", "propane" },
-            new double[] { 0.70, 0.08, 0.02, 0.15, 0.05 }, 285.0, 45.0, 8, true, true, false, false, false),
-        commercialCase("CO2 rich demethanizer", new String[] { "methane", "CO2", "ethane" },
-            new double[] { 0.45, 0.35, 0.20 }, 240.0, 55.0, 8, true, true, false, false, false),
-        commercialCase("water rich hydrocarbon", new String[] { "methane", "CO2", "water" },
-            new double[] { 0.60, 0.10, 0.30 }, 310.0, 20.0, 6, true, true, false, false, false),
-        commercialCase("bad initial guesses", new String[] { "propane", "n-butane", "n-pentane" },
-            new double[] { 0.40, 0.40, 0.20 }, 318.15, 9.0, 6, true, true, false, false, true),
-        commercialCase("side draw fractionator", new String[] { "propane", "n-butane", "n-pentane" },
-            new double[] { 0.25, 0.50, 0.25 }, 320.0, 9.0, 7, true, true, true, false, false),
-        commercialCase("pumparound fractionator", new String[] { "n-butane", "n-pentane", "n-hexane" },
-            new double[] { 0.30, 0.45, 0.25 }, 360.0, 5.0, 8, true, true, false, true, false),
-        commercialCase("low reflux startup", new String[] { "ethane", "propane", "n-butane" },
-            new double[] { 0.30, 0.45, 0.25 }, 300.0, 18.0, 6, true, true, false, false, false),
-        commercialCase("high pressure demethanizer", new String[] { "methane", "ethane", "propane" },
-            new double[] { 0.65, 0.25, 0.10 }, 220.0, 70.0, 8, true, true, false, false, false),
-        commercialCase("vacuum debutanizer", new String[] { "n-butane", "n-pentane", "n-hexane" },
-            new double[] { 0.35, 0.45, 0.20 }, 340.0, 1.5, 8, true, true, false, false, false),
-        commercialCase("near critical rich gas", new String[] { "methane", "ethane", "propane" },
-            new double[] { 0.40, 0.35, 0.25 }, 305.0, 45.0, 8, true, true, false, false, false),
-        commercialCase("nitrogen rich gas", new String[] { "nitrogen", "methane", "ethane" },
-            new double[] { 0.20, 0.65, 0.15 }, 230.0, 40.0, 6, true, true, false, false, false),
-        commercialCase("heavy NGL splitter", new String[] { "n-pentane", "n-hexane", "n-heptane" },
-            new double[] { 0.35, 0.40, 0.25 }, 380.0, 4.0, 8, true, true, false, false, false),
-        commercialCase("wet gas stabilizer", new String[] { "methane", "ethane", "water", "n-butane" },
-            new double[] { 0.55, 0.25, 0.05, 0.15 }, 300.0, 30.0, 7, true, true, false, false, false),
-        commercialCase("lean methane absorber", new String[] { "methane", "ethane", "n-butane" },
-            new double[] { 0.82, 0.12, 0.06 }, 295.0, 60.0, 5, false, false, false, false, false) };
+        commercialCase("total condenser C3-C5", new String[] {"propane", "n-butane", "n-pentane"},
+            new double[] {0.35, 0.45, 0.20}, 318.15, 10.0, 6, true, true, false, false, false),
+        commercialCase("partial condenser C1-C4", new String[] {"methane", "ethane", "propane", "n-butane"},
+            new double[] {0.30, 0.25, 0.25, 0.20}, 250.0, 28.0, 8, true, true, false, false, false),
+        commercialCase("absorber no condenser reboiler", new String[] {"methane", "ethane", "propane"},
+            new double[] {0.70, 0.20, 0.10}, 298.15, 50.0, 5, false, false, false, false, false),
+        commercialCase("stripper no condenser", new String[] {"propane", "n-butane", "n-pentane"},
+            new double[] {0.20, 0.50, 0.30}, 350.0, 8.0, 6, false, true, false, false, false),
+        commercialCase("narrow butane pentane", new String[] {"i-butane", "n-butane", "n-pentane"},
+            new double[] {0.25, 0.45, 0.30}, 330.0, 6.0, 8, true, true, false, false, false),
+        commercialCase("wide boiling C1-C7", new String[] {"methane", "propane", "n-hexane", "n-heptane"},
+            new double[] {0.40, 0.30, 0.20, 0.10}, 310.0, 35.0, 10, true, true, false, false, false),
+        commercialCase("sour gas trace H2S", new String[] {"methane", "CO2", "H2S", "ethane", "propane"},
+            new double[] {0.70, 0.08, 0.02, 0.15, 0.05}, 285.0, 45.0, 8, true, true, false, false, false),
+        commercialCase("CO2 rich demethanizer", new String[] {"methane", "CO2", "ethane"},
+            new double[] {0.45, 0.35, 0.20}, 240.0, 55.0, 8, true, true, false, false, false),
+        commercialCase("water rich hydrocarbon", new String[] {"methane", "CO2", "water"},
+            new double[] {0.60, 0.10, 0.30}, 310.0, 20.0, 6, true, true, false, false, false),
+        commercialCase("bad initial guesses", new String[] {"propane", "n-butane", "n-pentane"},
+            new double[] {0.40, 0.40, 0.20}, 318.15, 9.0, 6, true, true, false, false, true),
+        commercialCase("side draw fractionator", new String[] {"propane", "n-butane", "n-pentane"},
+            new double[] {0.25, 0.50, 0.25}, 320.0, 9.0, 7, true, true, true, false, false),
+        commercialCase("pumparound fractionator", new String[] {"n-butane", "n-pentane", "n-hexane"},
+            new double[] {0.30, 0.45, 0.25}, 360.0, 5.0, 8, true, true, false, true, false),
+        commercialCase("low reflux startup", new String[] {"ethane", "propane", "n-butane"},
+            new double[] {0.30, 0.45, 0.25}, 300.0, 18.0, 6, true, true, false, false, false),
+        commercialCase("high pressure demethanizer", new String[] {"methane", "ethane", "propane"},
+            new double[] {0.65, 0.25, 0.10}, 220.0, 70.0, 8, true, true, false, false, false),
+        commercialCase("vacuum debutanizer", new String[] {"n-butane", "n-pentane", "n-hexane"},
+            new double[] {0.35, 0.45, 0.20}, 340.0, 1.5, 8, true, true, false, false, false),
+        commercialCase("near critical rich gas", new String[] {"methane", "ethane", "propane"},
+            new double[] {0.40, 0.35, 0.25}, 305.0, 45.0, 8, true, true, false, false, false),
+        commercialCase("nitrogen rich gas", new String[] {"nitrogen", "methane", "ethane"},
+            new double[] {0.20, 0.65, 0.15}, 230.0, 40.0, 6, true, true, false, false, false),
+        commercialCase("heavy NGL splitter", new String[] {"n-pentane", "n-hexane", "n-heptane"},
+            new double[] {0.35, 0.40, 0.25}, 380.0, 4.0, 8, true, true, false, false, false),
+        commercialCase("wet gas stabilizer", new String[] {"methane", "ethane", "water", "n-butane"},
+            new double[] {0.55, 0.25, 0.05, 0.15}, 300.0, 30.0, 7, true, true, false, false, false),
+        commercialCase("lean methane absorber", new String[] {"methane", "ethane", "n-butane"},
+            new double[] {0.82, 0.12, 0.06}, 295.0, 60.0, 5, false, false, false, false, false)};
   }
 
   /**
@@ -990,8 +1249,8 @@ public class ColumnSpecificationTest {
     column.addFeedStream(feed, 3);
     column.setTopPressure(pressure);
     column.setBottomPressure(pressure + 0.2);
-    column.getCondenser().setOutTemperature(condenserTemperature);
-    column.getReboiler().setOutTemperature(reboilerTemperature);
+    column.getCondenser().setOutletTemperature(condenserTemperature);
+    column.getReboiler().setOutletTemperature(reboilerTemperature);
     column.setCondenserRefluxRatio(1.8);
     column.setSolverType(DistillationColumn.SolverType.AUTO);
     column.setMaxNumberOfIterations(80);
@@ -1023,7 +1282,7 @@ public class ColumnSpecificationTest {
     column.addFeedStream(feed, 4);
     column.setTopPressure(30.0);
     column.setBottomPressure(31.0);
-    column.getReboiler().setOutTemperature(273.15 + 100.0);
+    column.getReboiler().setOutletTemperature(273.15 + 100.0);
     column.setSolverType(DistillationColumn.SolverType.AUTO);
     column.setMaxNumberOfIterations(80);
     column.setTemperatureTolerance(1.0e-1);
@@ -1055,11 +1314,11 @@ public class ColumnSpecificationTest {
     column.setTopPressure(regressionCase.pressure);
     column.setBottomPressure(regressionCase.pressure + Math.max(0.1, 0.02 * regressionCase.pressure));
     if (regressionCase.condenser) {
-      column.getCondenser().setOutTemperature(Math.max(80.0, regressionCase.feedTemperature - 25.0));
+      column.getCondenser().setOutletTemperature(Math.max(80.0, regressionCase.feedTemperature - 25.0));
       column.setCondenserRefluxRatio(regressionCase.name.contains("low reflux") ? 0.05 : 1.5);
     }
     if (regressionCase.reboiler) {
-      column.getReboiler().setOutTemperature(regressionCase.feedTemperature + 45.0);
+      column.getReboiler().setOutletTemperature(regressionCase.feedTemperature + 45.0);
     }
     if (regressionCase.sideDraw) {
       column.addSideDrawFlowSpecification(Math.max(1, regressionCase.trays / 2),

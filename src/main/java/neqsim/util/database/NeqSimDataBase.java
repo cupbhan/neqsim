@@ -366,18 +366,7 @@ public class NeqSimDataBase implements neqsim.util.util.FileSystemSettings, java
    * @return True if component is found.
    */
   public static boolean hasComponent(String name) {
-    try (neqsim.util.database.NeqSimDataBase database = new neqsim.util.database.NeqSimDataBase();
-        java.sql.ResultSet dataSet = database.getResultSet("select count(*) from comp WHERE NAME='" + name + "'")) {
-      dataSet.next();
-      int size = dataSet.getInt(1);
-      if (size == 0) {
-        return false;
-      } else {
-        return true;
-      }
-    } catch (Exception ex) {
-      throw new RuntimeException(ex);
-    }
+    return countRowsByName("comp", name) > 0;
   }
 
   /**
@@ -387,14 +376,33 @@ public class NeqSimDataBase implements neqsim.util.util.FileSystemSettings, java
    * @return True if component is found.
    */
   public static boolean hasTempComponent(String name) {
+    return countRowsByName("comptemp", name) > 0;
+  }
+
+  /**
+   * Count the rows of a table whose NAME column equals the given value.
+   *
+   * <p>
+   * The name is bound as a parameter rather than concatenated into the SQL text. Component names legitimately contain
+   * apostrophes (the extended database has more than two thousand, such as {@code 4'-hydroxyacetophenone}), which
+   * produced invalid SQL when concatenated.
+   * </p>
+   *
+   * @param tableName Name of the table to query; must be a literal known to this class.
+   * @param name Value to match against the NAME column.
+   * @return Number of matching rows.
+   */
+  private static int countRowsByName(String tableName, String name) {
+    if (name == null) {
+      return 0;
+    }
+    String sql = "select count(*) from " + tableName + " WHERE NAME=?";
     try (neqsim.util.database.NeqSimDataBase database = new neqsim.util.database.NeqSimDataBase();
-        java.sql.ResultSet dataSet = database.getResultSet("select count(*) from comptemp WHERE NAME='" + name + "'")) {
-      dataSet.next();
-      int size = dataSet.getInt(1);
-      if (size == 0) {
-        return false;
-      } else {
-        return true;
+        java.sql.PreparedStatement statement = database.getConnection().prepareStatement(sql)) {
+      statement.setString(1, name);
+      try (java.sql.ResultSet dataSet = statement.executeQuery()) {
+        dataSet.next();
+        return dataSet.getInt(1);
       }
     } catch (Exception ex) {
       throw new RuntimeException(ex);
@@ -425,6 +433,7 @@ public class NeqSimDataBase implements neqsim.util.util.FileSystemSettings, java
   public static void useExtendedComponentDatabase(boolean useExtendedDatabase) {
     if (useExtendedDatabase) {
       updateTable("COMP", "data/COMP_EXT.csv");
+      includeMissingStandardComponents();
     } else {
       updateTable("COMP", "data/COMP.csv");
     }
@@ -434,6 +443,90 @@ public class NeqSimDataBase implements neqsim.util.util.FileSystemSettings, java
           "- failed to (re)load the COMP table (extended=" + useExtendedDatabase + "). The component "
               + "database is now unusable until useExtendedComponentDatabase or replaceTable('COMP', ...) "
               + "is called again successfully."));
+    }
+  }
+
+  /**
+   * Preserve standard components and optional columns when loading the extended database.
+   *
+   * <p>
+   * The extended resource is maintained independently. Existing extended rows retain their properties except for
+   * reviewed formation enthalpies, explicitly unavailable liquid-vapor pressure data and the corrected acetone, ammonia
+   * and H2S correlations, taken from the standard table. Newly added standard names are copied with fresh IDs. CSVREAD
+   * exposes columns as strings, including optional identity metadata.
+   * </p>
+   */
+  private static void includeMissingStandardComponents() {
+    URL standard = NeqSimDataBase.class.getClassLoader().getResource("data/COMP.csv");
+    String source = "CSVREAD('file:" + standard + "')";
+    try (NeqSimDataBase database = new NeqSimDataBase()) {
+      java.util.Set<String> extendedColumns = new java.util.HashSet<String>();
+      try (ResultSet columns = database.getResultSet("SELECT * FROM COMP WHERE 1=0")) {
+        java.sql.ResultSetMetaData metadata = columns.getMetaData();
+        for (int i = 1; i <= metadata.getColumnCount(); i++) {
+          extendedColumns.add(metadata.getColumnName(i));
+        }
+      }
+      java.util.List<String> standardColumns = new java.util.ArrayList<String>();
+      try (ResultSet columns = database.getResultSet("SELECT * FROM " + source + " WHERE 1=0")) {
+        java.sql.ResultSetMetaData metadata = columns.getMetaData();
+        for (int i = 1; i <= metadata.getColumnCount(); i++) {
+          standardColumns.add(metadata.getColumnName(i));
+        }
+      }
+      StringBuilder names = new StringBuilder();
+      StringBuilder values = new StringBuilder();
+      for (String column : standardColumns) {
+        String quoted = "\"" + column.replace("\"", "\"\"") + "\"";
+        if (!extendedColumns.contains(column)) {
+          database.execute("ALTER TABLE COMP ADD " + quoted + " VARCHAR");
+        }
+        if (names.length() > 0) {
+          names.append(',');
+          values.append(',');
+        }
+        names.append(quoted);
+        if ("ID".equalsIgnoreCase(column)) {
+          values.append("(SELECT COALESCE(MAX(CAST(ID AS BIGINT)),0) FROM COMP) + ROW_NUMBER() OVER ()");
+        } else {
+          values.append("standard.").append(quoted);
+        }
+      }
+      database.execute("INSERT INTO COMP (" + names + ") SELECT " + values + " FROM " + source
+          + " standard WHERE NOT EXISTS (SELECT 1 FROM COMP extended WHERE extended.NAME=standard.NAME)");
+      // Copy reviewed gas-phase formation data as a value/provenance pair. Never label an
+      // unrelated extended-table placeholder as reviewed merely because the name matches.
+      try (
+          ResultSet formation = database.getResultSet("SELECT NAME,ENTHALPYOFFORMATION,FORMATIONENTHALPYSOURCE FROM "
+              + source + " WHERE FORMATIONENTHALPYSOURCE IS NOT NULL AND FORMATIONENTHALPYSOURCE<>''");
+          java.sql.PreparedStatement update = database.getConnection()
+              .prepareStatement("UPDATE COMP SET ENTHALPYOFFORMATION=?,FORMATIONENTHALPYSOURCE=? WHERE NAME=?")) {
+        while (formation.next()) {
+          update.setString(1, formation.getString("ENTHALPYOFFORMATION"));
+          update.setString(2, formation.getString("FORMATIONENTHALPYSOURCE"));
+          update.setString(3, formation.getString("NAME"));
+          update.addBatch();
+        }
+        update.executeBatch();
+      }
+      // Apply only the reviewed vapor-pressure corrections, preserving other extended-table data.
+      String vaporColumns = "AntoineVapPresLiqType,ANTOINEA,ANTOINEB,ANTOINEC,ANTOINED,ANTOINEE";
+      try (
+          ResultSet corrections = database.getResultSet("SELECT NAME," + vaporColumns + " FROM " + source
+              + " WHERE AntoineVapPresLiqType='none' OR NAME IN ('acetone','ammonia','H2S')");
+          java.sql.PreparedStatement update = database.getConnection().prepareStatement(
+              "UPDATE COMP SET AntoineVapPresLiqType=?,ANTOINEA=?,ANTOINEB=?,ANTOINEC=?,ANTOINED=?,ANTOINEE=? WHERE NAME=?")) {
+        while (corrections.next()) {
+          for (int i = 1; i <= 6; i++) {
+            update.setString(i, corrections.getString(i + 1));
+          }
+          update.setString(7, corrections.getString("NAME"));
+          update.addBatch();
+        }
+        update.executeBatch();
+      }
+    } catch (Exception ex) {
+      throw new IllegalStateException("Failed to preserve standard components in the extended database", ex);
     }
   }
 
@@ -515,6 +608,7 @@ public class NeqSimDataBase implements neqsim.util.util.FileSystemSettings, java
       updateTable("ISO6976constants2016");
       updateTable("STOCCOEFDATA");
       updateTable("REACTIONDATA");
+      updateTable("REACTIONDATAPITZER");
       // Table ReactionKSPdata is not in use anywhere
       updateTable("ReactionKSPdata");
       updateTable("AdsorptionParameters");

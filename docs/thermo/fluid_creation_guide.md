@@ -4,8 +4,6 @@ description: "This guide provides comprehensive documentation on how to create a
 keywords: "fluid, create fluid, SystemSrkEos, SystemPrEos, SystemSrkCPAstatoil, addComponent, mixing rule, equation of state, EOS, natural gas, oil, water, composition"
 ---
 
-# Creating Fluids in NeqSim
-
 This guide provides comprehensive documentation on how to create and configure thermodynamic fluids in NeqSim, including available equations of state, mixing rules, and best practices.
 
 ## Table of Contents
@@ -290,7 +288,14 @@ import neqsim.thermo.system.SystemUNIFAC;
 SystemInterface fluid = new SystemUNIFAC(300.0, 1.0);
 fluid.addComponent("methanol", 0.3);
 fluid.addComponent("water", 0.7);
+fluid.setMixingRule("classic");
+fluid.init(0);
 ```
+
+UNIFAC group lists and indexed arrays are synchronized automatically during component
+construction and group alignment. Repeated initialization requires no manual group
+copying. `SystemUNIFACpsrk` uses the same group assignments with its temperature-dependent
+interaction parameters; UMR-PRU retains its separate group table.
 
 ### 6.2 NRTL
 
@@ -306,7 +311,13 @@ fluid.addComponent("water", 0.6);
 
 ### 6.3 GE-Wilson
 
-Wilson equation for activity coefficients.
+Wilson equation for activity coefficients. The calculated coefficients are stored for use by
+both solvent vapor-pressure and solute Henry-law fugacity calculations.
+
+Standalone UNIQUAC is currently unsupported: direct UNIQUAC construction and the
+`"UNIQUAC"`/`"UNIQUAQ"` Huron–Vidal selectors throw `UnsupportedOperationException` because
+the implementation and parameter data are incomplete. Use a supported GE model explicitly;
+see [GE model support](thermodynamic_models.md#64-other-ge-models).
 
 ```java
 import neqsim.thermo.system.SystemGEWilson;
@@ -392,6 +403,10 @@ activity-based scale-potential screening after reactive gas-aqueous or gas-oil-a
 saturation ratio; explicit mineral precipitation, solid amounts, solid-phase equilibrium and wax checks are not yet
 supported by the hybrid strategy.
 
+Neutral-gas dissolution also requires a qualified Henry-law reference and, for brines, separately qualified Pitzer
+neutral-ion interactions. See [Henry-law reference states and aqueous gas-solubility evidence](henry_law_reference.md)
+for the implemented temperature law, derivative contract, current coefficient audit, source matrix and adoption gates.
+
 The solver is not restricted to Pitzer. Desmukh-Mather and Kent-Eisenberg use the same reactive coupling when
 `chemicalReactionInit()` and `setMultiPhaseCheck(true)` are enabled. Other `SystemEosGE` systems can opt in explicitly:
 
@@ -410,7 +425,54 @@ new ThermodynamicOperations(fluid).TPflash();
 `enableHybridEosGeFlash()` configures topology, not electrolyte parameters. Scale calculations require a GE phase
 with meaningful activities for all requested aqueous species. Pitzer has the broadest concentrated-brine parameter
 coverage; the amine models retain their narrower component and validity ranges. `SystemDuanSun` remains excluded from
-this topology because its current public API accepts only CO2.
+this topology because its current public API accepts only CO2. Accordingly, `setModel("Duan-Sun")`
+rejects conversion explicitly: it cannot preserve a brine's water and ion inventory. The historical
+`SystemDuanSun` constructor remains available for compatibility, but is not a usable gas-in-brine
+system. `PhaseDuanSun` remains available for direct correlation evaluation with explicitly supplied
+state and salinity; this does not establish a complete or validated multiphase brine model.
+
+`setModel` throws `IllegalArgumentException` with the original cause when conversion fails,
+including unknown model names. It never returns a partially copied fluid as a successful conversion.
+
+For imported Pitzer datasets, check both interaction coverage and scientific qualification. Coverage answers whether
+the active binary, same-sign, ternary, and neutral topology is explicit; qualification answers which systems and
+observables have independent evidence:
+
+```java
+SystemPitzer qualifiedBrine = new SystemPitzer(298.15, 1.01325);
+qualifiedBrine.addComponent("water", 55.508);
+qualifiedBrine.addComponent("Na+", 0.5);
+qualifiedBrine.addComponent("K+", 0.5);
+qualifiedBrine.addComponent("Cl-", 1.0);
+qualifiedBrine.init(0);
+qualifiedBrine.applyPhreeqcSodiumPotassiumChlorideParameters();
+
+PitzerParameterQualification evidence = qualifiedBrine.getPitzerParameterQualification();
+
+// Property-specific publication gate: complete interaction coverage plus independent
+// evidence for the requested observable. A VLE request would fail for this subset.
+qualifiedBrine.requirePitzerDatasetValidationFor(
+    PitzerParameterQualification.ValidationTarget.AQUEOUS_ACTIVITY_COEFFICIENTS);
+
+// Dataset qualification does not prove that this exact state is inside its evidence envelope.
+boolean insideRange = PitzerParameterDatasets.isWithinSodiumPotassiumChlorideValidationRange(
+    qualifiedBrine.getTemperature(),
+    0.5,  // Na+ molality, mol/kg water
+    0.5,  // K+ molality, mol/kg water
+    1.0); // Cl- molality, mol/kg water
+```
+
+The accessor completes lazy parameter selection and interaction-coverage auditing but does not run a flash. The target
+gate is opt-in and executes only when called, so neutral models and ordinary Pitzer property calculations do no new
+work. It accepts only a completely qualified named dataset with independent evidence for the requested property;
+callers must still apply the use-case-specific range helper for the current temperature and molality. The legacy
+`requireCompletePitzerDatasetQualification()` gate remains available, but its overall level alone must not be treated
+as VLE, reaction, or mineral evidence.
+
+The complete PHREEQC catalog is intentionally reported as partially validated: CaCl2 and MgCl2 binaries have held-out
+activity evidence, while exact mixed Ca-Mg-Cl-SO4 activity and mineral precipitation remain separate gates. Process
+equipment can carry hybrid EOS-Pitzer states and calculate phase density, enthalpy, and heat capacity, but a finite
+saturation ratio is not yet a mineral-amount or precipitation-complementarity result.
 
 ---
 
@@ -521,6 +583,45 @@ oil.addTBPfraction("C10", 0.02, 0.134, 0.792);
 
 oil.setMixingRule("classic");
 ```
+
+### 10.1.1 Defining a Cut by Boiling Point
+
+A gas chromatograph reports a retention time, so a boiling point is often better known than a density. Two
+alternatives take a boiling point instead of the missing property:
+
+```java
+// molar mass known, specific gravity unknown
+oil.addTBPfraction2("C10", 0.02, 0.142, 447.3);   // name, moles, molarMass [kg/mol], Tb [K]
+
+// specific gravity known, molar mass unknown
+oil.addTBPfraction3("C10", 0.02, 0.734, 447.3);   // name, moles, specificGravity [-], Tb [K]
+```
+
+`addTBPfraction2` obtains the specific gravity from the Riazi-Daubert (1980) correlation
+$M = 4.5673\times10^{-5}\,T_b^{2.1962}\,SG^{-1.0164}$ (with $T_b$ in degrees Rankine and $M$ in g/mol) inverted
+analytically for $SG$. `addTBPfraction3` inverts the selected TBP model for molar mass, which is the better
+conditioned direction. In both cases the supplied boiling point is then used by the TBP model itself, so it reaches
+the critical properties for the boiling-point based models (Lee-Kesler, Twu, Cavett).
+
+**Molar mass and boiling point are not independent.** In the correlation, a relative error in molar mass carries
+almost one-for-one into specific gravity, and a relative error in boiling point is amplified by about 2.2. A pair
+that implies a specific gravity outside 0.5 to 1.3 is rejected rather than silently accepted:
+
+```java
+oil.addTBPfraction2("C10", 0.02, 0.129, 560.0);  // throws: a 129 g/mol cut cannot boil at 560 K
+```
+
+If the paraffin, naphthene and aromatic character of the cut is known, the Watson characterization factor is a
+markedly more accurate route to the density, because $K_w$ encodes exactly that character:
+
+```java
+double sg = oil.calculateDensityFromBoilingPointAndWatsonK(447.3, 12.66);  // Tb [K], Kw [-]
+oil.addTBPfraction("C10", 0.02, 0.142, sg);
+```
+
+Indicative values are about 12.7 for paraffinic cuts, 11.0 for naphthenic and 10.0 for aromatic. Against pure
+components this route reproduces the specific gravity to better than 1 %, where the molar-mass route is typically
+5 % out for paraffins.
 
 ### 10.2 Plus Fractions
 

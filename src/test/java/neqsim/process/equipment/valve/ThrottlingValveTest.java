@@ -1,8 +1,10 @@
 package neqsim.process.equipment.valve;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import neqsim.process.equipment.stream.Stream;
@@ -11,6 +13,7 @@ import neqsim.process.mechanicaldesign.valve.ControlValveSizing_simple;
 import neqsim.process.mechanicaldesign.valve.ValveMechanicalDesign;
 import neqsim.process.processmodel.ProcessSystem;
 import neqsim.thermo.system.SystemSrkEos;
+import neqsim.thermo.system.SystemInterface;
 
 public class ThrottlingValveTest {
   private static class InitTrackingSystemSrkEos extends SystemSrkEos {
@@ -55,6 +58,105 @@ public class ThrottlingValveTest {
     int getLevelThreeCalls() {
       return levelThreeCalls.get();
     }
+  }
+
+  /** Regression test for GitHub issue #3446. */
+  @Test
+  void testCalculatedOutletPressureInvertsGasValveSizingIssue3446() {
+    SystemInterface fluid = new SystemSrkEos(298.15, 1.9);
+    fluid.addComponent("methane", 0.9);
+    fluid.addComponent("ethane", 0.1);
+    fluid.setMixingRule("classic");
+
+    Stream inlet = new Stream("inlet", fluid);
+    inlet.setFlowRate(28500.0, "kg/hr");
+    inlet.setPressure(1.9, "bara");
+    inlet.setTemperature(25.0, "C");
+
+    ThrottlingValve valve = new ThrottlingValve("valve", inlet);
+    valve.setGasValve(true);
+    valve.setPercentValveOpening(100.0);
+    valve.setOutletPressure(1.484, "bara");
+    assertFalse(valve.isAllowChoked(), "Single-phase valve flow is not capacity-limited unless enabled explicitly");
+
+    valve.setAllowChoked(true);
+    assertTrue(valve.getMechanicalDesign().getValveSizingMethod().isAllowChoked(),
+        "The valve-level choked-flow setting must reach the active sizing method");
+    valve.setAllowChoked(false);
+
+    ProcessSystem process = new ProcessSystem("gas valve pressure inversion");
+    process.add(inlet);
+    process.add(valve);
+    process.run();
+
+    double sizedKv = valve.getKv();
+    valve.setIsCalcOutPressure(true);
+    process.run();
+
+    assertEquals(sizedKv, valve.getKv(), 0.0, "Reverse mode must retain the sized valve coefficient");
+    assertEquals(1.484, valve.getOutletStream().getPressure("bara"), 1.0e-4,
+        "Fixed-Kv pressure mode must invert the forward sizing point");
+
+    double previousPressureDrop = 0.0;
+    double[] flowRates = {24000.0, 26500.0, 27500.0, 28000.0, 28500.0, 29000.0, 30000.0};
+    for (double flowRate : flowRates) {
+      inlet.setFlowRate(flowRate, "kg/hr");
+      process.run();
+      double pressureDrop = inlet.getPressure("bara") - valve.getOutletStream().getPressure("bara");
+
+      assertTrue(Double.isFinite(pressureDrop), "Calculated pressure drop must remain finite");
+      assertTrue(pressureDrop > previousPressureDrop, "Pressure drop must increase smoothly with gas flow");
+      assertTrue(valve.getOutletStream().getPressure("bara") > 0.1,
+          "A nearby flow increase must not pin the outlet pressure to the solver floor");
+      previousPressureDrop = pressureDrop;
+    }
+  }
+
+  @Test
+  void testAutoSizeAtPartialOpeningReproducesDesignFlowInTransientMode() {
+    SystemSrkEos fluid = new SystemSrkEos(273.15 + 25.0, 20.0);
+    fluid.addComponent("methane", 1.0);
+    fluid.setMixingRule(2);
+
+    Stream feed = new Stream("auto-size feed", fluid);
+    feed.setFlowRate(5000.0, "kg/hr");
+    feed.setPressure(20.0, "bara");
+    feed.setTemperature(25.0, "C");
+    feed.run();
+
+    ThrottlingValve valve = new ThrottlingValve("auto-sized valve", feed);
+    valve.setOutletPressure(10.0, "bara");
+    valve.setPercentValveOpening(70.0);
+    valve.autoSize(1.0, 70.0);
+    valve.setCalculateSteadyState(false);
+    valve.runTransient(0.1);
+
+    assertEquals(5000.0, valve.getOutletStream().getFlowRate("kg/hr"), 50.0);
+  }
+
+  @Test
+  void testAutoSizePreservesNewDesignFlowWhenExistingCvIsStale() {
+    SystemInterface gas = new SystemSrkEos(293.15, 20.0);
+    gas.addComponent("methane", 1.0);
+    gas.setMixingRule("classic");
+
+    Stream inlet = new Stream("inlet", gas);
+    inlet.setFlowRate(1000.0, "kg/hr");
+    inlet.run();
+
+    ThrottlingValve valve = new ThrottlingValve("valve", inlet);
+    valve.setOutletPressure(10.0, "bara");
+    valve.setPercentValveOpening(70.0);
+    valve.run();
+
+    inlet.setFlowRate(5000.0, "kg/hr");
+    valve.autoSize(1.0, 70.0);
+
+    assertEquals(5000.0, inlet.getFlowRate("kg/hr"), 1.0e-6);
+    valve.setCalculateSteadyState(false);
+    valve.runTransient(1.0, UUID.randomUUID());
+
+    assertEquals(5000.0, valve.getOutletStream().getFlowRate("kg/hr"), 50.0);
   }
 
   /**
@@ -679,5 +781,37 @@ public class ThrottlingValveTest {
     assertEquals(outletPhases, valve.getOutletStream().getFluid().getNumberOfPhases());
     assertEquals(actualEntropy, valve.getEntropyProduction("J/K"), 0.0,
         "Repeated diagnostic calls must remain bit-identical");
+  }
+
+  @Test
+  void testAcceptNegativeDPFlagLogic() {
+    neqsim.thermo.system.SystemInterface testSystem = new neqsim.thermo.system.SystemSrkEos(298.15, 10.0);
+    testSystem.addComponent("methane", 1.0);
+    testSystem.setMixingRule(2);
+
+    Stream stream1 = new Stream("Stream1", testSystem);
+    stream1.setPressure(10.0, "bara");
+    stream1.run();
+
+    ThrottlingValve defaultValve = new ThrottlingValve("default valve", stream1);
+    assertTrue(defaultValve.isAcceptNegativeDP(), "Requested higher outlet pressure is accepted by default");
+    defaultValve.setOutletPressure(15.0, "bara");
+    defaultValve.run();
+    assertEquals(15.0, defaultValve.getOutletStream().getPressure("bara"), 1e-4,
+        "The default retains the requested outlet thermodynamic pressure state");
+
+    ThrottlingValve clampingValve = new ThrottlingValve("clamping valve", stream1);
+    clampingValve.setOutletPressure(15.0, "bara");
+    clampingValve.setAcceptNegativeDP(false);
+    clampingValve.run();
+    assertEquals(10.0, clampingValve.getOutletStream().getPressure("bara"), 1e-4,
+        "Disabling acceptance clamps the outlet thermodynamic pressure to the inlet");
+
+    ThrottlingValve acceptingValve = new ThrottlingValve("accepting valve", stream1);
+    acceptingValve.setOutletPressure(15.0, "bara");
+    acceptingValve.setAcceptNegativeDP(true);
+    acceptingValve.run();
+    assertEquals(15.0, acceptingValve.getOutletStream().getPressure("bara"), 1e-4,
+        "Enabling acceptance retains the requested outlet thermodynamic pressure state");
   }
 }

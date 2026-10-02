@@ -597,7 +597,7 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
     private Result toResult() {
       double[] critical = operation.get("criticalPoint1");
       if (critical == null || critical.length < 2) {
-        critical = new double[] { 0.0, 0.0 };
+        critical = new double[] {0.0, 0.0};
       }
       double[] threePhaseTemperatures = operation.get("threePhaseT");
       return new Result(segments, operation.isEnvelopeClosed(), finitePhysicalValues,
@@ -742,7 +742,7 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
       double maximumTemperature = Double.NEGATIVE_INFINITY;
       double pressureAtMaximumTemperature = 0.0;
       double minimumCompositionDistance = Double.POSITIVE_INFINITY;
-      double[] criticalPoint = new double[] { 0.0, 0.0 };
+      double[] criticalPoint = new double[] {0.0, 0.0};
       int threePhasePointCount = 0;
       for (Polyline polyline : polylines) {
         if (polyline.points.size() < 3) {
@@ -764,7 +764,7 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
           }
           if (point.compositionDistance < minimumCompositionDistance) {
             minimumCompositionDistance = point.compositionDistance;
-            criticalPoint = new double[] { point.temperatureK, point.pressureBara };
+            criticalPoint = new double[] {point.temperatureK, point.pressureBara};
           }
           if (point.threePhase) {
             threePhasePointCount++;
@@ -776,24 +776,24 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
       }
 
       if (segments.isEmpty()) {
-        return new TopologyAttempt(segments, false, false, new double[] { 0.0, 0.0 }, new double[] { 0.0, 0.0, 0.0 },
-            new double[] { 0.0, 0.0, 0.0 }, 0, flashCount, failedFlashCount,
+        return new TopologyAttempt(segments, false, false, new double[] {0.0, 0.0}, new double[] {0.0, 0.0, 0.0},
+            new double[] {0.0, 0.0, 0.0}, 0, flashCount, failedFlashCount,
             "No stable gas-and-hydrocarbon-liquid coexistence boundary was found in the automatic domain");
       }
       if (!Double.isFinite(minimumCompositionDistance)) {
-        criticalPoint = new double[] { 0.0, 0.0 };
+        criticalPoint = new double[] {0.0, 0.0};
       }
       return new TopologyAttempt(segments, closed, finite, criticalPoint,
-          new double[] { temperatureAtMaximumPressure, maximumPressure, 0.0 },
-          new double[] { maximumTemperature, pressureAtMaximumTemperature, 0.0 }, threePhasePointCount, flashCount,
+          new double[] {temperatureAtMaximumPressure, maximumPressure, 0.0},
+          new double[] {maximumTemperature, pressureAtMaximumTemperature, 0.0}, threePhasePointCount, flashCount,
           failedFlashCount, null);
     }
 
     private void addCellContours(PhaseState[][] states, int temperatureIndex, int pressureIndex,
         Map<String, ContourPoint> points, Map<String, Set<String>> graph) {
-      PhaseState[] corners = new PhaseState[] { states[temperatureIndex][pressureIndex],
+      PhaseState[] corners = new PhaseState[] {states[temperatureIndex][pressureIndex],
           states[temperatureIndex + 1][pressureIndex], states[temperatureIndex + 1][pressureIndex + 1],
-          states[temperatureIndex][pressureIndex + 1] };
+          states[temperatureIndex][pressureIndex + 1]};
       if (!corners[0].valid || !corners[1].valid || !corners[2].valid || !corners[3].valid) {
         return;
       }
@@ -820,46 +820,46 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
       List<int[]> pairs = new ArrayList<int[]>();
       switch (mask) {
       case 1:
-        pairs.add(new int[] { 3, 0 });
+        pairs.add(new int[] {3, 0});
         break;
       case 2:
-        pairs.add(new int[] { 0, 1 });
+        pairs.add(new int[] {0, 1});
         break;
       case 3:
-        pairs.add(new int[] { 3, 1 });
+        pairs.add(new int[] {3, 1});
         break;
       case 4:
-        pairs.add(new int[] { 1, 2 });
+        pairs.add(new int[] {1, 2});
         break;
       case 5:
         addAmbiguousPairs(pairs, corners, true);
         break;
       case 6:
-        pairs.add(new int[] { 0, 2 });
+        pairs.add(new int[] {0, 2});
         break;
       case 7:
-        pairs.add(new int[] { 3, 2 });
+        pairs.add(new int[] {3, 2});
         break;
       case 8:
-        pairs.add(new int[] { 2, 3 });
+        pairs.add(new int[] {2, 3});
         break;
       case 9:
-        pairs.add(new int[] { 0, 2 });
+        pairs.add(new int[] {0, 2});
         break;
       case 10:
         addAmbiguousPairs(pairs, corners, false);
         break;
       case 11:
-        pairs.add(new int[] { 1, 2 });
+        pairs.add(new int[] {1, 2});
         break;
       case 12:
-        pairs.add(new int[] { 1, 3 });
+        pairs.add(new int[] {1, 3});
         break;
       case 13:
-        pairs.add(new int[] { 0, 1 });
+        pairs.add(new int[] {0, 1});
         break;
       case 14:
-        pairs.add(new int[] { 3, 0 });
+        pairs.add(new int[] {3, 0});
         break;
       default:
         break;
@@ -873,11 +873,11 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
       PhaseState center = evaluate(centerTemperature, centerPressure);
       boolean centerInside = center.valid && center.hydrocarbonTwoPhase;
       if (centerInside == diagonalZeroTwoInside) {
-        pairs.add(new int[] { 0, 1 });
-        pairs.add(new int[] { 2, 3 });
+        pairs.add(new int[] {0, 1});
+        pairs.add(new int[] {2, 3});
       } else {
-        pairs.add(new int[] { 3, 0 });
-        pairs.add(new int[] { 1, 2 });
+        pairs.add(new int[] {3, 0});
+        pairs.add(new int[] {1, 2});
       }
     }
 
@@ -1134,6 +1134,6 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
   }
 
   private static double[] safeArray(double[] values) {
-    return values == null ? new double[] { 0.0, 0.0, 0.0 } : values;
+    return values == null ? new double[] {0.0, 0.0, 0.0} : values;
   }
 }

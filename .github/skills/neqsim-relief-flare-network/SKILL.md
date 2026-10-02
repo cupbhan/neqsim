@@ -1,7 +1,7 @@
 ---
 name: neqsim-relief-flare-network
 version: "1.0.0"
-description: "Relief and flare system design — PSV sizing per API 520 (gas/liquid/two-phase, fire case), API 521 fire heat input, flare load summation, flare-tip sizing, radiation contour (API 521 §6), header back-pressure & Mach, and the integrated TR3001 overpressure-protection study engine (multi-cause governing-case selection, fire-case relief, compliance check, disposal-load roll-up). USE WHEN: a task involves PSV sizing, relief contingency analysis, thermal relief for trapped liquid, flare network hydraulics, flare radiation/dispersion, PSV→flare integration, or a TR3001/API 521 overpressure study. Anchors on neqsim.process.util.fire.ReliefValveSizing, neqsim.process.safety.overpressure, neqsim.process.equipment.flare.{Flare, FlareStack}, neqsim.process.equipment.valve.SafetyValve."
+description: "Relief and flare design - PSV sizing per API 520 (gas/liquid/two-phase, fire), API 521 fire heat input, flare load summation, tip sizing, radiation contours, header back-pressure and Mach, and the TR3001 overpressure-study engine. USE WHEN: PSV sizing, relief contingency analysis, thermal relief of trapped liquid, flare hydraulics or radiation, PSV-to-flare integration, or a TR3001/API 521 study. Anchors on ReliefValveSizing, safety.overpressure, Flare, SafetyValve."
 last_verified: "2026-06-27"
 requires:
   java_packages: [neqsim.process.util.fire, neqsim.process.safety.overpressure, neqsim.process.equipment.flare, neqsim.process.equipment.valve]
@@ -288,6 +288,7 @@ modeling.
 ## Related Skills
 
 - [`neqsim-process-safety`](../neqsim-process-safety/SKILL.md) — when PSV is the IPL of last resort in LOPA
+- [`neqsim-firewater-deluge-design`](../neqsim-firewater-deluge-design/SKILL.md) — fire-water demand for the area, which competes with the relief and flare load for the same simultaneous-demand budget
 - [`neqsim-trapped-liquid-fire-rupture`](../neqsim-trapped-liquid-fire-rupture/SKILL.md) — blocked-in liquid fire rupture screening before thermal relief/PFP decisions
 - [`neqsim-depressurization-mdmt`](../neqsim-depressurization-mdmt/SKILL.md) — blowdown transients + `MultiVesselBlowdownStudy` for coupled header loads
 - [`neqsim-consequence-analysis`](../neqsim-consequence-analysis/SKILL.md) — `Api537FlareFlameModel` radiation/noise and hazardous-area zoning

@@ -54,7 +54,7 @@ public final class SpecifiedThreePhaseGibbsSeedPreconditioner {
     SystemInterface working;
     try {
       working = createWorkingSystem(temperatureK, pressureBara, phaseFractions,
-          new double[][] { phaseZeroComposition, phaseOneComposition, phaseTwoComposition });
+          new double[][] {phaseZeroComposition, phaseOneComposition, phaseTwoComposition});
     } catch (RuntimeException error) {
       return Result.failure(phaseZero, phaseOne, phaseTwo, temperatureK, pressureBara,
           template.getPhase(0).getNumberOfComponents(), error.getMessage());
@@ -100,7 +100,7 @@ public final class SpecifiedThreePhaseGibbsSeedPreconditioner {
     working.setMaxNumberOfPhases(3);
     working.setNumberOfPhases(3);
     PhaseInterface phaseTemplate = template.getPhase(0);
-    CandidatePhase[] phaseSlots = new CandidatePhase[] { phaseZero, phaseOne, phaseTwo };
+    CandidatePhase[] phaseSlots = new CandidatePhase[] {phaseZero, phaseOne, phaseTwo};
     double fractionTotal = phaseFractionsTotal(fractions);
     for (int phaseIndex = 0; phaseIndex < 3; phaseIndex++) {
       working.setPhase(phaseTemplate.clone(), phaseIndex);

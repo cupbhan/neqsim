@@ -18,10 +18,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from shared_thermo_smoke import run_smoke
+from verify_shared_enhancements import verify as verify_enhancements
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE_TESTS = ("ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,"
-              "HeavyOilMultimediaFluidTest,TPmultiflashSolveStatusTest,HydrocarbonWater*Test")
 VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+-cupbhan\.\d+(?:-rc\.\d+)?\Z")
 
 
@@ -42,16 +41,22 @@ def require_clean(root=ROOT):
     return git("rev-parse", "HEAD", root=root)
 
 
-def test_summary(directory):
-    """Reject missing, skipped, failing or empty selected test reports."""
+def test_summary(directory, allowed_skips=()):
+    """Reject failures and unreviewed skips; retain explicitly recorded upstream disabled cases."""
     files = sorted(Path(directory).glob("TEST-*.xml"))
     summary = {"suites": [], "tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+    skipped_cases = []
     for path in files:
         suite = ET.parse(path).getroot()
         summary["suites"].append(suite.attrib["name"])
         for key in ("tests", "failures", "errors", "skipped"):
             summary[key] += int(suite.attrib.get(key, 0))
-    if not summary["tests"] or any(summary[k] for k in ("failures", "errors", "skipped")):
+        skipped_cases.extend(suite.attrib["name"] + "#" + case.attrib["name"]
+                             for case in suite.findall("testcase") if case.find("skipped") is not None)
+    summary["skippedCases"] = skipped_cases
+    unknown_skips = set(skipped_cases) - set(allowed_skips)
+    if (summary["tests"] <= summary["skipped"] or summary["failures"] or summary["errors"]
+            or len(skipped_cases) != summary["skipped"] or unknown_skips):
         raise RuntimeError("Selected regression gate did not fully pass: " + json.dumps(summary))
     return summary
 
@@ -82,6 +87,9 @@ def build(version):
     if not VERSION_PATTERN.fullmatch(version):
         raise ValueError("Use a personal version such as 3.17.0-cupbhan.1-rc.1")
     commit = require_clean()
+    upstream, policy = verify_enhancements()
+    if not version.startswith(upstream["version"] + "-cupbhan."):
+        raise ValueError("Candidate version must match the recorded official baseline")
     base = ROOT / "build/shared-thermo"
     destination = base / "releases" / version
     if destination.exists():
@@ -107,8 +115,11 @@ def build(version):
             raise RuntimeError(f"{label} failed; inspect {logs / (label + '.log')}")
 
     run("core", common + ["clean", "spotless:check", "install", "-Dneqsim.shade.skip=true",
-                          "-Dtest=" + CORE_TESTS])
-    core_tests = test_summary(ROOT / "target/surefire-reports")
+                          "-Dtest=" + policy["coreTests"]])
+    core_tests = test_summary(ROOT / "target/surefire-reports", policy.get("knownUpstreamDisabledTests", {}))
+    missing_suites = set(policy["requiredCoreSuites"]) - set(core_tests["suites"])
+    if missing_suites:
+        raise RuntimeError("Personal regression suites were not executed: " + str(sorted(missing_suites)))
     run("mcp", common + ["-f", "neqsim-mcp-server/pom.xml", "clean", "spotless:check", "package"])
     mcp_tests = test_summary(ROOT / "neqsim-mcp-server/target/surefire-reports")
     core = ROOT / "target" / f"neqsim-{version}.jar"
@@ -129,6 +140,8 @@ def build(version):
     destination.mkdir(parents=True)
     for source in (core, runner, ROOT / "target" / f"neqsim-{version}-sources.jar",
                    ROOT / "LICENSE", ROOT / "distribution/cupbhan/source-baseline.json",
+                   ROOT / "distribution/cupbhan/upstream.json",
+                   ROOT / "distribution/cupbhan/personal-enhancements.json",
                    logs / "validation.json"):
         shutil.copy2(source, destination / source.name)
     shutil.copy2(ROOT / ".flattened-pom.xml", destination / f"neqsim-{version}.pom")
@@ -137,7 +150,7 @@ def build(version):
     manifest = {"schemaVersion": 1, "version": version, "status": "tested-candidate",
                 "repository": baseline["canonicalRepository"], "commit": commit, "dirty": False,
                 "branch": git("branch", "--show-current"),
-                "upstreamCommit": baseline["upstreamBaseline"],
+                "upstreamCommit": upstream["commit"], "upstreamTag": upstream["tag"],
                 "builtAt": datetime.now(timezone.utc).isoformat(), "artifacts": artifacts,
                 "java": subprocess.check_output([java, "-version"], stderr=subprocess.STDOUT, text=True).strip(),
                 "maven": maven_version,

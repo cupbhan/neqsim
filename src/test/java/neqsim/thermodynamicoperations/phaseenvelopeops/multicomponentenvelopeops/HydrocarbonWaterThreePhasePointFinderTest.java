@@ -63,7 +63,7 @@ class HydrocarbonWaterThreePhasePointFinderTest extends NeqSimTest {
   @Tag("slow")
   void diagnoseFluidOneOilStationaryPointAtFiftyBara() {
     SystemInterface source = LindeloffMichelsenReferenceFluidTest.fluidOne(false);
-    for (double temperatureK : new double[] { 150.0, 225.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0 }) {
+    for (double temperatureK : new double[] {150.0, 225.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0}) {
       SystemInterface grid = source.clone();
       grid.setTemperature(temperatureK);
       grid.setPressure(50.0);
@@ -158,8 +158,8 @@ class HydrocarbonWaterThreePhasePointFinderTest extends NeqSimTest {
       }
     }
     assertTrue(seed != null);
-    for (double waterScale : new double[] { 1.0e-8, 1.0e-6, 1.0e-4, 1.0e-3, 1.0e-2, 0.03, 0.1, 0.2, 0.4, 0.6, 0.8,
-        1.0 }) {
+    for (double waterScale : new double[] {1.0e-8, 1.0e-6, 1.0e-4, 1.0e-3, 1.0e-2, 0.03, 0.1, 0.2, 0.4, 0.6, 0.8,
+        1.0}) {
       SystemInterface gas = source.clone();
       gas.setNumberOfPhases(1);
       gas.setTemperature(225.0);

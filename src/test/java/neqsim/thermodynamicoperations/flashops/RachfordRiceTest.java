@@ -12,8 +12,8 @@ public class RachfordRiceTest {
 
   @Test
   void testCalcBeta() {
-    double[] z = new double[] { 0.7, 0.3 };
-    double[] K = new double[] { 2.0, 0.01 };
+    double[] z = new double[] {0.7, 0.3};
+    double[] K = new double[] {2.0, 0.01};
 
     try {
       RachfordRice rachfordRice = new RachfordRice();
@@ -37,8 +37,8 @@ public class RachfordRiceTest {
 
   @Test
   void testCalcBetaMethod2() {
-    double[] z = new double[] { 0.7, 0.3 };
-    double[] K = new double[] { 2.0, 0.01 };
+    double[] z = new double[] {0.7, 0.3};
+    double[] K = new double[] {2.0, 0.01};
 
     try {
       RachfordRice rachfordRice = new RachfordRice();
@@ -46,5 +46,18 @@ public class RachfordRiceTest {
     } catch (Exception e) {
       logger.error(e.getMessage());
     }
+  }
+
+  @Test
+  void testCalcBetaNielsen2023DoesNotMutateInputArray() {
+    double[] z = new double[] {0.9, 0.1};
+    double[] k = new double[] {5.0, 0.2};
+    double[] originalK = k.clone();
+
+    RachfordRice rachfordRice = new RachfordRice();
+    double beta = Assertions.assertDoesNotThrow(() -> rachfordRice.calcBetaNielsen2023(k, z));
+
+    Assertions.assertTrue(beta > 0.0 && beta < 1.0);
+    Assertions.assertArrayEquals(originalK, k, 0.0, "The caller's K array must remain unchanged");
   }
 }

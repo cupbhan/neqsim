@@ -1,9 +1,7 @@
 ---
 title: "Pure Component Parameters Database (COMP)"
-description: "This guide provides detailed documentation of the COMP database, which stores pure component parameters used by NeqSim's thermodynamic models. Understanding these parameters is essential for model sel..."
+description: "Reference to NeqSim's COMP database of pure-component parameters for thermodynamic model selection, diagnostics, and component extension."
 ---
-
-# Pure Component Parameters Database (COMP)
 
 This guide provides detailed documentation of the COMP database, which stores pure component parameters used by NeqSim's thermodynamic models. Understanding these parameters is essential for model selection, debugging, and extending NeqSim with new components.
 
@@ -64,10 +62,33 @@ Key characteristics:
 | `ID` | Unique component identifier | - | Internal indexing |
 | `NAME` | Component name for lookup | - | `addComponent("methane", ...)` |
 | `CASnumber` | CAS Registry Number | - | Component identification |
+| `InChIKey` | Structure-derived identifier | - | Identity checking, not used by any model |
 | `COMPTYPE` | Component type classification | - | Model selection (see [Component Types](#component-types)) |
 | `COMPINDEX` | Component index in database | - | Internal ordering |
 | `FORMULA` | Chemical formula | - | Element calculations |
 | `MOLARMASS` | Molar mass | g/mol | All models (stored internally as kg/mol) |
+
+`InChIKey` is a hash of the molecular structure, so it is identical for a
+substance no matter how it is named and differs whenever the structure differs.
+Use it, not the name or the CAS number, to check whether two rows are the same
+molecule: a CAS number may be missing, wrong, or registered separately for each
+stereoisomer, and a row created by copying another keeps the original's values in
+every column that was not edited. A repeated `InChIKey` is either an intentional
+variant pair (a neutral and its ion, a `PVTsim` re-parameterisation, `ice` and
+`water`) or a copy-paste defect.
+
+Temporary TBP and wax pseudo-components have no defined molecular structure, so
+their `InChIKey` is left unset. Their database insert names its physical-property
+columns explicitly: optional identity columns must not shift or discard wax
+flags, fusion enthalpies, or other characterization data. This also preserves
+compatibility with component tables that have no `InChIKey` column.
+
+When adding standard components, also update the case-insensitive canonical-name
+index in `ComponentNameResolver`. Loading the extended database also imports any
+standard component names and optional columns absent from `COMP_EXT.csv`.
+Existing extended component properties are retained, and imported rows receive
+new unique IDs; the original extended resource remains unchanged.
+Read CSV names with a CSV parser because systematic names can contain commas.
 
 ### Critical Properties
 
@@ -92,7 +113,7 @@ Parameters for Antoine-type vapor pressure correlations.
 
 | Column | Description | Unit | Model Usage |
 |--------|-------------|------|-------------|
-| `AntoineVapPresLiqType` | Equation type | - | `pow10`, `log`, `exp`, `loglog` |
+| `AntoineVapPresLiqType` | Equation type or availability marker | - | `pow10`, `pow10KPa`, `log`, `exp`, `loglog`; `none` means unavailable |
 | `ANTOINEA` | Antoine A coefficient | - | Vapor pressure calculation |
 | `ANTOINEB` | Antoine B coefficient | - | Vapor pressure calculation |
 | `ANTOINEC` | Antoine C coefficient | - | Vapor pressure calculation |
@@ -103,9 +124,60 @@ Parameters for Antoine-type vapor pressure correlations.
 | `ANTOINESolidC` | Solid vapor pressure C | - | Sublimation pressure |
 
 **Antoine equation forms:**
-- `pow10`: $\log_{10}(P_{sat}) = A - \frac{B}{T + C}$ (P in mmHg, T in °C)
-- `log`: $\ln(P_{sat}) = A + \frac{B}{T} + C \ln(T) + D T^E$
-- `exp`: $P_{sat} = \exp(A - \frac{B}{T + C})$
+- `pow10`: $\log_{10}(P_{sat}) = A - \frac{B}{T + C - 273.15}$ (P in bar absolute, API temperature T in K)
+- `pow10KPa`: $P_{sat} = 10^{A-B/(T+C)}/10^5$ in bar absolute, with T in K. The legacy label retains this existing scale; it does not select a kPa-to-bar conversion.
+- For non-`pow10`/`pow10KPa` labels with $|E| > 10^{-12}$, DIPPR-101 gives $P_{sat} = \exp(A + B/T + C \ln(T) + DT^E)/10^5$ in bar, with T in K. This includes legacy `log` and `exp` labels.
+- With zero exponent, `log` and `exp` use $P_{sat} = \exp(A - B/(T+C))$ in bar, with T in K.
+
+`getAntoineVaporPressuredT(T)` returns the analytical derivative for `pow10`,
+`pow10KPa`, DIPPR-101, and the three-parameter `log`/`exp` form, in bar/K.
+For `pow10KPa`, $dP_{sat}/dT = P_{sat}\ln(10)B/(T+C)^2$; explicit base-ten
+labels keep precedence even when `ANTOINEE` is nonzero. The pressure and
+derivative therefore use the same correlation and scale during inverse-temperature
+recovery. The legacy Wagner fallback still returns zero for the derivative;
+correlation availability alone does not establish derivative support for that path.
+
+**Missing data and applicability:** `none` with zero `ANTOINEA`–`ANTOINEE`
+means no liquid-vapor correlation is available; it does not mean zero vapor
+pressure. The three repeated legacy tuples reported in issue #3771, copied
+water coefficients on unrelated compounds, the `default` pseudo-component
+template, and every charged species are marked this way. Repeated coefficients
+have not been reinterpreted as measured Wagner fits or replaced with guessed data.
+Water and seawater retain their existing correlation. Solid sublimation
+coefficients and EOS parameters are separate and are unchanged.
+
+If all five liquid-vapor coefficients are zero, NeqSim also reports the
+correlation as unavailable, even if an imported row has a live type label.
+It does not infer or store a fitted Antoine curve from a normal boiling point.
+Supply a sourced fit when vapor pressure is required.
+
+`ComponentInterface.hasAntoineVaporPressureCorrelation()` distinguishes missing
+data from an available correlation. Availability alone does not certify the
+accuracy or fitted range of older data. `getAntoineVaporPressure(T)` and its
+temperature derivative return `Double.NaN` for missing data, ions, nonpositive or
+nonfinite T, and T above the component's critical temperature. The inverse
+`getAntoineVaporTemperature(P)` returns NaN for missing data, nonpositive or
+nonfinite P, and P above the critical pressure. A fitted correlation may have a
+narrower range; subcritical results are not clipped to Pc and are not a general
+quality guarantee. Below the melting point a liquid correlation can describe a
+metastable liquid, not solid sublimation.
+
+EOS saturation calculations and adsorption estimates already recognize NaN and
+use their own initial guesses or estimation paths. Activity models requiring a
+pure-liquid reference need actual vapor-pressure data or an appropriate Henry
+reference; the `none` marker does not supply either. Selecting the extended
+database applies the standard table's unavailable-data markers and corrected
+acetone coefficients to matching names, preserving other extended properties.
+
+**Acetone provenance:** the [NIST Chemistry WebBook](https://webbook.nist.gov/cgi/cbook.cgi?ID=C67641&Mask=4&Type=ANTOINE)
+reports A = 4.42448, B = 1312.253, C = -32.445 for T in K and P in bar,
+valid from 259.16 to 507.60 K, based on Ambrose, Sprake and Townsend (1974),
+[DOI: 10.1016/0021-9614(74)90119-0](https://doi.org/10.1016/0021-9614(74)90119-0).
+The database stores C = 240.705 to match the existing `pow10` Celsius offset.
+This gives approximately 0.306 bar at 298.15 K and 0.726 bar at 320 K; the
+0.031 bar at 298.15 K quoted in issue #3771 is not the acetone reference value.
+The three numerical coefficients are attributed reference data; no external
+software or compiled database has been imported.
 
 ### Ideal Gas Heat Capacity
 
@@ -230,9 +302,10 @@ Parameters for gas hydrate equilibrium calculations.
 
 | Column | Description | Unit | Model Usage |
 |--------|-------------|------|-------------|
-| `Href` | Reference enthalpy | J/mol | Enthalpy calculations |
+| `Href` | Separate legacy reference metadata | J/mol | Not the formation enthalpy used by `getHID` |
 | `GIBBSENERGYOFFORMATION` | Gibbs energy of formation | J/mol | Chemical equilibrium |
-| `ENTHALPYOFFORMATION` | Standard enthalpy of formation | J/mol | Reaction thermodynamics |
+| `ENTHALPYOFFORMATION` | Standard ideal-gas enthalpy of formation at 298.15 K for reviewed neutral species | J/mol | Reaction thermodynamics and optional formation-referenced stream enthalpy |
+| `FORMATIONENTHALPYSOURCE` | Provenance of a reviewed gas-phase formation enthalpy; blank means unavailable | - | Enables explicit formation-reference calculations; zero values require provenance too |
 | `ABSOLUTEENTROPY` | Absolute entropy | J/(mol·K) | Entropy calculations |
 | `HEATOFFUSION` | Heat of fusion | J/mol | Solid-liquid equilibrium |
 | `Hsub` | Heat of sublimation | J/mol | Solid-vapor equilibrium |
@@ -240,6 +313,52 @@ Parameters for gas hydrate equilibrium calculations.
 | `TRIPLEPOINTPRESSURE` | Triple point pressure | bar | Phase boundaries |
 | `TRIPLEPOINTDENSITY` | Triple point density | kg/m³ | Reference state |
 | `MELTINGPOINTTEMPERATURE` | Melting point | K | Solid calculations |
+
+### Formation enthalpy availability and sources
+
+`getHID(T)` retains the default sensible-enthalpy convention, zero at 273.15 K.
+Enable `fluid.setUseIdealGasEnthalpyOfFormation(true)` to include
+`ENTHALPYOFFORMATION` and integrate Cp from **298.15 K**, where the tabulated
+formation enthalpy applies. See the [reference-state guide](reading_fluid_properties.md#formation-enthalpy-reference).
+This does not use `Href`, which is separate legacy metadata.
+
+The following gas-phase values have explicit provenance. Values are stored in
+J/mol; the table displays kJ/mol. Each link points to the NIST Chemistry WebBook
+entry (SRD 69). Chase values use the displayed Shomate `H` reference constant;
+Cp continues to use NeqSim's existing polynomial, not the Shomate correlation.
+
+| Component | Formation enthalpy at 298.15 K (kJ/mol) | Source |
+|---|---:|---|
+| methane | -74.87310 | [Chase 1998](https://webbook.nist.gov/cgi/cbook.cgi?ID=C74828&Mask=1) |
+| CO2 | -393.5224 | [Chase 1998](https://webbook.nist.gov/cgi/cbook.cgi?ID=C124389&Mask=1) |
+| water (ideal gas) | -241.8264 | [Chase 1998](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=1) |
+| CO | -110.5271 | [Chase 1998](https://webbook.nist.gov/cgi/cbook.cgi?ID=C630080&Mask=1) |
+| ammonia | -45.89806 | [Chase 1998](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7664417&Mask=1) |
+| H2S | -20.600 | [CODATA 1984](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7783064&Mask=1) |
+| ethane | -83.800 | [Pittam and Pilcher 1972](https://webbook.nist.gov/cgi/cbook.cgi?ID=C74840&Mask=1) |
+| propane | -104.700 | [Pittam and Pilcher 1972](https://webbook.nist.gov/cgi/cbook.cgi?ID=C74986&Mask=1) |
+| hydrogen | 0 | [Element standard state](https://webbook.nist.gov/cgi/cbook.cgi?ID=C1333740&Mask=1) |
+| nitrogen | 0 | [Element standard state](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7727379&Mask=1) |
+| oxygen | 0 | [Element standard state](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7782447&Mask=1) |
+| helium | 0 | [Element standard state](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7440597&Mask=1) |
+| argon | 0 | [Element standard state](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7440371&Mask=1) |
+
+In particular, helium no longer carries the old -242000 J/mol placeholder.
+The extended-database loader copies these reviewed **value/source pairs** from
+`COMP.csv` into the loaded extended table. Other extended entries remain
+unreviewed. The optional column is also preserved when adding missing standard
+components. Older custom databases without the column continue to work in
+legacy mode; they cannot silently opt into formation-based enthalpy.
+
+Blank provenance does not mean that formation enthalpy is physically zero.
+It means the entry has not been reviewed for this gas-phase reference. Supply
+a finite value with `setIdealGasEnthalpyOfFormation(value)` on each phase's
+component before enabling the system option, or add a sourced database entry.
+The setter marks the value as `user-supplied`. Aqueous ionic formation properties
+must not be interpreted as ideal-gas values and remain outside this option.
+Generated TBP estimates and combined pseudo-component estimates retain their
+legacy numeric values but have no reviewed provenance. Supply appropriate
+formation data explicitly before using those fractions in this reference mode.
 
 ### Ionic and Electrolyte Parameters
 
@@ -397,7 +516,7 @@ Add a new row to `COMP.csv` with all required parameters.
 SystemInterface fluid = new SystemSrkEos(298.15, 50.0);
 
 // Add TBP fraction with molar mass and density
-fluid.addTBPfraction("C7_custom", 0.1, 95.0, 0.72);  // name, moles, MW, SG
+fluid.addTBPfraction("C7_custom", 0.1, 95.0 / 1000.0, 0.72);  // name, moles, MW [g/mol], SG
 
 // Or add component and modify properties
 fluid.addComponent("n-heptane", 1.0);
@@ -433,11 +552,221 @@ The COMP table works with several related tables:
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
 | `INTER` | Binary interaction parameters (kij) | comp1, comp2, kij, model |
-| `UNIFACcomp` | UNIFAC group assignments | compname, group, count |
-| `UNIFACGroupParam` | UNIFAC group parameters | groupid, R, Q |
-| `UNIFACInterParam*` | UNIFAC group interaction parameters | group1, group2, aij |
+| `UNIFACcomp` | UNIFAC group assignments (original UNIFAC) | `Name`, `sub1`…`sub138` |
+| `UNIFACcompUMRPRU` | UNIFAC group assignments (UMR-PRU) | `Name`, `sub1`…`sub138` |
+| `UNIFACGroupParam` | UNIFAC subgroup parameters | `Secondary`, `Main`, `VolumeR`, `SurfAreaQ` |
+| `UNIFACInterParam*` | UNIFAC group interaction parameters | MainGroup, n1…n70 |
 | `MBWR32param` | MBWR equation parameters | comp, coefficients |
 | `AdsorptionParameters` | Adsorption isotherm parameters | comp, adsorbent, params |
+
+The `subN` columns are indexed by the **standard UNIFAC secondary subgroup
+number**, so `sub12` is ACCH2. A component row is found by exact match on
+`Name` against the COMP.csv `NAME`, which means a name mismatch between the two
+files silently leaves the component with no groups.
+
+---
+
+## UNIFAC Group Assignment Conventions
+
+There are two group-assignment tables, and they are **not** interchangeable:
+
+| Table | Read by | Maintained? |
+|-------|---------|-------------|
+| `UNIFACcomp.csv` | classic UNIFAC / UNIQUAC (`ComponentGEUnifac`) | No — frozen |
+| `UNIFACcompUMRPRU.csv` | UMR-PRU (`ComponentGEUnifacUMRPRU`) | **Yes** |
+
+UMR-PRU is the model in active use, so `UNIFACcompUMRPRU.csv` is the table that
+is kept complete and correct. Where the two disagree, the UMR-PRU assignment
+follows **NTUA/Voutsas**, which takes precedence over the DDBST original-UNIFAC
+decomposition. `UNIFACcomp.csv` is left as published.
+
+The subgroup number used in both tables is the **`Secondary`** column of
+`UNIFACGroupParam.csv`, not `ID`. `UNIFACGroupParam.csv` also carries a
+`Reference` column identifying where each subgroup comes from:
+
+| Reference | Subgroups | Source |
+|-----------|-----------|--------|
+| `Hansen1991` | 1–64, 70 | Published original UNIFAC (DDBST) |
+| `Holderbaum1991`, `Fisher1995` | 120–128, 134 | PSRK gas groups |
+| `Voutsas2017`, `Voutsas`, `NTUA`, `Mentzelos` | 135–140 | UMR-PRU extensions |
+
+### Aromatics
+
+Main group 4 is **"aromatic carbon-alkane"**. When a ring carbon carries an
+alkane substituent, the ring carbon and its attached carbon form a single
+ACCH3 / ACCH2 / ACCH group:
+
+```
+toluene         5*ACH + 1*ACCH3
+ethylbenzene    5*ACH + 1*ACCH2 + 1*CH3
+pentylbenzene   5*ACH + 1*ACCH2 + 3*CH2 + 1*CH3
+```
+
+The bare `AC` group is reserved for a ring carbon whose substituent is **not**
+an alkane group, for example styrene (`1*CH2=CH + 5*ACH + 1*AC`), a naphthalene
+ring fusion, or one of the dedicated ACOH / ACCl / ACNO2 / ACNH2 groups.
+
+### Rings
+
+The UMR-PRU set adds cyclic clones `cCH2` (136), `cCH` (137) and `cC` (138).
+They carry the **same R and Q** as CH2 / CH / C and sit in their own main groups
+66–68 so that ring-specific interaction parameters can be regressed. Because R
+and Q are identical, the combinatorial term is unaffected; only the residual
+term changes. All cross terms between main group 1 and main groups 66–68 are
+zero in the A, B and C matrices, and the rows are otherwise equal, so the two
+choices differ **only** against water, CO2, CH4, N2, H2S, C2H6, Hg and TEG.
+
+**In `UNIFACcompUMRPRU.csv` every ring carbon uses the cyclic groups.** This
+matches the DDBST *modified UNIFAC (Dortmund)* assignment set, which uses its
+cyclic subgroups 78/79/80 (`CY-CH2`, `CY-CH`, `CY-C`) for the same molecules:
+
+```
+cyclohexane          6*cCH2
+methylcyclohexane    1*CH3 + 5*cCH2 + 1*cCH
+n-butylcyclohexane   1*CH3 + 3*CH2 + 5*cCH2 + 1*cCH
+cyclopropane         3*cCH2
+```
+
+Original UNIFAC has no cyclic groups at all — main groups 66–68 have no rows in
+`UNIFACInterParam.csv` — so `UNIFACcomp.csv` correctly uses the aliphatic groups
+for rings. The same molecule therefore has two different, both correct,
+assignments in the two tables.
+
+Small rings (C3, C4) are outside the range the `Voutsas2017` parameters were
+regressed on, since group contribution cannot represent ring strain. They are
+assigned the cyclic groups anyway, because that is both the structurally correct
+decomposition and what DDBST does.
+
+### Gases
+
+Light gases are carried as a single dedicated group rather than decomposed:
+CH4 (122), O2 (123), Ar (124), N2 (125), H2S (126), H2 (127), CO (128),
+C2H6 (134). Spin isomers share the parent group, so `ortho-hydrogen` and
+`para-hydrogen` both use H2 (127) — UNIFAC has no way to distinguish them.
+
+Argon's main group 59 has an interaction parameter only against water, so
+against hydrocarbons argon reduces to the combinatorial term alone.
+
+### Known gaps: ethylene and alkynes
+
+`ethylene` has **no representable assignment**. Main group 2 (C=C) provides
+only substituted subgroups — CH2=CH, CH=CH, CH2=C, CH=C, C=C — and none stands
+for a bare CH2=CH2. DDBST has no assignment for it either, in any of its
+original, modified or PSRK sets. Representing ethylene needs a dedicated fitted
+group, the way `Voutsas` added C2H6 as group 134; it is not a data-entry fix and
+must not be approximated with a substituted olefin group.
+
+`5-methyl-3-heptyne` has the same problem for a different reason: DDBST assigns
+the alkyne subgroup 66, which has no row in `UNIFACGroupParam.csv` and therefore
+neither R and Q nor interaction parameters.
+
+Both are listed in `HYDROCARBONS_WITHOUT_A_GROUP` in `UnifacDatabaseIntegrityTest`
+so the "every hydrocarbon has an assignment" check does not demand a row that
+cannot be written. They remain usable with the cubic equations of state.
+
+### Missing groups fail loudly
+
+A component with no group assignment gives R = Q = 0, which makes the
+combinatorial term evaluate to NaN rather than raising an error.
+`ComponentGEUnifac` and `ComponentGEUnifacUMRPRU` therefore throw when a
+component ends up with no groups.
+
+Note that a UMR-PRU or PSRK component does **not** need a row in
+`UNIFACcomp.csv`. `PhaseGEUnifac` skips building the classic components when it
+is constructing a subclass, which would otherwise discard them immediately while
+forcing every UMR-PRU component to be duplicated into the classic table.
+
+---
+
+## Vapor-pressure data audit (issue #3822)
+
+The public vapor-pressure API returns `NaN` when a correlation is unavailable,
+inapplicable or produces a nonfinite/nonpositive pressure. Its inverse must close
+the requested pressure before returning a temperature. It does not expose overflow
+as a usable pressure or report a failed inverse iteration as success.
+
+The H2O2 row combined an incompatible coefficient set with DIPPR dispatch and
+produced infinity. Its liquid-vapor correlation is now explicitly unavailable.
+Unverified copied tuples for PG, SF6, R12, R134a, COS, 3-methyl-1-butene and eight
+branched/cyclic hydrocarbons are also unavailable, as are the all-zero sulfuric
+acid, nitric acid and NO2 tuples. The standard `COMP.csv` records the corrections. The existing extended-database
+loader applies the same reviewed standard correlations when `COMP_EXT.csv` is
+selected, preserving unrelated extended data. This does not remove the components or their EOS parameters.
+Species aliases and deliberate seawater/water or MEG variants are not automatically
+rejected merely because their coefficients coincide.
+
+Ammonia and H2S use sourced base-ten Antoine fits, with pressure in bar:
+
+| Component | Source temperature range (K) | A | B | C for T in K |
+|---|---:|---:|---:|---:|
+| Ammonia | 239.6–371.5 | 4.86886 | 1113.928 | -10.409 |
+| H2S | 212.8–349.5 | 4.52887 | 958.587 | -0.539 |
+
+Sources: NIST Chemistry WebBook, Stull (1947),
+[ammonia](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7664417&Mask=4) and
+[hydrogen sulfide](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7783064&Mask=4).
+The database `pow10` convention uses Celsius in the denominator, so its stored
+C adds 273.15 to the tabulated Kelvin C. The table has no per-fit range columns;
+callers must respect these fit ranges. The API's generic positive-T/Tc check is
+not a certification of validity throughout that larger interval.
+`AntoineHazopRegressionTest` verifies these fits, their derivatives and inverses,
+as well as rejection of the original H2O2 overflow from custom/legacy tables.
+
+Ionic critical fields are pseudo-component model parameters, not measured
+liquid-vapor critical points of isolated ions. CSV `TC` uses degrees Celsius,
+whereas the Java getter uses kelvin. Replacing these model inputs with `NaN`
+would invalidate electrolyte calculations; liquid-vapor applicability is instead
+rejected explicitly for ions by the property API.
+
+---
+
+## Data Integrity Gates
+
+Two JUnit tests guard these tables. Both compare the current findings against a
+baseline of accepted, pre-existing issues, and both fail if a baseline entry has
+been fixed, so the baselines can only shrink.
+
+| Test | Guards | Baseline |
+|------|--------|----------|
+| `ComponentDatabaseIntegrityTest` | COMP.csv | `src/test/resources/data/comp_known_issues.tsv` |
+| `UnifacDatabaseIntegrityTest` | UNIFAC tables | `src/test/resources/data/unifac_known_issues.tsv` |
+
+`UnifacDatabaseIntegrityTest` checks subgroup R, Q and main group against the
+DDBST published values, duplicate component names, subgroups with no parameter
+row, components with no groups, molar mass implied by the assigned groups
+against COMP.csv, and the aromatic and ring conventions above.
+
+The baseline is a ratchet, not a requirement to preserve defects. A fixed finding
+must be removed in the same change. Do not add newly introduced defects to make
+a test pass. The screening commands below can help inspect a proposed data change:
+
+```bash
+python devtools/screen_unifac_tables.py --tsv > src/test/resources/data/unifac_known_issues.tsv
+python devtools/screen_component_database.py --tsv > src/test/resources/data/comp_known_issues.tsv
+```
+
+Write these files as UTF-8 without a byte order mark. On Windows use Python
+rather than PowerShell redirection, which adds a BOM.
+
+> **The screening scripts and the tests do not report the same findings.** The
+> checks are implemented twice: in Python in `devtools/`, and again in Java
+> inside the tests. `screen_unifac_tables.py` emits no `missing_unifac_row`
+> finding at all, so regenerating `unifac_known_issues.tsv` from it deletes
+> every such entry and the test then reports them all as new. **Take the delta
+> from the test failure output, which lists exactly what to add and remove, and
+> edit the baseline rather than overwriting it.**
+
+> **CI does not run these tests for a data-only change.** The `Detect Java/XML
+> changes` job skips the whole test matrix when a pull request touches no
+> `.java` or `.xml` file, so a change to `COMP.csv` or the UNIFAC tables alone
+> goes green with these gates never executed. Run them locally:
+>
+> ```bash
+> ./mvnw test -Dtest=ComponentDatabaseIntegrityTest,UnifacDatabaseIntegrityTest
+> ```
+>
+> Note the comma: surefire treats `+` as a literal, and `-Dtest=A+B` matches
+> nothing and fails with "No tests matching pattern".
 
 ---
 
@@ -455,3 +784,6 @@ The COMP table works with several related tables:
 2. Peng, D. Y., & Robinson, D. B. (1976). A new two-constant equation of state. Industrial & Engineering Chemistry Fundamentals, 15(1), 59-64.
 3. Kontogeorgis, G. M., et al. (1999). An equation of state for associating fluids. Industrial & Engineering Chemistry Research, 38(10), 4073-4082.
 4. Gross, J., & Sadowski, G. (2001). Perturbed-chain SAFT: An equation of state based on a perturbation theory for chain molecules. Industrial & Engineering Chemistry Research, 40(4), 1244-1260.
+5. Hansen, H. K., Rasmussen, P., Fredenslund, A., Schiller, M., & Gmehling, J. (1991). Vapor-liquid equilibria by UNIFAC group contribution. 5. Revision and extension. Industrial & Engineering Chemistry Research, 30(10), 2352-2355.
+6. Holderbaum, T., & Gmehling, J. (1991). PSRK: A group contribution equation of state based on UNIFAC. Fluid Phase Equilibria, 70(2-3), 251-265.
+7. DDBST GmbH. Published parameters for original UNIFAC. https://www.ddbst.com/published-parameters-unifac.html

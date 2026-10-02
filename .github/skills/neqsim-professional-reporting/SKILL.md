@@ -1,7 +1,7 @@
 ---
 name: neqsim-professional-reporting
 version: "1.0.0"
-description: "Engineering deliverable quality — results.json schema, figure→discussion→linked_results traceability, evidence matrices, assumptions/gaps registers, citation conventions, KaTeX math formatting, units consistency, executive-summary structure, AACE class declaration. USE WHEN: producing a task report, building a notebook deliverable, or finalizing any engineering output that needs to look like it came from a senior engineer. Consolidates the rules scattered across AGENTS.md and copilot-instructions.md."
+description: "Engineering deliverable quality - the nine analytical-depth moves, results.json schema, figure-discussion-results traceability, evidence matrices, assumptions/gaps registers, citations, KaTeX, units, executive-summary structure, AACE class. USE WHEN: producing a task report, a PEPR/M1/root-cause report, a notebook deliverable, or finalizing any engineering output that must read like a senior engineer's work."
 last_verified: "2026-07-09"
 ---
 
@@ -17,6 +17,124 @@ narrative that matches the way senior engineers communicate.
 - Building Jupyter notebook deliverables (study-grade, not exploratory)
 - Producing FEED-quality memos, technical notes, or design basis documents
 - Any output that will be read by a reviewer, client, or auditor
+
+## Principle 0 — Analytical depth (what makes a report worth reading)
+
+Principles 1–10 are **hygiene**: they stop a report being wrong or unreadable.
+They do not make it *useful*. A hygienic report that restates the originating
+memo, lists contributors without ranking them, and ends in "further study is
+recommended" passes every checklist below and tells the reader nothing they did
+not already know.
+
+The depth of a report is set in the **study**, not in the write-up. Plan for
+these moves while the analysis is still running — most of them cannot be added
+afterwards.
+
+### The nine depth moves
+
+Aim for **≥ 6 of 9** on a Standard report and **all 9** on a Comprehensive or
+root-cause/problem-solving report. Record the score in `results.json`
+(`depth_score`) and name the moves that were not achievable and why.
+
+| # | Move | What it looks like | Anti-pattern it replaces |
+|---|------|--------------------|--------------------------|
+| 1 | **Rank the contributors on one common basis** | A single table of every candidate cause with an improvement factor or utilisation number, computed the same way, so they are directly comparable | An unranked bullet list of "contributing factors" |
+| 2 | **Adjudicate the source document's own conclusions** | A verdict table over each recommendation of the originating memo/PEPR/notification: *Supported / Supported with a correction / Challenged*, each with the number that decides it | Silently agreeing with the source, or silently ignoring it |
+| 3 | **Rule things out, quantitatively** | "Thermal cycling does not explain this, by three orders of magnitude" — a competing explanation eliminated with a number and a stated margin | Leaving every hypothesis nominally alive |
+| 4 | **Find what the source document missed** | A contributor, coupling, or second-order consequence absent from the originating document, established from evidence — and stated as such | Answering only the question as posed |
+| 5 | **Test the conclusion's robustness and say where it flips** | A sensitivity table over the one or two genuinely uncertain modelling parameters, plus the explicit crossover point: "the top two swap around a slope of ~0.7, but the headline does not depend on it" | A single-point answer with an unquantified caveat |
+| 6 | **State the direction of every conservatism** | Each screening value, default, and correlation labelled as an upper or lower bound on the reported quantity, so the reader knows which way the number can move | Undirected "this is approximate" |
+| 7 | **Name the cheapest discriminating test** | The single measurement or inspection that would confirm or refute the diagnosis, why it discriminates, and what each outcome would mean | A generic "further investigation is recommended" |
+| 8 | **Report what does not fit** | The observation that disagrees with the model, reported as a disagreement rather than smoothed over or omitted | Presenting only corroborating evidence |
+| 9 | **Convert qualitative asks into specifications** | "Effective oxygen exclusion" → a purity table with the consequence of each grade; "improve filtration" → a micron rating with the mechanism that sets it | Repeating the source's qualitative wording back |
+
+#### Write the moves into `results.json` — the report renders them
+
+The depth work has to reach the reader. `generate_report.py` emits an
+**Analytical Depth** section (Word and HTML) from these keys, turning a list of
+dicts into a numbered table and anything else into bullets:
+
+| `results.json` key | Move |
+|--------------------|------|
+| `contributor_ranking` | 1 — contributors on one basis |
+| `source_recommendation_assessment` | 2 — verdict per source recommendation |
+| `ruled_out` | 3 — quantitative rule-outs |
+| `robustness` | 5 — sensitivity and the crossover |
+| `conservatism` | 6 — direction of each conservatism |
+| `discriminating_test` | 7 — the cheapest discriminating test |
+| `evidence_against` | 8 — evidence that does not fit |
+
+```json
+"contributor_ranking": [
+  {"contributor": "Shell-side fouling", "share_pct": 62, "basis": "duty deficit vs design"},
+  {"contributor": "Seawater inlet temperature", "share_pct": 21, "basis": "duty deficit vs design"}
+],
+"ruled_out": [
+  {"hypothesis": "Tube leak", "test": "Chloride in condensate", "margin": "5 mg/l vs 250 mg/l threshold"}
+],
+"discriminating_test": {"test": "Single-point wall-thickness UT at the first bend",
+                        "decides": "Erosion vs fouling", "cost": "1 shift, no shutdown"},
+"depth_score": "7/9"
+```
+
+`devtools/validate_task_results.py` warns when a study that has figure
+discussion, uncertainty, or a risk register reports fewer than two of them —
+that combination means the task was past quick-answer scale and the depth work
+should exist. If the moves were not achievable, say which and why rather than
+leaving the keys out.
+
+### Two further depth habits
+
+- **Look for the natural experiment in the data.** Near-identical units with
+  different duty, a repaired section that failed again, a period with a barrier
+  out of service — these discriminate between hypotheses far more cheaply than
+  any model. Actively search the fleet/historian/maintenance record for one.
+- **Bound rather than assert.** When a value cannot be measured, compute what it
+  would have to be for the conclusion to change ("the screening factor of 4.0
+  would require a shear ratio of 16; this geometry produces 2.74"). A bounded
+  unknown is a result; an asserted unknown is a gap.
+
+### Numerical results earn their own subsection
+
+Any non-trivial computed result (CFD, FEM, transient, Monte Carlo, optimiser)
+gets: **validation against an analytical or independent value first**, then a
+**convergence/mesh/sample-count check**, then the result, then an explicit
+statement of **what the computation does and does not decide**. A quantity that
+still moves with refinement is an artefact and must be reported as one — report
+the converged averaged measures, not the unconverged point maximum.
+
+### Report skeleton for a problem-solving / root-cause / PEPR report
+
+```
+Executive summary          ranking table + the conclusion that inverts or
+                           confirms the source document + N further findings
+                           (count them; keep the count in sync)
+0. Design/evidence basis   what was retrieved, with document ids and revisions,
+                           and the two or three basis facts that change the reading
+1..n Findings              one section per finding, each: observation (numbers) →
+                           mechanism (physics) → implication (for the decision) →
+                           recommendation (specific action)
+n+1 Robustness             sensitivity table + where the conclusion flips
+n+2 Ruled out              each eliminated hypothesis with its quantitative margin
+n+3 Assessment of the      verdict table over the source document's own
+    source's recommendations recommendations
+n+4 What remains open      per-finding, not one lumped register; each with the
+                           test that would close it and its owner
+```
+
+Every section that reaches a conclusion ends with **"what remains open"** for
+that conclusion specifically. One consolidated gap register at the end of a
+report is where gaps go to be ignored.
+
+### Depth failure modes to check for before sending
+
+| Symptom | What it means |
+|---------|---------------|
+| The report's recommendations are the source document's recommendations | Moves 1–4 were not attempted |
+| Every hypothesis is still "possible" | Move 3 was not attempted |
+| The only number in the executive summary is a restatement of the input | The study produced description, not analysis |
+| "Further study is recommended" with no named test | Move 7 was not attempted |
+| No sentence in the report contradicts anything | Moves 2, 4, and 8 were not attempted — verify this is genuinely the case, not avoidance |
 
 ## Principle 1 — Traceability Chain (MANDATORY)
 
@@ -178,6 +296,20 @@ array (or an object wrapping `benchmarks`/`cases`). Each entry must carry:
 | `reference` / `source` / `benchmark` / `reference_value` | the independent reference |
 | `delta_pct` / `deviation_pct` / `status` / `neqsim_value` | the comparison result |
 | `status` (optional) | one of `PASS`, `FAIL`, `WARN`, `INFO` (any other value is rejected) |
+| `disposition` (optional) | why a `FAIL` stands, e.g. two published input sources disagree and nothing was tuned |
+
+A `FAIL` above 20% deviation is an ERROR ("model may need retuning") unless it carries a
+written `disposition`; then it is reported as a documented finding. Use it only when the
+deviation is not a model misfit: a conflict between two input sources, or a cross-check of
+an alternative model that the deliverable does not use. Still name the failure in
+`conclusions` (the gate looks for "fail", "discrepancy", "deviation").
+
+When the compared value comes from another simulator (OPM Flow, OLGA) write it as
+`calculated`, not `neqsim_value`: the column is then headed "Calculated value" rather than
+"NeqSim value". `benchmark_validation.value_label` overrides the heading explicitly.
+
+Figures are numbered in the order of `figure_captions` when the PNG names carry no numeric
+prefix (`fig01_`, `01_`); otherwise alphabetically. Write the captions in narrative order.
 
 Both `TaskResultValidator` (Java) and `devtools/validate_task_results.py` (the CI
 gate) now check this structure, so a malformed benchmark block fails the gate
@@ -247,19 +379,39 @@ workflow gaps were found.
   },
   "results": { "...": "..." },
   "figures": [ { "id": "fig_01", "path": "...", "caption": "...", "discussed_in": "...", "linked_results": [] } ],
-  "tables": [ { "id": "tbl_01", "path": "...", "caption": "..." } ],
+  "tables": [ { "title": "caption text", "headers": ["Year", "Utilisation [%]"], "rows": [[2026, 117]] } ],
+  "reproducibility": {
+    "summary": "where the scripts live and which README is the user guide",
+    "environment": ["interpreter", "JDK", "NeqSim version or checkout, incl. unreleased changes the run depends on"],
+    "steps": ["script 1 - what it writes", "script 2 - ...", "generate_report.py"],
+    "checks": ["values a rerun must reproduce, e.g. 2026 bottleneck inlet scrubber at 117 %"],
+    "what_if": ["where to edit to change an input, and which step to rerun from"]
+  },
   "uncertainty": { "method": "Monte Carlo n=10000", "P10": ..., "P50": ..., "P90": ... },
   "risks": [ { "id": "R1", "description": "...", "P": 3, "C": 4, "score": 12, "mitigation": "..." } ],
   "standards_applied": ["API 521-2020", "NORSOK Z-013"],
   "benchmarks": [ { "what": "PSV area", "reference": "API 520 Ex 5", "delta_pct": 1.2 } ],
   "evidence_matrix": [ { "document": "...", "value": "...", "used_for": "..." } ],
   "assumptions_gaps": [ { "gap": "...", "default_used": "...", "impact": "...", "action": "..." } ],
+  "contributor_ranking": [ { "contributor": "...", "lever": "...", "improvement_factor": 20.0, "basis": "..." } ],
+  "ruled_out": [ { "hypothesis": "...", "margin": "3 orders of magnitude", "basis": "...", "residual_caveat": "..." } ],
+  "source_recommendation_assessment": [ { "recommendation": "...", "verdict": "SUPPORTED|SUPPORTED_WITH_CORRECTION|CHALLENGED", "basis": "..." } ],
+  "robustness": { "parameter": "...", "range": "...", "conclusion_stable": true, "crossover": "..." },
+  "conservatism": [ { "value": "...", "direction": "upper_bound|lower_bound", "effect_on_result": "..." } ],
+  "discriminating_test": { "test": "...", "why_it_discriminates": "...", "outcome_if_positive": "...", "outcome_if_negative": "...", "cost": "..." },
+  "depth_score": { "achieved": 8, "of": 9, "missing": [ { "move": 5, "why": "..." } ] },
   "limitations": ["..."],
   "next_actions": ["..."]
 }
 ```
 
 ## Common Mistakes
+
+A model-based deliverable is not finished until a reader can rerun it. Emit
+`reproducibility` (rendered as the report appendix *Reproducing the Results*) and
+keep a task-root `README.md` with the same prerequisites, the exact command
+sequence, the check values a rerun must hit, and where to edit to change a case.
+Name any unreleased NeqSim change the results depend on.
 
 | Mistake                                          | Fix                                                                 |
 | ------------------------------------------------ | ------------------------------------------------------------------- |
@@ -272,7 +424,93 @@ workflow gaps were found.
 | No benchmark validation                          | Run hand check or compare to literature; report deviation %         |
 | Discussion that doesn't reference its figures    | Use `[fig_03]` cross-references in prose                            |
 
+## Word output — use the configured template
+
+The Word report is built from the template the user configured, so the
+deliverable carries their organisation's styles, fonts, headers and footers.
+Resolution: `generate_report.py --template PATH` > `NEQSIM_REPORT_TEMPLATE` >
+the saved `report_template` in `~/.neqsim/task_defaults.json`
+(`neqsim --set-report-template "PATH"`) > built-in styling.
+
+- Do not pass `--no-template` or restyle the document away from the template
+  unless the user asks for it.
+- If the generator exits with a missing/invalid-template error, report that —
+  do not ship an unbranded report instead.
+- The scientific paper (`--paper`) keeps journal formatting and ignores the template.
+- An older task folder carries its own `generate_report.py`; prefer
+  `neqsim report <task folder>`, which always runs the current canonical
+  generator, over the stale vendored copy.
+
+### Page measure and captions (handled by the generator — do not fight it)
+
+A corporate `.dotx` is often **A4 landscape**, because it was built for forms.
+Left alone, that sets a 30-page report on a 9.5 in measure — about 140
+characters per line, twice the readable optimum — while every figure and table
+sized for a portrait page leaves a third of the width empty. The generator
+therefore normalises the body to **portrait** and caps the measure at 6.7 in,
+keeping the template's own styles, header, and footer. Override per study with
+`report.orientation: portrait | landscape | template` in `study_config.yaml`, or
+`--orientation VALUE`; `template` keeps whatever the template declares.
+
+The rest follows from the measure and needs nothing from the author:
+
+- Figures and tables are laid out across the full measure, and a tall figure is
+  scaled down so it still fits the printable height with its caption.
+- Figures, tables, and equations get numbered captions in Word's `Caption`
+  style, using `SEQ` fields, so the numbering survives an insertion and Word can
+  build the **List of Figures** and **List of Tables** placed after the contents.
+- A `tables[]` entry's `title` becomes a table caption, not a Heading 2 — a data
+  table does not belong in the table of contents.
+- Table header rows repeat across page breaks, rows are not split, numeric cells
+  are right-aligned, and a table with 7+ columns steps its type size down.
+- Headings carry keep-with-next, so none is stranded at the foot of a page.
+- Numbers are grouped with a non-breaking space per ISO 80000-1 and exact counts
+  are printed in full: `370 523`, never `3.705e+05`.
+
+## Report file names are the report title
+
+Report files are named after the study title, so a deliverable is identifiable
+outside its task folder: "Hydrate margin for the export line" produces
+`step3_report/Hydrate_margin_for_the_export_line.docx` and `.html` (paper:
+`..._Paper.docx`). Set `study.title` in `study_config.yaml`, or pass `--title`,
+before generating. Files written under an earlier title are deleted on
+regeneration — a superseded report must never sit beside the current one.
+
+## Title and task statement — the first thing the reader sees
+
+The report title is the **study** title, and the task is stated before any
+analysis. Both are resolved at run time, so nothing has to be edited in the
+generator:
+
+- **Title**: `--title` > `NEQSIM_REPORT_TITLE` > `study_config.yaml`
+  `study.title` > first `#` heading of `task_spec.md` > task folder name.
+  Set `study.title` (and optionally `study.author`, `study.classification`) —
+  a study left at `"[Title]"` degrades to a folder-name title.
+- **Task statement**: `results.json` `task_statement` / `objective` >
+  the `## Objective` section of `task_spec.md` > `"Study scope: <title>."`.
+  Write it as 2-4 sentences saying what was asked and what must be delivered;
+  it is rendered as a "Task" callout at the top of the report body, so a reader
+  who opens the document cold knows the question before the answer.
+- Scaffold prose left inside `[square brackets]` is treated as a placeholder and
+  never quoted — fill it or delete it.
+- Study-depth badges (task type, scale, mode, AACE class, FEL stage) come from
+  `study_config.yaml` `study.*`; values left at `auto` are simply not shown.
+
 ## Validation Checklist (RUN BEFORE FINALIZING)
+
+**Depth (Principle 0) — check these first; they cannot be fixed by editing prose:**
+
+- [ ] `depth_score` recorded, ≥ 6/9 (Standard) or 9/9 (Comprehensive / root-cause)
+- [ ] Contributors ranked on one common basis, not merely listed
+- [ ] Each recommendation of the originating document given an explicit verdict
+- [ ] At least one competing hypothesis ruled out with a stated quantitative margin
+- [ ] Robustness tested, with the crossover point named
+- [ ] Every screening default labelled upper or lower bound
+- [ ] One named discriminating test, not "further study recommended"
+- [ ] Any evidence that does not fit the conclusion is reported
+- [ ] Every conclusion carries its own "what remains open", not one lumped register
+
+**Hygiene:**
 
 - [ ] Executive summary present, 1 page max
 - [ ] Every figure referenced in text and has caption + units

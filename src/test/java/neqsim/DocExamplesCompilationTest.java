@@ -77,6 +77,9 @@ import neqsim.process.util.optimizer.DebottleneckAnalyzer;
 import neqsim.process.util.optimizer.MonteCarloSimulator;
 import neqsim.process.util.optimizer.ProcessModelSimulationEvaluator;
 import neqsim.process.util.optimizer.SensitivityAnalysis;
+import neqsim.process.util.reconciliation.DataReconciliationEngine;
+import neqsim.process.util.reconciliation.ReconciliationResult;
+import neqsim.process.util.reconciliation.ReconciliationVariable;
 import neqsim.process.util.report.HeatMaterialBalance;
 import neqsim.process.util.report.ProcessValidator;
 import neqsim.pvtsimulation.flowassurance.BariteCelestiteSolidSolution;
@@ -86,6 +89,8 @@ import neqsim.pvtsimulation.flowassurance.ScaleMassCalculator;
 import neqsim.pvtsimulation.flowassurance.ScalePredictionCalculator;
 import neqsim.pvtsimulation.flowassurance.WaterCompatibilityScreener;
 import neqsim.thermo.phase.PhaseType;
+import neqsim.thermo.phase.PitzerParameterDatasets;
+import neqsim.thermo.phase.PitzerParameterQualification;
 import neqsim.thermo.system.FluidBuilder;
 import neqsim.thermo.system.SystemDesmukhMather;
 import neqsim.thermo.system.SystemElectrolyteCPAstatoil;
@@ -122,6 +127,27 @@ public class DocExamplesCompilationTest {
     assertTrue(hasAqueousPhase);
     assertTrue(fluid.hasPhaseType(PhaseType.GAS));
     assertTrue(fluid.hasPhaseType(PhaseType.OIL));
+  }
+
+  /** Pitzer property-specific qualification example from docs/thermo/fluid_creation_guide.md. */
+  @Test
+  public void testPitzerObservableQualificationFluidCreationGuide() {
+    SystemPitzer qualifiedBrine = new SystemPitzer(298.15, 1.01325);
+    qualifiedBrine.addComponent("water", 55.508);
+    qualifiedBrine.addComponent("Na+", 0.5);
+    qualifiedBrine.addComponent("K+", 0.5);
+    qualifiedBrine.addComponent("Cl-", 1.0);
+    qualifiedBrine.init(0);
+    qualifiedBrine.applyPhreeqcSodiumPotassiumChlorideParameters();
+
+    PitzerParameterQualification evidence = qualifiedBrine.getPitzerParameterQualification();
+    qualifiedBrine
+        .requirePitzerDatasetValidationFor(PitzerParameterQualification.ValidationTarget.AQUEOUS_ACTIVITY_COEFFICIENTS);
+    boolean insideRange = PitzerParameterDatasets
+        .isWithinSodiumPotassiumChlorideValidationRange(qualifiedBrine.getTemperature(), 0.5, 0.5, 1.0);
+
+    assertTrue(evidence.isValidatedFor(PitzerParameterQualification.ValidationTarget.AQUEOUS_ACTIVITY_COEFFICIENTS));
+    assertTrue(insideRange);
   }
 
   /** Generic SystemEosGE opt-in example from docs/thermo/fluid_creation_guide.md. */
@@ -201,10 +227,10 @@ public class DocExamplesCompilationTest {
     transientNetwork.addPipe("asgardBranch", "asgard", "junction", 2000.0, 0.4, 12, asgardGas);
     transientNetwork.addPipe("kristinBranch", "kristin", "junction", 2000.0, 0.4, 12, kristinGas);
     transientNetwork.addPipe("export", "junction", "karsto", 4000.0, 0.4, 12, mixedGas);
-    transientNetwork.setSourceSchedule("asgard", new double[] { 0.0 }, new SystemInterface[] { asgardGas },
-        new double[] { 20.0 });
-    transientNetwork.setSourceSchedule("kristin", new double[] { 0.0, 600.0, 1800.0 },
-        new SystemInterface[] { kristinGas, kristinHighCo2, kristinGas }, new double[] { 20.0, 18.0, 20.0 });
+    transientNetwork.setSourceSchedule("asgard", new double[] {0.0}, new SystemInterface[] {asgardGas},
+        new double[] {20.0});
+    transientNetwork.setSourceSchedule("kristin", new double[] {0.0, 600.0, 1800.0},
+        new SystemInterface[] {kristinGas, kristinHighCo2, kristinGas}, new double[] {20.0, 18.0, 20.0});
 
     transientNetwork.run(5400.0, 60.0);
     TransientCompositionalPipeNetworkHistory species = transientNetwork.getSpeciesHistory();
@@ -279,7 +305,7 @@ public class DocExamplesCompilationTest {
     }, 15000.0);
     evaluator.addEquipmentCapacityConstraints();
 
-    ProcessModelSimulationEvaluator.EvaluationResult result = evaluator.evaluate(new double[] { 12000.0 });
+    ProcessModelSimulationEvaluator.EvaluationResult result = evaluator.evaluate(new double[] {12000.0});
     ProcessModelSimulationEvaluator.BottleneckStatus bottleneck = result.getActiveBottleneck();
     List<ProcessModelSimulationEvaluator.BottleneckStatus> ranked = result.getRankedCapacityConstraints();
 
@@ -778,8 +804,7 @@ public class DocExamplesCompilationTest {
     pitzer.addComponent("CO2", 0.05);
     pitzer.addComponent("n-heptane", 2.0);
     pitzer.addComponent("water", 55.5);
-    pitzer.addComponent("Ca++", 1.0e-4);
-    pitzer.addComponent("Na+", 1.0e-3);
+    pitzer.addComponent("Ca++", 6.0e-4);
     pitzer.addComponent("Cl-", 2.0e-4);
     pitzer.addComponent("HCO3-", 1.0e-3);
     pitzer.chemicalReactionInit();
@@ -798,7 +823,7 @@ public class DocExamplesCompilationTest {
     WaterCompatibilityScreener screener = new WaterCompatibilityScreener();
     screener.setFormationWater(400, 200, 50, 2, 150, 10, 50000, 90, 200, 3.0, 6.2);
     screener.setInjectionWater(400, 0, 5, 0, 140, 2700, 35000, 15, 200, 0.3, 8.1);
-    screener.setMixingRatios(new double[] { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 });
+    screener.setMixingRatios(new double[] {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100});
     screener.calculate();
     assertNotNull(screener.getWorstCaseScale());
     assertTrue(Double.isFinite(screener.getWorstCaseRatio()));
@@ -905,7 +930,7 @@ public class DocExamplesCompilationTest {
 
     DistillationColumn column = new DistillationColumn("Doc MESH Deethanizer", 5, true, false);
     column.addFeedStream(runFeed, 5);
-    column.getReboiler().setOutTemperature(105.0 + 273.15);
+    column.getReboiler().setOutletTemperature(105.0 + 273.15);
     column.setTopPressure(30.0);
     column.setBottomPressure(32.0);
     column.setMaxNumberOfIterations(150);
@@ -1231,7 +1256,7 @@ public class DocExamplesCompilationTest {
     feedStream.setFlowRate(1000.0, "kg/hr");
 
     FiredHeater heater = new FiredHeater("Crude Heater", feedStream);
-    heater.setOutTemperature(273.15 + 350.0);
+    heater.setOutletTemperature(273.15 + 350.0);
     heater.setThermalEfficiency(0.85);
     heater.setFuelLHV(48.0e6);
     heater.setFuelCO2Factor(2.75);
@@ -1497,7 +1522,7 @@ public class DocExamplesCompilationTest {
     zone1.shellCp = 4180.0;
     zone1.shellConductivity = 0.60;
 
-    ThermalDesignCalculator.ZoneDefinition[] zones = new ThermalDesignCalculator.ZoneDefinition[] { zone1 };
+    ThermalDesignCalculator.ZoneDefinition[] zones = new ThermalDesignCalculator.ZoneDefinition[] {zone1};
 
     ThermalDesignCalculator.ZoneResult[] results = calc.calculateZones(zones);
     assertNotNull(results, "Zone results should not be null");
@@ -2193,6 +2218,32 @@ public class DocExamplesCompilationTest {
 
     assertTrue(massFlow > 0.0);
     assertEquals(0.4, wedgeRatio, 1.0e-9);
+  }
+
+  /**
+   * Data reconciliation example from docs/calibration/data_reconciliation_parameter_estimation.md.
+   */
+  @Test
+  public void testDataReconciliationDocumentationExample() {
+    DataReconciliationEngine recon = new DataReconciliationEngine();
+    recon.addVariable(new ReconciliationVariable("flow_in1", 5000.0, 100.0).setUnit("kg/hr"));
+    recon.addVariable(new ReconciliationVariable("flow_in2", 5100.0, 100.0).setUnit("kg/hr"));
+    recon.addVariable(new ReconciliationVariable("flow_out", 10200.0, 150.0).setUnit("kg/hr"));
+    recon.addConstraint(new double[] {1.0, 1.0, -1.0});
+
+    ReconciliationResult result = recon.reconcile();
+
+    assertTrue(result.isConverged());
+    assertTrue(result.getChiSquareStatistic() >= 0.0);
+    assertEquals(0.0, result.getConstraintResidualsAfter()[0], 1.0e-8);
+    assertEquals("flow_in1", recon.getVariable("flow_in1").getName());
+    assertEquals(3, recon.getVariables().size());
+    for (ReconciliationVariable variable : recon.getVariables()) {
+      assertTrue(Double.isFinite(variable.getReconciledValue()));
+    }
+
+    ReconciliationResult grossErrorResult = recon.reconcileWithGrossErrorElimination(1);
+    assertTrue(grossErrorResult.isConverged());
   }
 
 }

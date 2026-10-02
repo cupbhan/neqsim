@@ -1,14 +1,21 @@
-name: Create release (draft)
+name: Create release after merge
 permissions:
   contents: read
 
 on:
   workflow_dispatch:
+    inputs:
+      update_published:
+        description: Rebuild and update an existing published release from the selected tag
+        required: true
+        default: false
+        type: boolean
   push:
+    # Release branches are intentionally excluded. A version PR must be merged
+    # before an automatic release can be created or published.
     branches:
       - master
       - main
-      - release/*
     paths:
       - 'pom*.xml'
 
@@ -16,6 +23,9 @@ jobs:
   get_versions:
     if: github.repository == 'equinor/neqsim'
     name: Get version numbers from pom-files
+    # Automatic runs are restricted to the default branch by the push trigger.
+    # Manual runs may select an existing release tag for an explicit repair.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
 
     outputs:
@@ -50,7 +60,7 @@ jobs:
       - name: Check out neqsim java project
         uses: actions/checkout@v7
       - name: Set up Java 21 environment
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -75,7 +85,7 @@ jobs:
       - name: Check out neqsim java project
         uses: actions/checkout@v7
       - name: Set up Java 21 environment
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -90,7 +100,7 @@ jobs:
           path: staging
 
   compile_mcp_server:
-    name: Build MCP Server (Java 17)
+    name: Build MCP Server (Java 21)
     needs: get_versions
 
     if: ${{ needs.get_versions.outputs.version_8 == needs.get_versions.outputs.version }}
@@ -100,7 +110,7 @@ jobs:
       - name: Check out neqsim java project
         uses: actions/checkout@v7
       - name: Set up Java 21 environment
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -129,8 +139,10 @@ jobs:
 
   create_release:
     name: Create release v${{ needs.get_versions.outputs.version_8 }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
     needs: [get_versions, compile_java, compile_java_8, compile_mcp_server]
 
@@ -148,14 +160,30 @@ jobs:
         with:
           name: jarfiles-mcp-server
 
+      - name: Determine release publication mode
+        id: publication
+        env:
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          UPDATE_PUBLISHED: ${{ inputs.update_published }}
+        run: |
+          if [[ "$RELEASE_EVENT" == "push" && ( "$RELEASE_REF" == "refs/heads/master" || "$RELEASE_REF" == "refs/heads/main" ) && "$RELEASE_COMMIT_MESSAGE" == *"[publish-release]"* ]] || [[ "$RELEASE_EVENT" == "workflow_dispatch" && "$UPDATE_PUBLISHED" == "true" ]]; then
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "draft=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create release v${{ needs.get_versions.outputs.version_8 }}
         uses: ncipollo/release-action@v1.21.0
         with:
           name: NeqSim ${{ needs.get_versions.outputs.version_8 }}
           tag: v${{ needs.get_versions.outputs.version_8 }}
-          draft: true
+          commit: ${{ github.sha }}
+          draft: ${{ steps.publication.outputs.draft }}
           generateReleaseNotes: true
-          skipIfReleaseExists: true
+          allowUpdates: true
+          updateOnlyUnreleased: ${{ steps.publication.outputs.draft == 'true' }}
           artifacts: "*.jar,*.sha256"
           artifactContentType: application/java-archive
           body: |
@@ -224,3 +252,25 @@ jobs:
             ## Release notes
 
             GitHub-generated release notes are included with this release and list the commits and pull requests since the previous version.
+
+      - name: Trigger downstream release workflows
+        if: steps.publication.outputs.draft == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.get_versions.outputs.version }}
+        run: |
+          # workflow_dispatch is allowed to start workflows created with GITHUB_TOKEN.
+          gh workflow run publish_to_maven_central.yml --repo "$GITHUB_REPOSITORY" --ref "v${RELEASE_VERSION}"
+          gh workflow run mcp_server_release.yml --repo "$GITHUB_REPOSITORY" --ref "v${RELEASE_VERSION}"
+
+      - name: Notify the plugin marketplace (offline bundle rebuild)
+        # Cross-repo dispatch needs a PAT with `repo` scope on equinor/neqsim-copilot-plugin
+        # stored as NEQSIM_PLUGIN_DISPATCH_TOKEN. Without it the plugin repo's daily check
+        # still picks the release up within a day.
+        if: steps.publication.outputs.draft == 'false' && env.TOKEN != ''
+        env:
+          TOKEN: ${{ secrets.NEQSIM_PLUGIN_DISPATCH_TOKEN }}
+          RELEASE_VERSION: ${{ needs.get_versions.outputs.version }}
+        run: |
+          GH_TOKEN="$TOKEN" gh api repos/equinor/neqsim-copilot-plugin/dispatches \
+            -f event_type=neqsim-release -F "client_payload[version]=${RELEASE_VERSION}"

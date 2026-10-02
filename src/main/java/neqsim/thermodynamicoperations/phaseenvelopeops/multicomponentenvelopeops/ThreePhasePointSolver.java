@@ -405,7 +405,7 @@ public final class ThreePhasePointSolver {
     upper[2 * componentCount] = Math.log(Math.min(MAXIMUM_TEMPERATURE_K, 1.2 * temperatureK));
     lower[2 * componentCount + 1] = Math.log(Math.max(MINIMUM_PRESSURE_BARA, 0.5 * pressureBara));
     upper[2 * componentCount + 1] = Math.log(Math.min(MAXIMUM_PRESSURE_BARA, 1.5 * pressureBara));
-    return new double[][] { lower, upper };
+    return new double[][] {lower, upper};
   }
 
   private static double clampToBounds(double value, double lower, double upper) {

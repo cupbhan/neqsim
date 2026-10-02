@@ -47,8 +47,8 @@ import neqsim.thermodynamicoperations.ThermodynamicOperations;
  * OnePhasePipeLine pipe = new OnePhasePipeLine("GasPipe", inletStream);
  * pipe.setNumberOfLegs(1);
  * pipe.setNumberOfNodesInLeg(100);
- * pipe.setPipeDiameters(new double[] { 0.3, 0.3 });
- * pipe.setLegPositions(new double[] { 0.0, 5000.0 });
+ * pipe.setPipeDiameters(new double[] {0.3, 0.3});
+ * pipe.setLegPositions(new double[] {0.0, 5000.0});
  *
  * pipe.setConservativeCompositionalTracking(true);
  * pipe.setStoreSpeciesConservationHistory(true);
@@ -59,8 +59,8 @@ import neqsim.thermodynamicoperations.ThermodynamicOperations;
  *
  * // Run a three-interval event with changing inlet composition
  * UUID id = UUID.randomUUID();
- * pipe.runConservativeTransient(new double[] { 0.0, 30.0, 60.0, 90.0 },
- *     new SystemInterface[] { pulseGas, pulseGas, baselineGas }, 1, id);
+ * pipe.runConservativeTransient(new double[] {0.0, 30.0, 60.0, 90.0},
+ *     new SystemInterface[] {pulseGas, pulseGas, baselineGas}, 1, id);
  * String pythonReadyHistory = pipe.getSpeciesConservationHistory().toJson();
  * }</pre>
  *
@@ -294,6 +294,43 @@ public class OnePhasePipeLine extends Pipeline {
   }
 
   /**
+   * Get the authoritative final total inventory for every physical finite-volume cell.
+   *
+   * @return defensive copy of total cell inventories in kg, in inlet-to-outlet order
+   * @throws IllegalStateException if conservative species transport has not run
+   */
+  public double[] getConservativeCellInventoryKg() {
+    double[] inventory = getSpeciesConservationReport().getFinalCellInventoryKg();
+    if (inventory.length == 0) {
+      throw new IllegalStateException("Conservative species transport has not produced a cell inventory profile.");
+    }
+    return inventory;
+  }
+
+  /**
+   * Get the authoritative final inventory profile for one component.
+   *
+   * @param componentName component name, matched case-insensitively
+   * @return defensive copy of component inventory in kg by physical finite-volume cell
+   * @throws IllegalStateException if conservative species transport has not run
+   * @throws IllegalArgumentException if the component is absent from the report
+   */
+  public double[] getConservativeComponentInventoryProfileKg(String componentName) {
+    OnePhaseSpeciesConservationReport report = getSpeciesConservationReport();
+    String[] componentNames = report.getComponentNames();
+    if (componentNames.length == 0) {
+      throw new IllegalStateException("Conservative species transport has not produced a component profile.");
+    }
+    double[][] profiles = report.getFinalComponentCellInventoryKg();
+    for (int component = 0; component < componentNames.length; component++) {
+      if (componentNames[component].equalsIgnoreCase(componentName)) {
+        return profiles[component];
+      }
+    }
+    throw new IllegalArgumentException("Component is absent from conservative species report: " + componentName);
+  }
+
+  /**
    * Get the authoritative conservative outlet-cell mass fraction for one component.
    *
    * @param componentName component name, matched case-insensitively
@@ -465,7 +502,7 @@ public class OnePhasePipeLine extends Pipeline {
             "Conservative internal timestep must be finite and positive: " + internalTimeStep);
       }
       int steps = (int) Math.ceil(dt / internalTimeStep);
-      runConservativeTransient(new double[] { 0.0, dt }, new SystemInterface[] { inStream.getThermoSystem().clone() },
+      runConservativeTransient(new double[] {0.0, dt}, new SystemInterface[] {inStream.getThermoSystem().clone()},
           steps, id);
       return;
     }
@@ -488,8 +525,8 @@ public class OnePhasePipeLine extends Pipeline {
       double stepDt = Math.min(internalTimeStep, timeRemaining);
 
       // Set up time series for single step
-      double[] times = { simulationTime, simulationTime + stepDt };
-      SystemInterface[] systems = { inStream.getThermoSystem().clone(), inStream.getThermoSystem().clone() };
+      double[] times = {simulationTime, simulationTime + stepDt};
+      SystemInterface[] systems = {inStream.getThermoSystem().clone(), inStream.getThermoSystem().clone()};
 
       pipe.getTimeSeries().setTimes(times);
       pipe.getTimeSeries().setInletThermoSystems(systems);

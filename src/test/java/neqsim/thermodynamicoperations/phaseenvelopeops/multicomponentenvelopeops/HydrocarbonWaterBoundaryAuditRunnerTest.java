@@ -19,10 +19,10 @@ class HydrocarbonWaterBoundaryAuditRunnerTest extends NeqSimTest {
   @Tag("slow")
   void fluidOnePseudoArcCheckpointRestartAddsStrictPointAndReturnsTwoReusableStates() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidOne(false);
-    double[] temperaturesK = new double[] { 180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0 };
+    double[] temperaturesK = new double[] {180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0};
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result discovery = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
         .setCorrectionControls(32, 80, 1.0e-5, 1.0e-8).setStableScanControls(32, 0.25)
-        .discoverFromStableRegionTransitions(temperaturesK, new double[] { 10.0, 20.0 }).getDiscovery();
+        .discoverFromStableRegionTransitions(temperaturesK, new double[] {10.0, 20.0}).getDiscovery();
     HydrocarbonWaterBoundaryAnchorDiscoverer.Branch branch = discovery.getBranches().get(0);
 
     JsonObject diagnostic = HydrocarbonWaterBoundaryAuditRunner.runPseudoArcRestartDiagnostic(fluid,
@@ -42,13 +42,13 @@ class HydrocarbonWaterBoundaryAuditRunnerTest extends NeqSimTest {
     assertTrue(topology.get("independentBranchSupport").getAsBoolean(), topology.toString());
 
     JsonObject seeds = HydrocarbonWaterBoundaryAuditRunner.runStrictBranchSeedDiagnostic(fluid, temperaturesK,
-        new double[] { 10.0, 20.0 }, BoundaryFamily.GW_TO_GOW);
+        new double[] {10.0, 20.0}, BoundaryFamily.GW_TO_GOW);
     assertEquals(1, seeds.get("branchCount").getAsInt(), seeds.toString());
     assertEquals(2, seeds.getAsJsonArray("branches").get(0).getAsJsonObject().getAsJsonArray("restartStates").size(),
         seeds.toString());
 
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result denseDiscovery = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
-        .discoverFromStableRegionTransitions(temperaturesK, new double[] { 10.0, 10.1, 10.2 }).getDiscovery();
+        .discoverFromStableRegionTransitions(temperaturesK, new double[] {10.0, 10.1, 10.2}).getDiscovery();
     HydrocarbonWaterBoundaryAnchorDiscoverer.Branch denseBranch = denseDiscovery.getBranches().get(0);
     assertTrue(denseBranch.getPoints().size() >= 3, denseDiscovery.toString());
     JsonObject switched = HydrocarbonWaterBoundaryAuditRunner.runBranchSwitchDiagnostic(fluid,
@@ -64,10 +64,10 @@ class HydrocarbonWaterBoundaryAuditRunnerTest extends NeqSimTest {
   @Tag("slow")
   void fluidOneHybridDiagnosticSelectsRegularPressureForDenseAnchorsInBothDirections() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidOne(false);
-    double[] temperaturesK = new double[] { 180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0 };
+    double[] temperaturesK = new double[] {180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0};
 
     JsonObject diagnostic = HydrocarbonWaterBoundaryAuditRunner.runHybridBranchDiagnostic(fluid, temperaturesK,
-        new double[] { 10.0, 10.5, 11.0 }, BoundaryFamily.GW_TO_GOW, 1, 170.0, 310.0, 1.0, 30.0);
+        new double[] {10.0, 10.5, 11.0}, BoundaryFamily.GW_TO_GOW, 1, 170.0, 310.0, 1.0, 30.0);
 
     assertEquals("success", diagnostic.get("status").getAsString(), diagnostic.toString());
     assertTrue(diagnostic.get("assembled").getAsBoolean(), diagnostic.toString());
@@ -87,10 +87,10 @@ class HydrocarbonWaterBoundaryAuditRunnerTest extends NeqSimTest {
   @Tag("slow")
   void fluidOneRegularPressureDiagnosticAddsOneStrictPointWithoutRunningTheGlobalNetwork() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidOne(false);
-    double[] temperaturesK = new double[] { 180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0 };
+    double[] temperaturesK = new double[] {180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0};
 
     JsonObject diagnostic = HydrocarbonWaterBoundaryAuditRunner.runRegularPressureDiagnostic(fluid, temperaturesK,
-        new double[] { 10.0, 20.0 }, BoundaryFamily.GW_TO_GOW, 1);
+        new double[] {10.0, 20.0}, BoundaryFamily.GW_TO_GOW, 1);
 
     assertEquals("success", diagnostic.get("status").getAsString(), diagnostic.toString());
     assertTrue(diagnostic.get("completedRequestedPoints").getAsBoolean(), diagnostic.toString());
@@ -110,7 +110,7 @@ class HydrocarbonWaterBoundaryAuditRunnerTest extends NeqSimTest {
   void explicitStableBracketCorrectionRecomputesAdjacencyAndReturnsStrictReusableState() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidOne(false);
     HydrocarbonWaterStableRegionTransitionScanner.Result scan = new HydrocarbonWaterStableRegionTransitionScanner(fluid)
-        .scan(new double[] { 180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0 }, new double[] { 10.0 });
+        .scan(new double[] {180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0}, new double[] {10.0});
     HydrocarbonWaterStableRegionTransitionScanner.TransitionBracket bracket = scan.getBrackets().stream()
         .filter(candidate -> candidate.getFamily() == BoundaryFamily.GW_TO_GOW).findFirst().orElseThrow();
 
@@ -130,9 +130,9 @@ class HydrocarbonWaterBoundaryAuditRunnerTest extends NeqSimTest {
   @Tag("slow")
   void modelSeededDiagnosticRecorrectsSerializedStateInsteadOfTrustingItsSourceModel() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidOne(false);
-    double[] temperaturesK = new double[] { 180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0 };
+    double[] temperaturesK = new double[] {180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0};
     HydrocarbonWaterBoundaryAnchorDiscoverer.Branch branch = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
-        .discoverFromStableRegionTransitions(temperaturesK, new double[] { 10.0, 20.0 }).getDiscovery().getBranches()
+        .discoverFromStableRegionTransitions(temperaturesK, new double[] {10.0, 20.0}).getDiscovery().getBranches()
         .get(0);
     TwoToThreePhaseArcLengthCorrector.State seed = branch.getPoints().get(0).toContinuationState();
 
@@ -152,8 +152,8 @@ class HydrocarbonWaterBoundaryAuditRunnerTest extends NeqSimTest {
   @Tag("slow")
   void fluidOneAuditClosesDomainToCepBranchButRejectsSparseDiscoveryCoverage() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidOne(false);
-    double[] temperaturesK = new double[] { 180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0 };
-    double[] pressuresBara = new double[] { 10.0, 20.0 };
+    double[] temperaturesK = new double[] {180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0};
+    double[] pressuresBara = new double[] {10.0, 20.0};
 
     JsonObject audit = HydrocarbonWaterBoundaryAuditRunner.run(fluid, temperaturesK, pressuresBara, 100);
     JsonObject network = audit.getAsJsonObject("network");
@@ -180,10 +180,10 @@ class HydrocarbonWaterBoundaryAuditRunnerTest extends NeqSimTest {
   @Tag("slow")
   void fluidTwoAuditClosesGoToGowFromDeclaredDomainToOilSpinodal() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
-    double[] temperaturesK = new double[] { 196.75, 233.15, 273.15, 323.15, 373.15, 423.15, 473.15, 498.15, 523.15,
-        548.15, 573.15, 623.15, 673.15, 723.15, 753.15 };
-    double[] pressuresBara = new double[] { 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 60.0, 100.0, 150.0, 200.0, 250.0,
-        260.0, 270.0, 275.0 };
+    double[] temperaturesK = new double[] {196.75, 233.15, 273.15, 323.15, 373.15, 423.15, 473.15, 498.15, 523.15,
+        548.15, 573.15, 623.15, 673.15, 723.15, 753.15};
+    double[] pressuresBara = new double[] {0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 60.0, 100.0, 150.0, 200.0, 250.0,
+        260.0, 270.0, 275.0};
 
     JsonObject audit = HydrocarbonWaterBoundaryAuditRunner.run(fluid, temperaturesK, pressuresBara, 200);
     JsonObject network = audit.getAsJsonObject("network");

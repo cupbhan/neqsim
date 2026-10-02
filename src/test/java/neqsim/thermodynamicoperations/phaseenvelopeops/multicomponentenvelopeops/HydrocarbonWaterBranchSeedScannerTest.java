@@ -18,7 +18,7 @@ class HydrocarbonWaterBranchSeedScannerTest extends NeqSimTest {
     double originalPressureBara = fluid.getPressure();
 
     HydrocarbonWaterBranchSeedScanner.Result result = new HydrocarbonWaterBranchSeedScanner(fluid,
-        CandidatePhase.AQUEOUS).scan(new double[] { 213.0, 214.0 }, new double[] { 65.0 });
+        CandidatePhase.AQUEOUS).scan(new double[] {213.0, 214.0}, new double[] {65.0});
 
     assertEquals(2, result.getEvaluatedPointCount());
     assertEquals(originalTemperatureK, fluid.getTemperature(), 0.0);
@@ -55,8 +55,8 @@ class HydrocarbonWaterBranchSeedScannerTest extends NeqSimTest {
   @Tag("slow")
   void fluidTwoCoarseScanExposesItsObservedMultiphaseSeedDomain() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
-    double[] temperaturesK = new double[] { 180.0, 220.0, 260.0, 300.0, 350.0, 425.0, 500.0, 650.0 };
-    double[] pressuresBara = new double[] { 0.5, 2.0, 10.0, 50.0, 100.0, 250.0, 500.0 };
+    double[] temperaturesK = new double[] {180.0, 220.0, 260.0, 300.0, 350.0, 425.0, 500.0, 650.0};
+    double[] pressuresBara = new double[] {0.5, 2.0, 10.0, 50.0, 100.0, 250.0, 500.0};
     HydrocarbonWaterBranchSeedScanner.Result result = new HydrocarbonWaterBranchSeedScanner(fluid,
         CandidatePhase.AQUEOUS).scan(temperaturesK, pressuresBara);
     long threePhaseSeeds = result.getSeeds().stream().filter(seed -> seed.hasPhase(CandidatePhase.GAS)

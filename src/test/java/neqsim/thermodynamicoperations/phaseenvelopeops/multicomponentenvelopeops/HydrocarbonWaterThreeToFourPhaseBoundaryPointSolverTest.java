@@ -51,8 +51,8 @@ class HydrocarbonWaterThreeToFourPhaseBoundaryPointSolverTest extends NeqSimTest
         .append(mode.getMinimumSingularValue()).append(" antisymmetry=").append(mode.getMaximumAntisymmetry())
         .append(" tpdMinimum=").append(tpdCurvature.getMinimumEigenvalue()).append(" tpdGradient=")
         .append(tpdCurvature.getMaximumGradient());
-    for (double separation : new double[] { doubleProperty("neqsim.fluid2.separation", 0.01) }) {
-      for (double fraction : new double[] { doubleProperty("neqsim.fluid2.fraction", 1.0e-4) }) {
+    for (double separation : new double[] {doubleProperty("neqsim.fluid2.separation", 0.01)}) {
+      for (double fraction : new double[] {doubleProperty("neqsim.fluid2.fraction", 1.0e-4)}) {
         HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver.Result trial = solver.solve(boundaryState, mode, separation,
             fraction);
         diagnostics.append(" sep=").append(separation).append(" fraction=").append(fraction).append(" converged=")

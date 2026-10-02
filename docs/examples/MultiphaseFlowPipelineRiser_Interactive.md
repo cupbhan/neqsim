@@ -1,12 +1,10 @@
 ---
 layout: default
-title: "MultiphaseFlowPipelineRiser Interactive"
-description: "Jupyter notebook tutorial for NeqSim"
+title: "🌊 Interactive Multiphase Pipeline & S-Riser Simulation"
+description: "Notebook for 🌊 Interactive Multiphase Pipeline & S-Riser Simulation, including NeqSim Python examples and workflow context."
 parent: Examples
 nav_order: 1
 ---
-
-# MultiphaseFlowPipelineRiser Interactive
 
 > **Note:** This is an auto-generated Markdown version of the Jupyter notebook
 > [`MultiphaseFlowPipelineRiser_Interactive.ipynb`](https://github.com/equinor/neqsim/blob/master/docs/examples/MultiphaseFlowPipelineRiser_Interactive.ipynb).
@@ -14,8 +12,6 @@ nav_order: 1
 > or [open in Google Colab](https://colab.research.google.com/github/equinor/neqsim/blob/master/docs/examples/MultiphaseFlowPipelineRiser_Interactive.ipynb).
 
 ---
-
-# 🌊 Interactive Multiphase Pipeline & S-Riser Simulation
 
 **Understanding Gas-Oil-Water Flow Dynamics using the OLGA Two-Fluid Model**
 
@@ -336,6 +332,8 @@ print(f"\n📐 Pipeline slope: {(elevations[N_PIPELINE_SECTIONS-1] - elevations[
 ```
 
 </details>
+
+![Result figure from cell 7](figures/MultiphaseFlowPipelineRiser_Interactive_cell_7_output_1.png)
 
 ## 4️⃣ Create Multiphase Fluid (Gas + Oil + Water)
 
@@ -661,6 +659,8 @@ plot_steady_state_profiles(
 )
 ```
 
+![Result figure from cell 15](figures/MultiphaseFlowPipelineRiser_Interactive_cell_15_output_1.png)
+
 ## 8️⃣ Pipeline Cross-Section Visualization
 
 Visualize the flow pattern inside the pipe at different locations.
@@ -781,6 +781,8 @@ fig.suptitle('Pipe Cross-Sections at Key Locations', fontsize=14, fontweight='bo
 plt.tight_layout()
 plt.show()
 ```
+
+![Result figure from cell 17](figures/MultiphaseFlowPipelineRiser_Interactive_cell_17_output_1.png)
 
 ## 9️⃣ Interactive Dynamic Simulation
 
@@ -1302,6 +1304,8 @@ Final state: Inlet P = 100.0 bara, Liquid = 594.4 m³
 
 </details>
 
+![Result figure from cell 22](figures/MultiphaseFlowPipelineRiser_Interactive_cell_22_output_2.png)
+
 ## 📖 Summary and Key Observations
 
 ### What We Learned
@@ -1358,4 +1362,3 @@ print("   - Pipeline liquid accumulation examples")
 ```
 
 </details>
-

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/equinor/neqsim.git",
+  "tag": "v3.23.0",
+  "version": "3.23.0",
+  "commit": "280152d97763672fb79c9139e421adf85663a930",
+  "previousHead": "3e9d6b4214eceeba26d77ff3808997ff19ce347b"
+}

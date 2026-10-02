@@ -110,6 +110,12 @@ Equipment subclasses (or specialised `MechanicalDesign` subclasses) may override
 kW, m/s). Until a hook is overridden, the corresponding design limit simply produces no
 constraint, so utilization is never reported on an undefined basis.
 
+`ValveMechanicalDesign` supplies the Cv hook as the calculated required Cv. When an explicit
+vendor trim catalog is configured, `maxDesignCv` is the selected trim maximum Cv (or the largest
+available maximum when no option is feasible), so `design Cv` utilization is
+`Cv_required / Cv_trim,max`. See [Valve Mechanical Design](ValveMechanicalDesign.md) for relative
+trim sizes, utilization reserve, and severe-service carbide/brickstopper metadata.
+
 ## Worked example
 
 ```java
@@ -143,6 +149,26 @@ double dpUtil = heater.getMechanicalDesign()
 int added = heater.applyMechanicalDesignCapacityConstraints(); // 1
 double maxUtil = heater.getMaxUtilization();                   // 0.5
 ```
+
+## Applying existing equipment design data in bulk
+
+For the normalized separator, compressor, heater/cooler and pump inputs used by JSON process
+building, call `process.applyDesignCapacities(capacities)` or
+`model.applyDesignCapacities(qualifiedCapacities)`. Both accept Java maps, including Java maps
+constructed through JPype. The model keys must be `area::equipment`. The methods apply values to
+the existing equipment and preserve its mechanical-design object; they initialize that object only
+when the supported setter needs it and none exists.
+
+The strict map API validates all equipment identities, property names, and finite positive values
+before applying any changes. Supplied values replace previous values and omitted values remain
+unchanged. Cached pump power/flow, compressor speed and heater duty ratings update in place without
+resetting constraint enable flags, severity, provenance or unrelated custom constraints. Compressor
+speed remains bounded by an active chart. This configuration call neither runs the process nor invokes the generic mechanical-design
+bridge. Equipment-specific capacity inputs and the generic bridge have different property and unit
+conventions: use the normalized input table and examples in the
+[JSON process models and systems guide](json_process_models_and_systems.md#42-design-capacity-and-advanced-equipment-design-metadata).
+A successful application report confirms data application; it does not establish constraint coverage,
+convergence or engineering feasibility.
 
 ## Workflow rules
 

@@ -25,6 +25,16 @@ public class DewPointTemperatureFlash extends ConstantDutyTemperatureFlash {
   /** {@inheritDoc} */
   @Override
   public void run() {
+    run(true);
+  }
+
+  /**
+   * Solve with bounded restarts after a trivial mixture root.
+   *
+   * @param allowRestart whether to retry from a Wilson estimate
+   */
+  private void run(boolean allowRestart) {
+    setSuperCritical(false);
     if (system.getPhase(0).getNumberOfComponents() == 1) {
       if (system.getPressure() >= system.getPhase(0).getComponent(0).getPC()) {
         throw new IllegalStateException("System is supercritical");
@@ -59,14 +69,15 @@ public class DewPointTemperatureFlash extends ConstantDutyTemperatureFlash {
       system.getChemicalReactionOperations().solveChemEq(1);
     }
 
+    boolean aqueousSeed = hasSignificantWater(system);
     for (int i = 0; i < system.getPhases()[1].getNumberOfComponents(); i++) {
       system.getPhases()[0].getComponent(i).setx(system.getPhases()[0].getComponent(i).getz());
       if (system.getPhases()[0].getComponent(i).getIonicCharge() != 0) {
         system.getPhases()[0].getComponent(i).setx(1e-40);
       } else {
-        if (system.getPhases()[1].getComponent(i).getName().equals("water")) {
+        if (aqueousSeed && system.getPhases()[1].getComponent(i).getName().equals("water")) {
           system.getPhases()[1].getComponent(i).setx(1.0);
-        } else if (system.getPhases()[1].hasComponent("water")) {
+        } else if (aqueousSeed) {
           system.getPhases()[1].getComponent(i).setx(1.0e-10);
         } else {
           system.getPhases()[1].getComponent(i)
@@ -141,8 +152,19 @@ public class DewPointTemperatureFlash extends ConstantDutyTemperatureFlash {
         setSuperCritical(true);
       }
     }
-    if (isSuperCritical()) {
-      // throw new IllegalStateException("System is supercritical");
+    if (isSuperCritical() && allowRestart && !system.isChemicalSystem() && !hasSignificantWater(system)) {
+      double guess = WilsonSaturationEstimate.temperature(system, false);
+      if (Double.isFinite(guess) && guess > 0.0) {
+        // Wilson can overestimate dense-gas dew temperatures. Try a small, bounded
+        // range below it; each attempt must pass the full EOS equilibrium checks.
+        for (double factor : new double[] {1.0, 0.95, 0.9}) {
+          system.setTemperature(factor * guess);
+          run(false);
+          if (!isSuperCritical() && Double.isFinite(system.getTemperature()) && system.getTemperature() > 0.0) {
+            break;
+          }
+        }
+      }
     }
   }
 

@@ -69,31 +69,49 @@ See [neqsim-python](https://github.com/equinor/neqsim-python) for more details.
 <dependency>
   <groupId>com.equinor.neqsim</groupId>
   <artifactId>neqsim</artifactId>
-  <version>3.17.0</version>
+  <version>3.23.0</version>
 </dependency>
 ```
+
+The program below is complete Java 8-compatible source. Run it with assertions enabled
+(`java -ea ReadmeQuickstart`) so invalid results fail visibly.
 
 ```java
 import neqsim.thermo.system.SystemSrkEos;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-SystemSrkEos fluid = new SystemSrkEos(273.15 + 25.0, 60.0);
-fluid.addComponent("methane", 0.85);
-fluid.addComponent("ethane", 0.10);
-fluid.addComponent("propane", 0.05);
-fluid.setMixingRule("classic");
+public final class ReadmeQuickstart {
+  private static final Logger LOGGER = LogManager.getLogger(ReadmeQuickstart.class);
 
-ThermodynamicOperations ops = new ThermodynamicOperations(fluid);
-ops.TPflash();
-fluid.initProperties();
+  private ReadmeQuickstart() {}
 
-System.out.println("Density: " + fluid.getDensity("kg/m3") + " kg/m3");
+  public static void main(String[] args) {
+    SystemSrkEos fluid = new SystemSrkEos(273.15 + 25.0, 60.0);
+    fluid.addComponent("methane", 0.85);
+    fluid.addComponent("ethane", 0.10);
+    fluid.addComponent("propane", 0.05);
+    fluid.setMixingRule("classic");
+
+    ThermodynamicOperations operations = new ThermodynamicOperations(fluid);
+    operations.TPflash();
+    fluid.initProperties();
+
+    double densityKgPerCubicMetre = fluid.getDensity("kg/m3");
+    assert fluid.getNumberOfPhases() >= 1 : "Expected at least one phase";
+    assert Double.isFinite(densityKgPerCubicMetre) : "Density must be finite";
+    assert densityKgPerCubicMetre > 0.0 : "Density must be positive";
+
+    LOGGER.info("Density: {} kg/m3", densityKgPerCubicMetre);
+  }
+}
 ```
 
 ### AI agent - describe your problem in plain English
 
 ```
-@solve.task hydrate formation temperature for wet gas at 100 bara
+@solve-task hydrate formation temperature for wet gas at 100 bara
 ```
 
 The agent scopes the task, builds a NeqSim simulation, validates results, and generates a Word + HTML report with no coding required.
@@ -255,7 +273,7 @@ Every response includes provenance metadata (EOS model, convergence, assumptions
 ### AI task-solving workflow
 
 ```
-@solve.task TEG dehydration sizing for 50 MMSCFD wet gas
+@solve-task TEG dehydration sizing for 50 MMSCFD wet gas
 ```
 
 The agent creates a task folder, runs NeqSim simulations, validates results, and generates a Word + HTML report with no coding required. See the [tutorial](docs/tutorials/solve-engineering-task.md) or [workflow reference](docs/development/TASK_SOLVING_GUIDE.md).
@@ -265,7 +283,7 @@ The agent creates a task folder, runs NeqSim simulations, validates results, and
 Agentic NeqSim is built from two layers you can mix and extend:
 
 - **Skills = the knowledge layer.** Structured markdown that encodes domain expertise (API patterns, decision rules, reference data). Agents *read* skills to know how to do something correctly.
-- **Agents = the workflow layer.** A role + objective + the skills it loads. Agents *drive* NeqSim to complete a job (e.g. `@solve.task`, `@field.development`).
+- **Agents = the workflow layer.** A role + objective + the skills it loads. Agents *drive* NeqSim to complete a job (e.g. `@solve-task`, `@field-development`).
 
 Content comes from four tiers — **core** (shipped in this repo under `.github/skills` and `.github/agents`, auto-loaded), **community** (public, installable), **enterprise** (company-private/internal), and **local private** (just you):
 
@@ -308,9 +326,22 @@ neqsim skill install --all        # install community skills
 
 neqsim agent private-init         # scaffold a private/enterprise catalog
 # ...or register a private repo AND sign in with browser SSO in one step:
-neqsim agent private-init --repo my-org/neqsim-enterprise-agents --login
-neqsim skill private-init --repo my-org/neqsim-enterprise-skills --login
+neqsim agent private-init --repo my-org/neqsim-enterprise-agents --catalog-path enterprise-agents.yaml --login
+neqsim skill private-init --repo my-org/neqsim-enterprise-skills --catalog-path enterprise-skills.yaml
+neqsim agent install --all --vscode --force   # community + enterprise
 ```
+
+> If `neqsim` is not recognized (no elevated privileges, console script not on
+> PATH), run the same commands as `python -m neqsim_cli ...`.
+
+> **Work with every repo in one VS Code workspace.** Clone NeqSim and the agent /
+> skill repos into one parent folder, open the first with `File → Open Folder...`,
+> add the rest with `File → Add Folder to Workspace...` — plus your task folder,
+> which is *not* a clone — then `File → Save Workspace As...`. Copilot Chat then
+> sees the skill, the agent definition, the NeqSim source, and the task in one
+> conversation, and you can push an improvement back to the right repo without
+> leaving the window. See
+> [Agents & Skills Setup §5.1](docs/integration/agents_and_skills_setup.md#51-keep-every-repo-and-your-task-folder-in-one-vs-code-workspace).
 
 - **How internal (enterprise) content works:** a company publishes private `enterprise-agents.yaml` / `enterprise-skills.yaml` in governed internal repos. These are **never committed to the public NeqSim repos**; they are discovered per-user (via `~/.neqsim/private-*.yaml` and gh-CLI / Git Credential Manager auth). `private-init` writes and then prints the path to those per-user files (`~/.neqsim/private-agents.yaml` / `private-skills.yaml`) so you can edit them afterwards. See [Enterprise Agent & Skill Repositories](docs/integration/enterprise_agent_skill_repos.md).
 - **Full details:** the [Skills & Agents Guide](docs/integration/skills_guide.md) explains the four tiers, packaging, canonical installs vs tool exports, and how to author your own.
@@ -336,13 +367,13 @@ See [VISION_AGENTS.md](VISION_AGENTS.md) and the [Where Does This Go? guide](htt
 <dependency>
   <groupId>com.equinor.neqsim</groupId>
   <artifactId>neqsim</artifactId>
-  <version>3.17.0</version>
+  <version>3.23.0</version>
 </dependency>
 ```
 
 The Quick Start above shows the core pattern (create a fluid, run a flash, and read properties). For process simulation, add equipment to a `ProcessSystem` and call `run()`; see the [Java Getting Started Guide](docs/java-getting-started.md) for full examples.
 
-**Learn more:** [Java Getting Started Guide](docs/java-getting-started.md) | [JavaDoc](https://equinor.github.io/neqsimhome/javadoc/site/apidocs/index.html) | [Wiki](https://github.com/equinor/neqsim/wiki) | [Colab demo](https://colab.research.google.com/drive/1XkQ_CrVj2gLTtJvXhFQMWALzXii522CL)
+**Learn more:** [Java Getting Started Guide](docs/java-getting-started.md) | [JavaDoc](https://equinor.github.io/neqsim/javadoc/index.html) | [Wiki](https://github.com/equinor/neqsim/wiki) | [Colab demo](https://colab.research.google.com/drive/1XkQ_CrVj2gLTtJvXhFQMWALzXii522CL)
 
 ---
 
@@ -415,7 +446,7 @@ cd $HOME\Documents\GitHub
 git clone https://github.com/equinor/neqsim.git
 cd neqsim
 
-# 2. Python devtools in a venv (keeps the 'neqsim' command on PATH)
+# 2. Python devtools in a venv ('neqsim' works in terminals where it is activated)
 py -3 -m venv .venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned   # per-process, no admin
 .\.venv\Scripts\Activate.ps1
@@ -430,7 +461,28 @@ neqsim doctor          # verifies Python, Java/JDK, Maven wrapper, agents
 # 4. Install AI agents into ~/.copilot for VS Code Copilot (no admin)
 neqsim agent install --all --vscode
 neqsim skill install --all
+
+# 5. Choose where solved tasks are saved (optional; defaults to <repo>\task_solve)
+neqsim --set-task-root "D:\Engineering Tasks"   # or: cwd, to follow the terminal folder
+neqsim --show-task-root
+
+# 6. Choose the Word template reports are built from (optional)
+neqsim --set-report-template "C:\Users\you\Documents\company report template.docx"
+neqsim --show-report-template
 ```
+
+The task root is where `neqsim new-task` and the AI agents create each dated task
+folder, so studies can live outside the clone and survive re-cloning. It is saved in
+`~/.neqsim/task_defaults.json` and shared by all NeqSim clones. Override one task with
+`neqsim new-task "title" --task-root "PATH"`, or remove the setting with
+`neqsim --reset-task-root` — existing tasks are never moved.
+
+The report template is saved in the same file and makes every generated Word
+report inherit your organisation's Word styles, fonts, headers, and footers.
+Override one run with `python step3_report/generate_report.py --template "PATH"`
+(or `--no-template`), and remove the setting with `neqsim --reset-report-template`.
+Report files are named after the report title, so a deliverable is identifiable
+outside its task folder.
 
 ### Run tests
 
@@ -507,7 +559,7 @@ graph TB
 | Quick property lookup via LLM | [MCP Server](neqsim-mcp-server/) + any LLM client | Java 21+ (or Docker) |
 | Python scripting / Jupyter notebooks | `pip install neqsim` | Python 3.9+, JVM |
 | Embed in a Java application | Maven dependency | Java 17+ (default) or Java 8+ (use the `-Java8` artifact) |
-| Full engineering study with reports | `@solve.task` agent in VS Code | VS Code + GitHub Copilot |
+| Full engineering study with reports | `@solve-task` agent in VS Code | VS Code + GitHub Copilot |
 | .NET / MATLAB integration | [Language bindings](#other-language-bindings) | See linked repos |
 
 #### Java version matrix
@@ -546,7 +598,7 @@ git clone https://github.com/equinor/neqsim.git
 cd neqsim
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1   # activate the venv FIRST so 'neqsim' lands on PATH
-.\install.cmd                  # or .\install.ps1  (append 'uv' for the fast installer)
+.\install.ps1                  # run this from PowerShell (append -Uv for the fast installer)
 neqsim onboard                 # interactive setup (Java, Maven, build, Python, agents)
 ```
 
@@ -563,6 +615,16 @@ neqsim onboard
 > or activate a venv — it only detects an already-active one. Activating first
 > means the package and the `neqsim` command install into the venv and stay on
 > PATH; skip it and you may hit "`neqsim` is not recognized".
+>
+> A venv is activated **per terminal**, so run `.\.venv\Scripts\Activate.ps1`
+> in each new terminal (or pick the interpreter via *Python: Select Interpreter*
+> in VS Code and let it activate for you). Restarting the machine does not
+> change this.
+>
+> Run `.\install.ps1` **from PowerShell**: it puts the command on PATH in the
+> window you are already in, so `neqsim` works immediately. `.\install.cmd`
+> launched from PowerShell runs as a child process and cannot do that — you
+> would need a new terminal.
 >
 > The `install` script finds a working Python for you and runs `python -m pip`
 > under the hood, so it works even when `pip`/`python` are not on PATH. To
@@ -615,8 +677,10 @@ Browse and install community-contributed skills, or publish your own:
 neqsim skill list                    # browse the catalog and discovered repositories
 neqsim skill install <name>          # install a skill
 neqsim skill install <name> --target vscode   # also export to your ~/.copilot/skills folder
+neqsim skill sync-packages           # install any deferred skill Python packages
+neqsim skill ensure <name>           # install one skill's package on first use
 neqsim skill doctor                  # check private-catalog authentication readiness
-neqsim skill doctor --target vscode  # verify VS Code skill exports
+neqsim skill doctor --target vscode  # verify VS Code skill exports and package health
 neqsim skill publish user/repo-name  # publish yours (creates a draft PR)
 ```
 
@@ -693,7 +757,7 @@ All tests and `./mvnw checkstyle:check` must pass before a PR is merged.
 | **Benchmark gallery** | [docs/benchmarks/](docs/benchmarks/index.md) - validation against NIST, published data |
 | **Reference manual index** | [REFERENCE_MANUAL_INDEX.md](docs/REFERENCE_MANUAL_INDEX.md) (350+ pages) |
 | **MCP tool contract** | [MCP_CONTRACT.md](neqsim-mcp-server/MCP_CONTRACT.md) - stable API for agent builders |
-| **JavaDoc API** | [JavaDoc](https://equinor.github.io/neqsimhome/javadoc/site/apidocs/index.html) |
+| **JavaDoc API** | [JavaDoc](https://equinor.github.io/neqsim/javadoc/index.html) |
 | **Jupyter notebooks** | [examples/notebooks/](examples/notebooks/) (30+ examples) |
 | **Discussion forum** | [GitHub Discussions](https://github.com/equinor/neqsim/discussions) |
 | **Releases** | [GitHub Releases](https://github.com/equinor/neqsim/releases) |
@@ -706,6 +770,41 @@ All tests and `./mvnw checkstyle:check` must pass before a PR is merged.
 Even Solbraa (esolbraa@gmail.com), Marlene Louise Lund
 
 NeqSim development was initiated at [NTNU](https://www.ntnu.edu/employees/even.solbraa). A number of master and PhD students have contributed to its development, and we greatly acknowledge their contributions.
+
+## How to Cite
+
+If NeqSim contributes to a publication, report, or product, please cite it. The authoritative, machine-readable citation metadata is maintained in [`CITATION.cff`](CITATION.cff); GitHub renders this automatically as a **"Cite this repository"** button on this page, which also lets you export the citation in APA, BibTeX, or other formats.
+
+**APA-style citation** (software):
+
+> Solbraa, E., & NeqSim Contributors. (2026). *NeqSim: A library for thermodynamic and process simulation* (Version 3.23.0) [Computer software]. Equinor. https://github.com/equinor/neqsim
+
+**BibTeX:**
+
+```bibtex
+@software{neqsim2026,
+  author       = {Solbraa, Even and {NeqSim Contributors}},
+  title        = {NeqSim: A library for thermodynamic and process simulation},
+  year         = {2026},
+  version      = {3.23.0},
+  publisher    = {Equinor},
+  url          = {https://github.com/equinor/neqsim},
+  license      = {Apache-2.0}
+}
+```
+
+When citing the thermodynamic models underlying NeqSim rather than the software itself, cite the originating academic work:
+
+```bibtex
+@phdthesis{solbraa2002,
+  author = {Solbraa, Even},
+  title  = {Equilibrium and non-equilibrium thermodynamics of natural gas systems},
+  school = {Norwegian University of Science and Technology},
+  year   = {2002}
+}
+```
+
+Always cite the specific NeqSim **version** used (see the `version` field in `CITATION.cff`, or the release tag on [GitHub Releases](https://github.com/equinor/neqsim/releases)) so results remain reproducible as the library evolves.
 
 ## License
 

@@ -114,6 +114,12 @@ public abstract class AttractiveTermBaseClass implements AttractiveTermInterface
     return parameters[i];
   }
 
+  /** {@inheritDoc} */
+  @Override
+  public int getNumberOfParameters() {
+    return parameters.length;
+  }
+
   /**
    * Get component.
    *
@@ -128,7 +134,8 @@ public abstract class AttractiveTermBaseClass implements AttractiveTermInterface
    *
    * @param component input components.
    */
-  void setComponent(ComponentEosInterface component) {
+  @Override
+  public void setComponent(ComponentEosInterface component) {
     this.component = component;
   }
 

@@ -245,32 +245,136 @@ def _parse_catalog_fallback(text):
     Handles the simple list-of-dicts format used in community-skills.yaml,
     including the top-level ``skills`` and ``repositories`` sections.
     """
-    data = {"skills": [], "repositories": []}
-    section = None
-    current = None
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if line.startswith("#") or not line:
-            continue
-        if not raw_line.startswith((" ", "\t")) and line.endswith(":"):
-            if current and section in data:
-                data[section].append(current)
-            section = line[:-1]
-            current = None
-        elif line.startswith("- "):
-            if current and section in data:
-                data[section].append(current)
-            current = {}
-            remainder = line[2:].strip()
-            if ":" in remainder:
-                key, val = remainder.split(":", 1)
-                current[key.strip()] = _parse_scalar_value(val.strip())
-        elif current and ":" in line:
-            key, val = line.split(":", 1)
-            current[key.strip()] = _parse_scalar_value(val.strip())
-    if current and section in data:
-        data[section].append(current)
+    data = _parse_simple_yaml(text)
+    if not isinstance(data, dict):
+        data = {}
+    for section in ("skills", "repositories"):
+        if not isinstance(data.get(section), list):
+            data[section] = []
     return data
+
+
+def _yaml_fallback_tokens(text):
+    """Return ``(indent, content)`` tokens for the minimal YAML parser."""
+    tokens = []
+    for raw_line in text.splitlines():
+        content = raw_line.strip()
+        if not content or content.startswith("#"):
+            continue
+        tokens.append((len(raw_line) - len(raw_line.lstrip(" \t")), content))
+    return tokens
+
+
+def _is_yaml_sequence_entry(content):
+    """Return true when a token line starts a block sequence entry."""
+    return content == "-" or content.startswith("- ")
+
+
+def _is_yaml_mapping_entry(content):
+    """Return true when a token line looks like ``key: value``."""
+    if content.startswith(("'", '"', "[", "{")):
+        return False
+    key, separator, remainder = content.partition(":")
+    if not separator or not key.strip():
+        return False
+    return not remainder or remainder.startswith(" ")
+
+
+def _parse_simple_yaml(text):
+    """Parse the YAML subset used by NeqSim catalogs and frontmatter.
+
+    Used only when PyYAML is unavailable. Supports nested mappings, block
+    sequences (indented or flush with their key), sequences of mappings,
+    inline ``[a, b]`` lists, quoted scalars and trailing comments.
+
+    @param text the YAML document text
+    @return the parsed mapping or sequence, or an empty dict when empty
+    """
+    tokens = _yaml_fallback_tokens(text)
+    if not tokens:
+        return {}
+    value, _ = _parse_yaml_block(tokens, 0, tokens[0][0])
+    return value
+
+
+def _parse_yaml_block(tokens, index, indent):
+    """Parse a mapping or sequence block starting at the given token index."""
+    if index >= len(tokens):
+        return {}, index
+    if _is_yaml_sequence_entry(tokens[index][1]):
+        return _parse_yaml_sequence(tokens, index, indent)
+    return _parse_yaml_mapping(tokens, index, indent)
+
+
+def _parse_yaml_sequence(tokens, index, indent):
+    """Parse a block sequence of scalars or mappings."""
+    items = []
+    while (index < len(tokens) and tokens[index][0] == indent
+           and _is_yaml_sequence_entry(tokens[index][1])):
+        dash_indent, content = tokens[index]
+        remainder = content[1:].strip()
+        index += 1
+        if not remainder:
+            if index < len(tokens) and tokens[index][0] > dash_indent:
+                child, index = _parse_yaml_block(
+                    tokens, index, tokens[index][0])
+                items.append(child)
+            else:
+                items.append("")
+            continue
+        if _is_yaml_mapping_entry(remainder):
+            # The inline key sits at the column where the dash content starts.
+            child_indent = dash_indent + len(content) - len(remainder)
+            nested = [(child_indent, remainder)]
+            while index < len(tokens) and tokens[index][0] > dash_indent:
+                nested.append(tokens[index])
+                index += 1
+            child, _ = _parse_yaml_block(nested, 0, child_indent)
+            items.append(child)
+        else:
+            items.append(_parse_scalar_value(_strip_yaml_comment(remainder)))
+    return items, index
+
+
+def _parse_yaml_mapping(tokens, index, indent):
+    """Parse a mapping block, recursing into nested mappings and sequences."""
+    mapping = {}
+    while index < len(tokens):
+        line_indent, content = tokens[index]
+        if line_indent != indent or _is_yaml_sequence_entry(content):
+            break
+        if ":" not in content:
+            index += 1
+            continue
+        key, value = content.split(":", 1)
+        key = key.strip()
+        value = _strip_yaml_comment(value.strip())
+        index += 1
+        if value:
+            mapping[key] = _parse_scalar_value(value)
+            continue
+        if index < len(tokens):
+            next_indent, next_content = tokens[index]
+            # A block sequence may be indented under its key or flush with it.
+            if next_indent > indent or (next_indent == indent
+                                        and _is_yaml_sequence_entry(next_content)):
+                child, index = _parse_yaml_block(tokens, index, next_indent)
+                mapping[key] = child
+                continue
+        mapping[key] = ""
+    return mapping, index
+
+
+def _strip_yaml_comment(value):
+    """Remove a trailing ``# comment`` from a scalar value."""
+    if not value:
+        return value
+    quote = value[0]
+    if quote in "\"'":
+        end = value.find(quote, 1)
+        return value[:end + 1] if end != -1 else value
+    marker = value.find(" #")
+    return value[:marker].rstrip() if marker != -1 else value
 
 
 def _parse_scalar_value(value):
@@ -322,18 +426,8 @@ def _extract_frontmatter(content):
     if yaml is not None:
         return yaml.safe_load(frontmatter) or {}
 
-    result = {}
-    for raw_line in frontmatter.splitlines():
-        if raw_line.startswith((" ", "\t")):
-            continue
-        line = raw_line.strip()
-        if not line or line.startswith("#") or ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        value = value.strip()
-        if value:
-            result[key.strip()] = _parse_scalar_value(value)
-    return result
+    parsed = _parse_simple_yaml(frontmatter)
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _github_request(url, accept="application/vnd.github+json"):
@@ -728,16 +822,6 @@ def _clone_git_repository(entry, destination):
         used_branch = branch or ""
     return used_branch
 
-
-def _read_git_repository_file(entry, path):
-    """Read a file from a git repository through a temporary clone."""
-    with tempfile.TemporaryDirectory() as tmp:
-        repo_dir = Path(tmp) / "repo"
-        used_branch = _clone_git_repository(entry, repo_dir)
-        file_path = repo_dir / path
-        if not file_path.exists() or not file_path.is_file():
-            raise RuntimeError(f"Path not found in git source: {path}")
-        return file_path.read_bytes(), used_branch
 
 
 def _discover_git_repository_skills(repository):
@@ -1279,12 +1363,23 @@ def cmd_info(skills, args):
 
 
 def _install_from_local(skill, dest_file):
-    """Install a skill from a local file path or network share."""
+    """Install a skill from a local file path or network share.
+
+    Copies the whole package folder (source, tests, pyproject.toml) instead of
+    just SKILL.md when the skill ships an installable Python package next to
+    it, so the skill is runnable immediately without a separate manual step.
+    """
     import shutil
     src_path = Path(skill["path"])
     if not src_path.exists():
         print(f"  [!!] Source file not found: {src_path}")
         sys.exit(1)
+    src_dir = src_path.parent
+    if (src_dir / "pyproject.toml").exists():
+        dest_dir = dest_file.parent
+        shutil.copytree(str(src_dir), str(dest_dir), dirs_exist_ok=True)
+        print(f"  [OK] Copied package from: {src_dir}")
+        return
     shutil.copy2(str(src_path), str(dest_file))
     print(f"  [OK] Copied from: {src_path}")
 
@@ -1310,28 +1405,383 @@ def _install_from_url(skill, dest_file):
 
 
 def _install_from_github(skill, dest_file):
-    """Install a skill from a GitHub repo (public or private)."""
+    """Install a skill from a GitHub repo (public or private).
+
+    Downloads just SKILL.md for a markdown-only skill. When SKILL.md ships
+    alongside an installable Python package (a sibling ``pyproject.toml``),
+    downloads the whole package folder (source, tests, examples) instead, so
+    the skill is runnable immediately without a separate manual pip install.
+    """
     repo = skill.get("repo", "")
     path = skill.get("path", "SKILL.md")
     branch = skill.get("branch")
     if not repo:
         print(f"  [!!] No repo specified for '{skill.get('name')}'.")
         sys.exit(1)
+    auth = _github_entry_auth(skill)
+
+    folder = str(Path(path).parent).replace("\\", "/")
+    if folder and folder != ".":
+        try:
+            used_branch, tree_paths = _list_github_tree_paths(repo, branch=branch, auth=auth)
+        except Exception:
+            tree_paths = []
+            used_branch = branch
+        prefix = folder + "/"
+        package_files = [p for p in tree_paths if p.startswith(prefix)]
+        if any(p == prefix + "pyproject.toml" for p in package_files):
+            dest_dir = dest_file.parent
+            for rel_path in package_files:
+                content, _branch, raw_url = _fetch_github_bytes(
+                    repo, rel_path, branch=used_branch, auth=auth)
+                target = dest_dir / Path(rel_path).relative_to(folder)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+            skill["branch"] = used_branch
+            print(f"  [OK] Downloaded package: https://github.com/{repo}/tree/{used_branch}/{folder}")
+            return
 
     content, used_branch, raw_url = _fetch_github_bytes(
-        repo, path, branch=branch, auth=_github_entry_auth(skill))
+        repo, path, branch=branch, auth=auth)
     print(f"  Downloading: {raw_url}")
     dest_file.write_bytes(content)
     skill["branch"] = used_branch
 
 
 def _install_from_git(skill, dest_file):
-    """Install a skill from a git repository using configured git credentials."""
+    """Install a skill from a git repository using configured git credentials.
+
+    Copies the whole package folder instead of just SKILL.md when the skill
+    ships an installable Python package (a sibling ``pyproject.toml``), so the
+    skill is runnable immediately without a separate manual pip install.
+    """
+    import shutil
     path = skill.get("path", "SKILL.md")
-    content, used_branch = _read_git_repository_file(skill, path)
-    print(f"  Downloading via git: {_git_repository_url(skill)}:{path}")
-    dest_file.write_bytes(content)
-    skill["branch"] = used_branch
+    with tempfile.TemporaryDirectory() as tmp:
+        repo_dir = Path(tmp) / "repo"
+        used_branch = _clone_git_repository(skill, repo_dir)
+        source_file = repo_dir / path
+        if not source_file.exists() or not source_file.is_file():
+            raise RuntimeError(f"Path not found in git source: {path}")
+        source_dir = source_file.parent
+        if (source_dir / "pyproject.toml").exists():
+            dest_dir = dest_file.parent
+            shutil.copytree(str(source_dir), str(dest_dir), dirs_exist_ok=True)
+            print(f"  [OK] Downloaded package via git: {_git_repository_url(skill)}:{path.rsplit('/', 1)[0]}")
+        else:
+            dest_file.write_bytes(source_file.read_bytes())
+            print(f"  Downloading via git: {_git_repository_url(skill)}:{path}")
+        skill["branch"] = used_branch
+
+
+_INSTALLED_NEQSIM_VERSION = []  # single-slot cache; [] = not probed, [None] = absent
+
+
+def _installed_neqsim_version():
+    """Return the installed Python neqsim package version, or None.
+
+    Probed once per process in a subprocess so a broken/absent neqsim install
+    can never take the installer down with it.
+    """
+    if _INSTALLED_NEQSIM_VERSION:
+        return _INSTALLED_NEQSIM_VERSION[0]
+    version = None
+    try:
+        probe = subprocess.run(
+            [sys.executable, "-c",
+             "import importlib.metadata as m; print(m.version('neqsim'))"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if probe.returncode == 0:
+            version = probe.stdout.strip() or None
+    except Exception:
+        version = None
+    _INSTALLED_NEQSIM_VERSION.append(version)
+    return version
+
+
+def _parse_version(text):
+    """Return a comparable tuple for a dotted version, ignoring any suffix."""
+    parts = []
+    for chunk in str(text or "").split("."):
+        digits = ""
+        for ch in chunk:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        parts.append(int(digits) if digits else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+
+def _check_min_neqsim_version(skill, name):
+    """Warn when the installed NeqSim is older than the skill requires.
+
+    ``min_neqsim_version`` was previously recorded in the manifest but never
+    compared against anything, so a skill relying on a newer NeqSim API installed
+    silently and only failed later at run time. This surfaces the mismatch at
+    install time. Advisory: it warns and continues rather than blocking, because
+    a skill may still be usable and the user may upgrade afterwards.
+
+    @param skill the resolved catalog skill mapping
+    @param name the skill name, used in the message
+    @return True when compatible or unknown, False when a mismatch was reported
+    """
+    required = str(skill.get("min_neqsim_version", "") or "").strip()
+    if not required:
+        return True
+    installed = _installed_neqsim_version()
+    if not installed:
+        print(f"  [!!] '{name}' needs NeqSim >= {required}; no neqsim package detected.")
+        print(f"  Install it with: {sys.executable} -m pip install neqsim")
+        return False
+    if _parse_version(installed) < _parse_version(required):
+        print(f"  [!!] '{name}' needs NeqSim >= {required}, but {installed} is installed.")
+        print(f"  Upgrade with: {sys.executable} -m pip install --upgrade neqsim")
+        return False
+    return True
+
+
+def _pip_install_skill_package(dest_dir, name):
+    """Install a downloaded skill's Python package into the running interpreter.
+
+    Uses ``sys.executable`` -- whichever interpreter is running this installer
+    -- so the package lands in the same environment an agent will use. Never
+    fatal: a failed build (e.g. a missing system dependency) is reported with
+    a one-line manual fallback instead of aborting the whole install.
+
+    @param dest_dir the installed skill's local directory (contains pyproject.toml)
+    @param name the skill name, used only for progress/log messages
+    @return True if the package installed successfully, False otherwise
+    """
+    print(f"  Installing '{name}' Python package (pip install -e)...")
+    for target in (f"{dest_dir}[dev]", str(dest_dir)):
+        cmd = [sys.executable, "-m", "pip", "install", "-e", target, "--quiet"]
+        try:
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            print(f"  [OK] Installed Python package for '{name}'.")
+            return True
+        except subprocess.CalledProcessError:
+            continue
+    print(f"  [!!] Could not pip install '{name}' automatically.")
+    print(f"  Run manually: {sys.executable} -m pip install -e \"{dest_dir}[dev]\"")
+    return False
+
+
+# ── Python package installs (batched / deferred) ───────────────────────
+
+# Queue used while a bulk install is running so the many packaged skills are
+# pip-installed in one resolver pass instead of one subprocess each.
+_PENDING_PACKAGE_INSTALLS = []
+_BATCH_PACKAGE_INSTALLS = [False]
+
+
+def _pip_disabled(args):
+    """Return True when the skill's Python package install should be skipped.
+
+    @param args parsed CLI arguments (reads ``no_pip``)
+    @return True when ``--no-pip`` or ``NEQSIM_SKILL_NO_PIP`` asks to defer
+    """
+    if getattr(args, "no_pip", False):
+        return True
+    return os.environ.get("NEQSIM_SKILL_NO_PIP", "").strip().lower() not in ("", "0", "false", "no")
+
+
+def begin_package_install_batch():
+    """Start collecting packaged-skill installs instead of running pip per skill."""
+    _BATCH_PACKAGE_INSTALLS[0] = True
+    del _PENDING_PACKAGE_INSTALLS[:]
+
+
+def flush_package_install_batch():
+    """Install every queued skill package in one pip pass and stop batching.
+
+    A single ``pip install -e a -e b ...`` replaces one subprocess per skill,
+    which is what made ``install --all --force`` slow once ~150 catalog skills
+    shipped a Python package.
+
+    @return list of skill names whose package could not be installed
+    """
+    _BATCH_PACKAGE_INSTALLS[0] = False
+    pending = list(_PENDING_PACKAGE_INSTALLS)
+    del _PENDING_PACKAGE_INSTALLS[:]
+    if not pending:
+        return []
+    failed = _pip_install_skill_packages(pending)
+    manifest = load_manifest()
+    changed = False
+    for name, _dest_dir in pending:
+        if name not in manifest:
+            continue
+        manifest[name]["package_installed"] = name not in failed
+        manifest[name]["package_pending"] = name in failed
+        changed = True
+    if changed:
+        save_manifest(manifest)
+    return failed
+
+
+def _chunk_package_items(items, max_command_chars=16000):
+    """Split package installs into chunks that fit a single command line.
+
+    Windows caps a command line at 32767 characters, so a 150-skill editable
+    install has to be issued in batches rather than one giant pip call.
+
+    @param items list of ``(name, dest_dir)`` pairs
+    @param max_command_chars soft budget for one pip command line
+    @return list of item lists
+    """
+    chunks = []
+    current = []
+    length = 0
+    for item in items:
+        entry = len(str(item[1])) + 10  # ' -e "<dir>[dev]"'
+        if current and length + entry > max_command_chars:
+            chunks.append(current)
+            current = []
+            length = 0
+        current.append(item)
+        length += entry
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _pip_install_skill_packages(items):
+    """Install several skill packages in one pip invocation, with per-skill fallback.
+
+    @param items list of ``(name, dest_dir)`` pairs to install editable
+    @return list of skill names that could not be installed
+    """
+    if not items:
+        return []
+    chunks = _chunk_package_items(items)
+    print("\n  Installing {count} skill Python package(s) in {passes} pip pass(es)...".format(
+        count=len(items), passes=len(chunks)))
+    failed = []
+    for chunk in chunks:
+        if _pip_install_package_chunk(chunk):
+            continue
+        print("  [!!] Bulk install failed; retrying skill by skill...")
+        for name, dest_dir in chunk:
+            if not _pip_install_skill_package(dest_dir, name):
+                failed.append(name)
+    if not failed:
+        print("  [OK] Installed {count} skill package(s).".format(count=len(items)))
+    return failed
+
+
+def _pip_install_package_chunk(chunk):
+    """Install one chunk of skill packages, preferring the ``[dev]`` extra.
+
+    @param chunk list of ``(name, dest_dir)`` pairs
+    @return True when the chunk installed in one pip call
+    """
+    for extras in ("[dev]", ""):
+        cmd = [sys.executable, "-m", "pip", "install", "--quiet"]
+        for _name, dest_dir in chunk:
+            cmd.extend(["-e", f"{dest_dir}{extras}"])
+        try:
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            return True
+        except subprocess.CalledProcessError:
+            continue
+    return False
+
+
+def _pyproject_project_name(pyproject_file):
+    """Return the ``[project] name`` declared in a pyproject.toml, or an empty string.
+
+    @param pyproject_file path to the skill's pyproject.toml
+    @return the normalized distribution name, or "" when it cannot be read
+    """
+    try:
+        text = Path(pyproject_file).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    in_project = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_project = stripped == "[project]"
+            continue
+        if in_project and stripped.replace(" ", "").startswith("name="):
+            value = stripped.split("=", 1)[1].strip().strip("\"'")
+            return value.replace("_", "-").lower()
+    return ""
+
+
+_INSTALLED_DIST_NAMES = []  # single-slot cache; [] = not probed
+
+
+def _installed_distribution_names():
+    """Return the set of distribution names installed in this interpreter.
+
+    Probed once per process from ``importlib.metadata`` (no subprocess), so a
+    skill whose package is already installed can be detected without pip.
+
+    @return set of normalized distribution names
+    """
+    if _INSTALLED_DIST_NAMES:
+        return _INSTALLED_DIST_NAMES[0]
+    names = set()
+    try:
+        import importlib.metadata as importlib_metadata
+        for dist in importlib_metadata.distributions():
+            raw = dist.metadata["Name"] if dist.metadata else None
+            if raw:
+                names.add(str(raw).replace("_", "-").lower())
+    except Exception:
+        names = set()
+    _INSTALLED_DIST_NAMES.append(names)
+    return names
+
+
+def _count_deferred_packages():
+    """Return how many installed skills still have a deferred Python package."""
+    try:
+        manifest = load_manifest()
+    except Exception:
+        return 0
+    return sum(1 for info in manifest.values() if info.get("package_pending"))
+
+
+def _handle_skill_package(name, dest_dir, args, previous_entry):
+    """Decide whether a skill's Python package needs a pip install, and do it.
+
+    Skills are installed editable, so a source change is picked up without
+    reinstalling; only a dependency/metadata change (pyproject.toml) needs pip.
+    Skipping the unchanged ones is what keeps ``--force`` from paying for ~150
+    redundant editable installs.
+
+    @param name the skill name
+    @param dest_dir the installed skill directory
+    @param args parsed CLI arguments (reads ``no_pip``)
+    @param previous_entry the previous manifest entry for this skill
+    @return ``(package_sha256, package_installed, package_pending)``
+    """
+    pyproject = dest_dir / "pyproject.toml"
+    if not pyproject.exists():
+        return "", False, False
+
+    package_sha = _sha256_file(pyproject)
+    already_installed = bool(previous_entry.get("package_installed"))
+    if not already_installed and not previous_entry.get("package_sha256"):
+        # Legacy manifest entry: fall back to probing the environment.
+        dist_name = _pyproject_project_name(pyproject)
+        already_installed = bool(dist_name) and dist_name in _installed_distribution_names()
+    if already_installed and previous_entry.get("package_sha256", package_sha) == package_sha:
+        print(f"  [OK] '{name}' Python package unchanged; skipping pip install.")
+        return package_sha, True, False
+    if _pip_disabled(args):
+        print(f"  [--] Deferred pip install for '{name}' (run: neqsim skill sync-packages).")
+        return package_sha, False, True
+    if _BATCH_PACKAGE_INSTALLS[0]:
+        _PENDING_PACKAGE_INSTALLS.append((name, dest_dir))
+        return package_sha, False, True
+    return package_sha, _pip_install_skill_package(dest_dir, name), False
 
 
 def cmd_install(skills, args):
@@ -1379,17 +1829,28 @@ def _install_all_skills(skills, args):
     manifest = load_manifest()
     installed = []
     failed = []
-    for index, skill in enumerate(unique, start=1):
-        name = skill.get("name", "")
-        print("  [{index}/{total}] {name}".format(index=index, total=total, name=name))
-        if _install_skill_record(skill, args, manifest):
-            installed.append(name)
-        else:
-            failed.append(name)
+    batching = not _pip_disabled(args)
+    if batching:
+        begin_package_install_batch()
+    try:
+        for index, skill in enumerate(unique, start=1):
+            name = skill.get("name", "")
+            print("  [{index}/{total}] {name}".format(index=index, total=total, name=name))
+            if _install_skill_record(skill, args, manifest):
+                installed.append(name)
+            else:
+                failed.append(name)
+    finally:
+        if batching:
+            flush_package_install_batch()
 
     print("\n  ==== Install summary ====")
     print("  Installed/OK: {count}".format(count=len(installed)))
     print("  Failed: {count}".format(count=len(failed)))
+    deferred = _count_deferred_packages()
+    if deferred:
+        print("  Deferred Python packages: {count}".format(count=deferred))
+        print("  Run: neqsim skill sync-packages   (or 'neqsim skill ensure <name>' on first use)")
     if failed:
         print("  Failed skills: {names}".format(names=", ".join(failed)))
         sys.exit(1)
@@ -1404,6 +1865,7 @@ def _install_skill_record(skill, args, manifest):
     @return True on success, False on failure (never calls sys.exit)
     """
     name = skill.get("name")
+    previous_entry = dict(manifest.get(name, {}))
     if name in manifest and not args.force:
         print(f"\n  Skill '{name}' already installed at {manifest[name]['path']}")
         print(f"  Use --force to reinstall.")
@@ -1442,6 +1904,13 @@ def _install_skill_record(skill, args, manifest):
             print(f"  [!!] Downloaded content doesn't look like a SKILL.md file.")
             return False
 
+        # Auto-install the skill's own Python package (if any) so it is usable
+        # immediately, without a separate manual pip install step.
+        package_sha, package_installed, package_pending = _handle_skill_package(
+            name, dest_dir, args, previous_entry)
+
+        neqsim_version_ok = _check_min_neqsim_version(skill, name)
+
         manifest[name] = {
             "path": str(dest_file),
             "source": skill.get("_source", "community"),
@@ -1456,8 +1925,12 @@ def _install_skill_record(skill, args, manifest):
             "tags": skill.get("tags", []),
             "author": skill.get("author", ""),
             "min_neqsim_version": skill.get("min_neqsim_version", ""),
+            "neqsim_version_ok": neqsim_version_ok,
             "installed_at": datetime.now(timezone.utc).isoformat(),
             "content_sha256": _sha256_file(dest_file),
+            "package_sha256": package_sha,
+            "package_installed": package_installed,
+            "package_pending": package_pending,
         }
         save_manifest(manifest)
 
@@ -1488,6 +1961,98 @@ def cmd_installed(skills, args):
     print(f"  {'-'*35} {'-'*20} {'-'*40}")
     for name, info in sorted(manifest.items()):
         print(f"  {name:<35} {info.get('author', '-'):<20} {info.get('path', '-')}")
+    print()
+
+
+def ensure_skill_package(name, manifest=None):
+    """Install one skill's Python package on first use, if it is not importable.
+
+    Lets ``install --no-pip`` stay fast while a skill that imports its own
+    package still works: the agent (or ``neqsim skill ensure``) pays for that
+    one pip run at the moment the skill is actually used.
+
+    @param name the installed skill name
+    @param manifest optional preloaded installed-skills manifest
+    @return True when the package is present (or the skill has none)
+    """
+    manifest = load_manifest() if manifest is None else manifest
+    info = manifest.get(name)
+    if not info:
+        print(f"  [!!] Skill '{name}' is not installed.")
+        return False
+    skill_path = info.get("path", "")
+    if not skill_path:
+        return False
+    dest_dir = Path(skill_path).parent
+    pyproject = dest_dir / "pyproject.toml"
+    if not pyproject.exists():
+        return True
+    dist_name = _pyproject_project_name(pyproject)
+    if dist_name and dist_name in _installed_distribution_names():
+        return True
+    ok = _pip_install_skill_package(dest_dir, name)
+    info["package_installed"] = ok
+    info["package_pending"] = not ok
+    if ok:
+        info["package_sha256"] = _sha256_file(pyproject)
+        _INSTALLED_DIST_NAMES[:] = []  # re-probe after a successful install
+    save_manifest(manifest)
+    return ok
+
+
+def cmd_ensure(skills, args):
+    """Install the named skills' Python packages if they are not importable yet."""
+    manifest = load_manifest()
+    failed = [name for name in args.names if not ensure_skill_package(name, manifest)]
+    if failed:
+        print("\n  [!!] Not usable: {names}\n".format(names=", ".join(failed)))
+        sys.exit(1)
+    print("\n  [OK] Ready: {names}\n".format(names=", ".join(args.names)))
+
+
+def cmd_sync_packages(skills, args):
+    """Install skill Python packages that were deferred by --no-pip."""
+    manifest = load_manifest()
+    force = getattr(args, "force", False)
+    pending = []
+    for name, info in sorted(manifest.items()):
+        skill_path = info.get("path", "")
+        if not skill_path:
+            continue
+        dest_dir = Path(skill_path).parent
+        pyproject = dest_dir / "pyproject.toml"
+        if not pyproject.exists():
+            continue
+        if not force:
+            if info.get("package_installed") and not info.get("package_pending"):
+                continue
+            if not info.get("package_pending"):
+                dist_name = _pyproject_project_name(pyproject)
+                if dist_name and dist_name in _installed_distribution_names():
+                    continue
+        pending.append((name, dest_dir))
+
+    if not pending:
+        print("\n  All installed skill packages are up to date.\n")
+        return
+
+    failed = _pip_install_skill_packages(pending)
+    for name, dest_dir in pending:
+        if name not in manifest:
+            continue
+        ok = name not in failed
+        manifest[name]["package_installed"] = ok
+        manifest[name]["package_pending"] = not ok
+        if ok:
+            manifest[name]["package_sha256"] = _sha256_file(dest_dir / "pyproject.toml")
+    save_manifest(manifest)
+
+    print("\n  ==== Package sync summary ====")
+    print("  Installed/OK: {count}".format(count=len(pending) - len(failed)))
+    print("  Failed: {count}".format(count=len(failed)))
+    if failed:
+        print("  Failed skills: {names}\n".format(names=", ".join(failed)))
+        sys.exit(1)
     print()
 
 
@@ -1544,11 +2109,44 @@ def get_enterprise_auth_status():
     }
 
 
+def _report_package_health():
+    """Print which installed skills have a Python package that is not usable yet.
+
+    @return number of packaged skills that still need a pip install
+    """
+    manifest = load_manifest()
+    installed_dists = _installed_distribution_names()
+    unusable = []
+    packaged = 0
+    for name, info in sorted(manifest.items()):
+        skill_path = info.get("path", "")
+        if not skill_path:
+            continue
+        pyproject = Path(skill_path).parent / "pyproject.toml"
+        if not pyproject.exists():
+            continue
+        packaged += 1
+        dist_name = _pyproject_project_name(pyproject)
+        if dist_name and dist_name in installed_dists:
+            continue
+        unusable.append(name)
+
+    print("\n  Skill Python packages:")
+    print(f"  [OK] Importable: {packaged - len(unusable)} of {packaged} packaged skill(s)")
+    if unusable:
+        print(f"  [!!] Not importable ({len(unusable)}): {', '.join(unusable[:8])}"
+              + (" ..." if len(unusable) > 8 else ""))
+        print("       Fix all: neqsim skill sync-packages")
+        print("       Fix one: neqsim skill ensure <name>")
+    return len(unusable)
+
+
 def cmd_doctor(skills, args):
     """Show enterprise auth readiness or export target health without handling secrets."""
     target = getattr(args, "target", None)
     if target:
         _check_export_target(target, args)
+        _report_package_health()
         return
 
     status = get_enterprise_auth_status()
@@ -1628,45 +2226,166 @@ def _check_export_target(target, args):
     print("\n  Result: PASS\n")
 
 
-def cmd_remove(skills, args):
-    """Remove an installed skill."""
-    name = args.name
-    manifest = load_manifest()
-    if name not in manifest:
-        print(f"\n  Skill '{name}' is not installed.\n")
-        sys.exit(1)
+REMOVE_SOURCES = ("all", "core", "community", "private")
 
-    skill_dir = INSTALL_DIR / name
-    if skill_dir.exists():
-        import shutil
-        shutil.rmtree(skill_dir)
 
-    vscode_path = manifest.get(name, {}).get("vscode_path", "")
+def _delete_path(path, dry_run=False):
+    """Delete a file or folder if it exists.
+
+    @param path path to delete
+    @param dry_run when true, only report what would be deleted
+    @return true when the path existed (and was, or would be, deleted)
+    """
+    p = Path(path)
+    if not p.exists():
+        return False
+    if dry_run:
+        return True
+    import shutil
+    if p.is_dir():
+        shutil.rmtree(str(p), ignore_errors=True)
+    else:
+        p.unlink()
+    return True
+
+
+def _remove_manifest_entry(kind, name, manifest, install_dir, dry_run=False):
+    """Remove one installed item and every export recorded for it.
+
+    Only paths recorded in the installed manifest are touched, so third-party
+    agents or skills that live next to NeqSim exports (for example under
+    ``~/.copilot``) are left alone.
+
+    @param kind "skills" or "agents" (used for messages and the generic manifest)
+    @param name installed item name
+    @param manifest installed manifest (entry is deleted in place unless dry_run)
+    @param install_dir the ``~/.neqsim/<kind>`` install root
+    @param dry_run when true, report without deleting
+    @return generic export root that needs its manifest rewritten, or None
+    """
+    verb = "Would remove" if dry_run else "Removed"
+    info = manifest.get(name, {})
+    item_dir = Path(install_dir) / name
+    if _delete_path(item_dir, dry_run):
+        print(f"  [OK] {verb} installed copy: {item_dir}")
+
+    seen = set()
+    vscode_path = info.get("vscode_path", "")
     if vscode_path:
-        vp = Path(vscode_path)
-        if vp.exists():
-            import shutil
-            shutil.rmtree(str(vp), ignore_errors=True)
-            print(f"  [OK] Removed VS Code copy: {vp}")
+        seen.add(str(Path(vscode_path)))
+        if _delete_path(vscode_path, dry_run):
+            print(f"  [OK] {verb} VS Code copy: {vscode_path}")
 
     generic_export_root = None
-    for target, export_path in manifest.get(name, {}).get("exports", {}).items():
+    for target, export_path in info.get("exports", {}).items():
         ep = Path(export_path)
-        if ep.exists():
-            import shutil
-            if ep.is_dir():
-                shutil.rmtree(str(ep), ignore_errors=True)
-            else:
-                ep.unlink()
-            print(f"  [OK] Removed {target} export: {ep}")
+        if str(ep) not in seen and _delete_path(ep, dry_run):
+            print(f"  [OK] {verb} {target} export: {ep}")
+        seen.add(str(ep))
         if target == "generic":
             generic_export_root = ep.parent.parent
 
-    del manifest[name]
-    if generic_export_root:
-        _write_generic_manifest("skills", generic_export_root, manifest)
+    if not dry_run:
+        del manifest[name]
+    return generic_export_root
+
+
+def _select_manifest_names(manifest, source="all"):
+    """Return installed names matching a source filter.
+
+    @param manifest installed manifest
+    @param source "all", or one of core / community / private
+    @return sorted list of matching names
+    """
+    if source in (None, "", "all"):
+        return sorted(manifest)
+    return sorted(
+        name for name, info in manifest.items()
+        if info.get("source", "community") == source)
+
+
+def _confirm_removal(kind, names, args):
+    """Ask before a bulk removal unless --yes was given.
+
+    @param kind "skills" or "agents"
+    @param names items about to be removed
+    @param args parsed CLI arguments (reads yes, dry_run)
+    @return true when the removal may proceed
+    """
+    if getattr(args, "dry_run", False) or getattr(args, "yes", False):
+        return True
+    if not sys.stdin or not sys.stdin.isatty():
+        print(f"  [!!] Refusing to remove {len(names)} {kind} without --yes "
+              "in a non-interactive session.")
+        return False
+    answer = input(f"  Remove {len(names)} {kind}? [y/N] ").strip().lower()
+    return answer in ("y", "yes")
+
+
+def remove_installed_skills(names, dry_run=False):
+    """Remove installed skills by name, including their recorded exports.
+
+    @param names skill names present in the installed manifest
+    @param dry_run when true, report without deleting
+    @return list of names that were (or would be) removed
+    """
+    manifest = load_manifest()
+    generic_roots = set()
+    removed = []
+    for name in names:
+        if name not in manifest:
+            continue
+        root = _remove_manifest_entry("skills", name, manifest, INSTALL_DIR, dry_run)
+        if root:
+            generic_roots.add(root)
+        removed.append(name)
+    if dry_run:
+        return removed
+    for root in generic_roots:
+        _write_generic_manifest("skills", root, manifest)
     save_manifest(manifest)
-    print(f"\n  [OK] Removed skill '{name}'.\n")
+    return removed
+
+
+def cmd_remove(skills, args):
+    """Remove an installed skill, or every installed skill with --all.
+
+    ``--all`` removes only what the NeqSim installer put in place (core,
+    community and private/enterprise skills recorded in the installed manifest)
+    together with their VS Code and generic exports; ``--source`` narrows it to
+    one catalog.
+    """
+    manifest = load_manifest()
+    remove_all = getattr(args, "all", False)
+    name = getattr(args, "name", None)
+    dry_run = getattr(args, "dry_run", False)
+
+    if remove_all:
+        source = getattr(args, "source", "all") or "all"
+        names = _select_manifest_names(manifest, source)
+        if not names:
+            print(f"\n  No installed skills to remove (source: {source}).\n")
+            return
+        label = "" if source == "all" else f" ({source})"
+        print(f"\n  Installed skills to remove{label}: {len(names)}")
+        for n in names:
+            print(f"    - {n}")
+        if not _confirm_removal("skills", names, args):
+            sys.exit(1)
+        removed = remove_installed_skills(names, dry_run=dry_run)
+        verb = "Would remove" if dry_run else "Removed"
+        print(f"\n  [OK] {verb} {len(removed)} skill(s).\n")
+        return
+
+    if not name:
+        print("\n  Give a skill name to remove, or --all.\n")
+        sys.exit(1)
+    if name not in manifest:
+        print(f"\n  Skill '{name}' is not installed.\n")
+        sys.exit(1)
+    remove_installed_skills([name], dry_run=dry_run)
+    verb = "Would remove" if dry_run else "Removed"
+    print(f"\n  [OK] {verb} skill '{name}'.\n")
 
 
 def cmd_publish(skills, args):
@@ -2126,6 +2845,9 @@ def main():
         "  neqsim skill install neqsim-example-skill --target generic",
         "  neqsim skill install --all --target vscode",
         "  neqsim skill install --all --source community --target vscode",
+        "  neqsim skill install --all --target vscode --no-pip   # skip Python package installs",
+        "  neqsim skill sync-packages                            # install the deferred packages",
+        "  neqsim skill ensure neqsim-example-skill              # install one package on first use",
         "  neqsim skill export neqsim-example-skill --target vscode",
         "  neqsim skill export neqsim-example-skill --target generic",
         "  neqsim skill installed",
@@ -2189,8 +2911,24 @@ def main():
     p_install.add_argument(
         "--export-dir", default=None,
         help="Generic export root for --target generic (default: ~/.neqsim/export/generic)")
+    p_install.add_argument(
+        "--no-pip", dest="no_pip", action="store_true",
+        help="Defer skill Python package installs; run 'neqsim skill sync-packages' "
+             "or 'neqsim skill ensure <name>' before using a skill that imports its package")
 
     sub.add_parser("installed", help="Show installed skills")
+
+    p_sync = sub.add_parser(
+        "sync-packages",
+        help="Pip install skill Python packages that are missing or were deferred by --no-pip")
+    p_sync.add_argument(
+        "--force", action="store_true",
+        help="Reinstall every packaged skill, not just the pending ones")
+
+    p_ensure = sub.add_parser(
+        "ensure",
+        help="Install a skill's Python package on first use (no-op when already importable)")
+    p_ensure.add_argument("names", nargs="+", help="Installed skill name(s)")
 
     p_export = sub.add_parser("export", help="Export an installed skill to an AI-tool target")
     p_export.add_argument("name", help="Installed skill name")
@@ -2207,8 +2945,20 @@ def main():
         "--export-dir", default=None,
         help="Generic export root for --target generic (default: ~/.neqsim/export/generic)")
 
-    p_remove = sub.add_parser("remove", help="Remove an installed skill")
-    p_remove.add_argument("name", help="Skill name to remove")
+    p_remove = sub.add_parser(
+        "remove", help="Remove an installed skill (or every NeqSim-installed skill with --all)")
+    p_remove.add_argument("name", nargs="?", default=None, help="Skill name to remove")
+    p_remove.add_argument(
+        "--all", action="store_true",
+        help="Remove every skill the NeqSim installer put in place, including its "
+             "VS Code (~/.copilot/skills) and generic exports; other files are untouched")
+    p_remove.add_argument(
+        "--source", choices=REMOVE_SOURCES, default="all",
+        help="With --all: only core, community or private/enterprise skills")
+    p_remove.add_argument("-y", "--yes", action="store_true",
+                          help="Do not ask for confirmation with --all")
+    p_remove.add_argument("--dry-run", action="store_true",
+                          help="Show what would be removed without deleting anything")
 
     p_publish = sub.add_parser("publish", help="Publish your skill to the catalog")
     p_publish.add_argument("repo", help="GitHub repo (owner/repo) containing the skill")
@@ -2250,6 +3000,9 @@ def main():
     if args.command == "doctor":
         cmd_doctor([], args)
         return
+    if args.command == "remove":
+        cmd_remove([], args)
+        return
 
     private_only = getattr(args, "private", False)
     skills = load_catalog(private_only=private_only)
@@ -2261,6 +3014,8 @@ def main():
         "install": cmd_install,
         "export": cmd_export,
         "installed": cmd_installed,
+        "sync-packages": cmd_sync_packages,
+        "ensure": cmd_ensure,
         "remove": cmd_remove,
         "publish": cmd_publish,
         "doctor": cmd_doctor,

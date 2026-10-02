@@ -66,6 +66,12 @@ public class PackingHydraulicsCalculator implements Serializable {
   /** Design flooding fraction (typically 0.65-0.75 for packed columns). */
   private double designFloodFraction = 0.70;
 
+  /**
+   * Relative hydraulic capacity factor applied to the calculated flooding velocity. A value of 1.0 uses the base GPDC
+   * correlation, while values above 1.0 represent a vendor-supported high-capacity packing rating.
+   */
+  private double hydraulicCapacityFactor = 1.0;
+
   // ======================== Operating conditions ========================
 
   /** Vapor mass flow rate [kg/s]. */
@@ -207,7 +213,7 @@ public class PackingHydraulicsCalculator implements Serializable {
     double muFactor = Math.pow(liquidViscosity / 0.001, 0.1); // Reference: water viscosity
 
     double uFloodSq = yFlood / (packingFactor * rhoFactor * muFactor);
-    floodingVelocity = Math.sqrt(Math.max(uFloodSq, 0.0));
+    floodingVelocity = Math.sqrt(Math.max(uFloodSq, 0.0)) * hydraulicCapacityFactor;
   }
 
   /**
@@ -510,8 +516,8 @@ public class PackingHydraulicsCalculator implements Serializable {
    * @return standard diameter [m]
    */
   private double roundToStandardDiameter(double diameter) {
-    double[] standardSizes = { 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.4, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6,
-        2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0 };
+    double[] standardSizes = {0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.4, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6,
+        2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0};
     for (double stdSize : standardSizes) {
       if (stdSize >= diameter) {
         return stdSize;
@@ -732,6 +738,33 @@ public class PackingHydraulicsCalculator implements Serializable {
    */
   public void setDesignFloodFraction(double fraction) {
     this.designFloodFraction = fraction;
+  }
+
+  /**
+   * Set the relative hydraulic capacity factor applied to the packing flooding velocity.
+   *
+   * <p>
+   * Keep the default value of 1.0 for the base correlation. Values such as 1.20 or 1.30 should only be used when the
+   * selected packing vendor supplies a defensible capacity rating for the relevant service and pressure range.
+   * </p>
+   *
+   * @param factor positive relative capacity factor
+   * @throws IllegalArgumentException if the factor is not positive and finite
+   */
+  public void setHydraulicCapacityFactor(double factor) {
+    if (!Double.isFinite(factor) || factor <= 0.0) {
+      throw new IllegalArgumentException("hydraulic capacity factor must be positive and finite");
+    }
+    this.hydraulicCapacityFactor = factor;
+  }
+
+  /**
+   * Get the relative hydraulic capacity factor applied to the flooding velocity.
+   *
+   * @return relative hydraulic capacity factor
+   */
+  public double getHydraulicCapacityFactor() {
+    return hydraulicCapacityFactor;
   }
 
   /**

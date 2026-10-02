@@ -1,6 +1,11 @@
 package neqsim.thermo.system;
 
+import neqsim.chemicalreactions.chemicalreaction.ChemicalReactionConcentrationBasis;
+import neqsim.chemicalreactions.chemicalreaction.ChemicalReactionDataSource;
 import neqsim.thermo.phase.PhasePitzer;
+import neqsim.thermo.phase.PitzerParameterDatasets;
+import neqsim.thermo.phase.PitzerParameterQualification;
+import neqsim.thermo.phase.PitzerParameterQualification.ValidationTarget;
 import neqsim.thermo.phase.PhaseSrkEos;
 
 /**
@@ -16,7 +21,9 @@ import neqsim.thermo.phase.PhaseSrkEos;
  * </p>
  *
  * <p>
- * The hybrid strategy currently supports fluid phases only. Solid and wax checks are rejected explicitly when the
+ * The hybrid TP strategy supports fluid phases only. Incipient hydrate temperature, pressure and equilibrium curves are
+ * available through ThermodynamicOperations using a Pitzer-consistent liquid-water reference and a bounded outer
+ * search. This does not compute hydrate amounts. Solid and wax checks are rejected explicitly when the hybrid TP
  * strategy is active.
  * </p>
  *
@@ -58,6 +65,134 @@ public class SystemPitzer extends SystemEosGE {
     configureHybridEosGePhases(T, P, new PhaseSrkEos(), new PhasePitzer(), new PhaseSrkEos());
   }
 
+  /**
+   * Selects legacy Pitzer parameter loading for compatibility with historical calculations.
+   *
+   * <p>
+   * The default is to use the bundled PHREEQC catalog whenever it contains every interaction required by the active
+   * aqueous topology. Call this method before the first activity or property evaluation only when reproducing a legacy
+   * result is required.
+   * </p>
+   */
+  public void useLegacyPitzerParameters() {
+    ((PhasePitzer) phaseArray[1]).setUsePhreeqcCatalogByDefault(false);
+  }
+
+  /**
+   * Loads the PHREEQC CO2/chloride family with explicitly supplied missing neutral ternary interactions.
+   *
+   * @param co2ChlorideZeta constant zeta keyed by each present cation name; no default values are assumed
+   * @see PitzerParameterDatasets#applyPhreeqcCo2ChlorideParameters(PhasePitzer, java.util.Map)
+   */
+  public void applyPhreeqcCo2ChlorideParameters(java.util.Map<String, Double> co2ChlorideZeta) {
+    PitzerParameterDatasets.applyPhreeqcCo2ChlorideParameters((PhasePitzer) phaseArray[1], co2ChlorideZeta);
+  }
+
+  /**
+   * Loads the CO2/chloride family with explicit missing zeta and potassium-magnesium theta interactions.
+   *
+   * @param co2ChlorideZeta constant zeta keyed by each present cation name
+   * @param potassiumMagnesiumTheta finite constant K+-Mg++ theta in kg/mol; no default is assumed
+   * @see PitzerParameterDatasets#applyPhreeqcCo2ChlorideParameters(PhasePitzer, java.util.Map, double)
+   */
+  public void applyPhreeqcCo2ChlorideParameters(java.util.Map<String, Double> co2ChlorideZeta,
+      double potassiumMagnesiumTheta) {
+    PitzerParameterDatasets.applyPhreeqcCo2ChlorideParameters((PhasePitzer) phaseArray[1], co2ChlorideZeta,
+        potassiumMagnesiumTheta);
+  }
+
+  /**
+   * Reports whether automatic parameter loading prefers the bundled PHREEQC catalog.
+   *
+   * @return {@code true} for the default catalog-first policy
+   */
+  public boolean isUsingPhreeqcPitzerParametersByDefault() {
+    return ((PhasePitzer) phaseArray[1]).isUsePhreeqcCatalogByDefault();
+  }
+
+  /**
+   * Refreshes catalog-first parameter selection after the active aqueous topology changes.
+   *
+   * <p>
+   * Component identities can be added after an earlier property evaluation selected the legacy fallback for a
+   * water-only topology. This method re-runs the complete catalog audit for the now-active species without changing an
+   * explicit {@link #useLegacyPitzerParameters()} selection. Missing catalog rows leave the existing coherent fallback
+   * untouched.
+   * </p>
+   *
+   * @return {@code true} when the complete PHREEQC catalog was applied to the active topology
+   */
+  public boolean refreshDefaultPitzerParameterSelection() {
+    if (!isUsingPhreeqcPitzerParametersByDefault()) {
+      return false;
+    }
+    return PitzerParameterDatasets.tryApplyCompletePhreeqcPitzerCatalog((PhasePitzer) phaseArray[1]);
+  }
+
+  /**
+   * Returns scientific qualification metadata for the selected Pitzer parameter dataset.
+   *
+   * <p>
+   * Calling this method completes lazy dataset selection and the active ionic-topology coverage audit. It does not run
+   * a flash or enter ordinary property kernels.
+   * </p>
+   *
+   * @return immutable qualification metadata for the selected dataset identity
+   */
+  public PitzerParameterQualification getPitzerParameterQualification() {
+    PhasePitzer aqueousPhase = (PhasePitzer) phaseArray[1];
+    aqueousPhase.getPitzerParameterCoverage();
+    return PitzerParameterDatasets.getQualification(aqueousPhase.getParameterDatasetId());
+  }
+
+  /**
+   * Requires complete interaction coverage and complete scientific qualification of the named Pitzer dataset.
+   *
+   * <p>
+   * This is an explicit publication gate. A broad dataset with only partially validated subsystems is rejected even
+   * when it covers the active topology. A successful result still requires the caller to check the appropriate
+   * subsystem-specific temperature and molality range helper. This legacy gate does not select an observable; use
+   * {@link #requirePitzerDatasetValidationFor(ValidationTarget)} before publishing a property-specific calculation.
+   * </p>
+   *
+   * @return immutable qualification metadata for the accepted dataset
+   * @throws IllegalStateException when interaction coverage is incomplete or the complete dataset is not validated
+   */
+  public PitzerParameterQualification requireCompletePitzerDatasetQualification() {
+    PhasePitzer aqueousPhase = (PhasePitzer) phaseArray[1];
+    aqueousPhase.requireCompletePitzerParameterCoverage();
+    PitzerParameterQualification qualification = PitzerParameterDatasets
+        .getQualification(aqueousPhase.getParameterDatasetId());
+    qualification.requireCompleteDatasetQualification();
+    return qualification;
+  }
+
+  /**
+   * Requires complete interaction coverage and independent qualification for one scientific target.
+   *
+   * <p>
+   * This explicit publication gate does not run a flash and does not check whether the current temperature, pressure,
+   * or composition lies inside the evidence envelope. Callers must also use the applicable dataset-specific range
+   * helper in {@link PitzerParameterDatasets}.
+   * </p>
+   *
+   * @param target requested property or equilibrium target
+   * @return immutable qualification metadata for the accepted dataset and target
+   * @throws IllegalArgumentException when {@code target} is null
+   * @throws IllegalStateException when coverage is incomplete or the target lacks independent qualification
+   */
+  public PitzerParameterQualification requirePitzerDatasetValidationFor(ValidationTarget target) {
+    if (target == null) {
+      throw new IllegalArgumentException("Pitzer validation target must not be null");
+    }
+    PhasePitzer aqueousPhase = (PhasePitzer) phaseArray[1];
+    aqueousPhase.requireCompletePitzerParameterCoverage();
+    PitzerParameterQualification qualification = PitzerParameterDatasets
+        .getQualification(aqueousPhase.getParameterDatasetId());
+    qualification.requireValidationFor(target);
+    return qualification;
+  }
+
   /** {@inheritDoc} */
   @Override
   public void setMixingRule(String typename) {
@@ -65,6 +200,64 @@ public class SystemPitzer extends SystemEosGE {
     for (int i = 1; i < numberOfPhases; i++) {
       phaseArray[i].initRefPhases(false);
     }
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public ChemicalReactionConcentrationBasis getChemicalReactionConcentrationBasis() {
+    return ChemicalReactionConcentrationBasis.SOLUTE_MOLALITY;
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public ChemicalReactionDataSource getChemicalReactionDataSource() {
+    return ChemicalReactionDataSource.PITZER;
+  }
+
+  /**
+   * Applies the qualified public-domain PHREEQC CO2-Na2SO4 parameter subset to this system's Pitzer aqueous role.
+   *
+   * <p>
+   * The dataset is intentionally fail-closed: additional active species require explicit companion interactions. See
+   * {@link PitzerParameterDatasets#applyPhreeqcCo2SodiumSulfate(PhasePitzer)} for source identity and validation scope.
+   * </p>
+   */
+  public void applyPhreeqcCo2SodiumSulfateParameters() {
+    PitzerParameterDatasets.applyPhreeqcCo2SodiumSulfate((PhasePitzer) phaseArray[1]);
+  }
+
+  /**
+   * Applies the qualified public-domain PHREEQC Na-K-Cl parameter subset to this system's Pitzer aqueous role.
+   *
+   * <p>
+   * The dataset contains both binary families and their same-sign and ternary mixed-ion companions. It is intentionally
+   * fail-closed if another active ionic or neutral species lacks a qualified interaction. See
+   * {@link PitzerParameterDatasets#applyPhreeqcSodiumPotassiumChloride(PhasePitzer)} for source identity and validation
+   * scope.
+   * </p>
+   */
+  public void applyPhreeqcSodiumPotassiumChlorideParameters() {
+    PitzerParameterDatasets.applyPhreeqcSodiumPotassiumChloride((PhasePitzer) phaseArray[1]);
+  }
+
+  /**
+   * Applies the complete explicit PHREEQC Pitzer subset required by this system's active aqueous species.
+   *
+   * <p>
+   * The bundled source catalog is broad, but activation remains fail-closed: every required binary, same-sign, ternary,
+   * and neutral interaction for the active aqueous topology must exist explicitly. Gas and oil remain on their EOS role
+   * phases and do not invoke the catalog.
+   * </p>
+   */
+  public void applyCompletePhreeqcPitzerCatalogParameters() {
+    PitzerParameterDatasets.applyCompletePhreeqcPitzerCatalog((PhasePitzer) phaseArray[1]);
+  }
+
+  /**
+   * Applies the complete qualified PHREEQC Ca-Mg-Cl-SO4 family to this system's Pitzer aqueous role.
+   */
+  public void applyPhreeqcCalciumMagnesiumChlorideSulfateParameters() {
+    PitzerParameterDatasets.applyPhreeqcCalciumMagnesiumChlorideSulfate((PhasePitzer) phaseArray[1]);
   }
 
   /** {@inheritDoc} */

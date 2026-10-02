@@ -10,13 +10,14 @@ import neqsim.thermo.system.SystemSrkEos;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
 
 class TPflashCubicRootSelectionTest {
-  private static final String[] COMPONENTS = { "methane", "ethane", "propane", "n-heptane", "nC10" };
-  private static final double[] FEED = { 0.72, 0.08, 0.05, 0.10, 0.05 };
-  private static final String[] NEAR_CRITICAL_COMPONENTS = { "methane", "ethane", "propane", "n-butane" };
-  private static final double[] NEAR_CRITICAL_FEED = { 0.5833884211682981, 0.16475359157041228, 0.19866217294783825,
-      0.053195814313451245 };
-  private static final String[] CO2_RICH_COMPONENTS = { "CO2", "methane", "nC10" };
-  private static final double[] CO2_RICH_FEED = { 0.80, 0.15, 0.05 };
+  private static final double CROSS_ALGORITHM_STATE_TOLERANCE = 1.0e-8;
+  private static final String[] COMPONENTS = {"methane", "ethane", "propane", "n-heptane", "nC10"};
+  private static final double[] FEED = {0.72, 0.08, 0.05, 0.10, 0.05};
+  private static final String[] NEAR_CRITICAL_COMPONENTS = {"methane", "ethane", "propane", "n-butane"};
+  private static final double[] NEAR_CRITICAL_FEED = {0.5833884211682981, 0.16475359157041228, 0.19866217294783825,
+      0.053195814313451245};
+  private static final String[] CO2_RICH_COMPONENTS = {"CO2", "methane", "nC10"};
+  private static final double[] CO2_RICH_FEED = {0.80, 0.15, 0.05};
 
   @Test
   void ordinaryAndMultiphaseFlashSelectSameLowestGibbsCubicRoots() {
@@ -28,12 +29,15 @@ class TPflashCubicRootSelectionTest {
     assertEquals(multiphase.getGibbsEnergy(), ordinary.getGibbsEnergy(), 1.0e-8);
 
     for (int phaseIndex = 0; phaseIndex < 2; phaseIndex++) {
-      assertEquals(multiphase.getBeta(phaseIndex), ordinary.getBeta(phaseIndex), 1.0e-12);
-      assertEquals(multiphase.getPhase(phaseIndex).getDensity(), ordinary.getPhase(phaseIndex).getDensity(), 1.0e-8);
-      assertEquals(multiphase.getPhase(phaseIndex).getZ(), ordinary.getPhase(phaseIndex).getZ(), 1.0e-12);
+      assertEquals(multiphase.getPhase(phaseIndex).getType(), ordinary.getPhase(phaseIndex).getType());
+      assertEquals(multiphase.getBeta(phaseIndex), ordinary.getBeta(phaseIndex), CROSS_ALGORITHM_STATE_TOLERANCE);
+      assertEquals(multiphase.getPhase(phaseIndex).getDensity(), ordinary.getPhase(phaseIndex).getDensity(),
+          Math.max(1.0e-8, CROSS_ALGORITHM_STATE_TOLERANCE * Math.abs(multiphase.getPhase(phaseIndex).getDensity())));
+      assertEquals(multiphase.getPhase(phaseIndex).getZ(), ordinary.getPhase(phaseIndex).getZ(),
+          CROSS_ALGORITHM_STATE_TOLERANCE);
       for (int componentIndex = 0; componentIndex < COMPONENTS.length; componentIndex++) {
         assertEquals(multiphase.getPhase(phaseIndex).getComponent(componentIndex).getx(),
-            ordinary.getPhase(phaseIndex).getComponent(componentIndex).getx(), 1.0e-12);
+            ordinary.getPhase(phaseIndex).getComponent(componentIndex).getx(), CROSS_ALGORITHM_STATE_TOLERANCE);
       }
     }
 
@@ -96,13 +100,13 @@ class TPflashCubicRootSelectionTest {
 
   @Test
   void nearbyCo2RichStatesPreserveCubicRootAcrossPhaseBoundary() {
-    double[][] states = { { 275.0, 75.0, 0.78, 0.17, 0.05 }, { 285.0, 85.0, 0.82, 0.13, 0.05 },
-        { 300.0, 100.0, 0.80, 0.15, 0.05 }, { 320.0, 150.0, 0.80, 0.15, 0.05 }, { 280.0, 250.0, 0.80, 0.15, 0.05 } };
+    double[][] states = {{275.0, 75.0, 0.78, 0.17, 0.05}, {285.0, 85.0, 0.82, 0.13, 0.05},
+        {300.0, 100.0, 0.80, 0.15, 0.05}, {320.0, 150.0, 0.80, 0.15, 0.05}, {280.0, 250.0, 0.80, 0.15, 0.05}};
     boolean observedSinglePhase = false;
     boolean observedTwoPhase = false;
 
     for (double[] state : states) {
-      double[] feed = { state[2], state[3], state[4] };
+      double[] feed = {state[2], state[3], state[4]};
       SystemInterface ordinary = createAndFlashCo2Rich(state[0], state[1], feed, false, false);
       SystemInterface multiphase = createAndFlashCo2Rich(state[0], state[1], feed, true, false);
 

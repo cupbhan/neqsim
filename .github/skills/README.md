@@ -10,6 +10,26 @@ prompts skills folder; use `--vscode-scope workspace` only when a maintainer int
 generated workspace copy. PaperLab keeps its full canonical library under `neqsim-paperlab/skills/`;
 only the `@paperlab` gateway's public skills are exported for VS Code by default.
 
+## OpenAI Codex discovery without duplicate skills
+
+The repository tracks `.agents/skills` as a symbolic link to this directory. OpenAI Codex scans
+`.agents/skills` for repository skills and follows symbolic links, while the existing NeqSim and
+GitHub Copilot tooling continues to use `.github/skills`.
+
+Maintain each core skill **only in this directory**. Do not replace `.agents/skills` with a copied
+skill tree or edit a second copy. The structural lint verifies both the link target and the resolved
+directory:
+
+```bash
+python devtools/verify_skills_agents.py
+git ls-files -s .agents/skills  # mode must be 120000
+```
+
+Windows checkouts must preserve Git symbolic links. Enable Windows Developer Mode and Git symlink
+support before cloning when a local checkout materializes the link as a plain text file. See the
+[OpenAI skill discovery documentation](https://learn.chatgpt.com/docs/build-skills) for the native
+Codex repository path and symbolic-link behavior.
+
 > **Full documentation:** See the [Skills and Agents Guide](../../docs/integration/skills_guide.md)
 > for the complete walkthrough — creating core, community, and private skills,
 > installing community/private agents, the SKILL.md and agent.yaml formats,
@@ -143,8 +163,9 @@ Every code example must work against NeqSim's actual API. Test by:
 **4. Register the skill:**
 
 - Add an entry to the **Skill Index** table in this README
-- Add a `<skill>` entry in `.github/copilot-instructions.md` under the `<skills>` section
-- Add a row to the **Skills Reference** table in `AGENTS.md`
+- Do **not** add it to `AGENTS.md` or `.github/copilot-instructions.md`: those are resent on
+  every model call and stay lean. VS Code lists skills from their frontmatter, and
+  `devtools/skill_search.py` indexes them; reference the skill from the agents that use it.
 
 **5. Submit a PR:**
 
@@ -296,7 +317,8 @@ neqsim skill list                          # community skills (catalog)
 1. Run `neqsim new-skill "name"` to scaffold
 2. Edit `.github/skills/neqsim-<name>/SKILL.md`
 3. Test all code patterns against the actual API
-4. Register in `copilot-instructions.md`, `AGENTS.md`, and this README
+4. Register in this README and in the agents that load it (not in `AGENTS.md` /
+   `copilot-instructions.md`, which are kept lean)
 5. Submit PR with `[Skill]` prefix
 
 ### Skill File Format

@@ -53,7 +53,7 @@ class HydrocarbonWaterIsolatedBoundaryRootClassifierTest extends NeqSimTest {
       independentlyRecovered.add(AnchorPoint.from(BoundaryFamily.GW_TO_GOW, root, fluid));
     }
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result initial = discoverer.setCorrectionControls(24, 80, 1.0e-5, 1.0e-8)
-        .discoverFromStableRegionTransitions(new double[] { 230.0, 260.0 }, new double[] { 10.0 }).getDiscovery();
+        .discoverFromStableRegionTransitions(new double[] {230.0, 260.0}, new double[] {10.0}).getDiscovery();
     assertEquals(1, initial.getCorrectedAnchorCount());
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result augmented = discoverer.augmentWithIndependentAnchors(initial,
         independentlyRecovered);

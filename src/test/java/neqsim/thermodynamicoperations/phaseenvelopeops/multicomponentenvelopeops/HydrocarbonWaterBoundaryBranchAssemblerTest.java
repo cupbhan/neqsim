@@ -16,10 +16,10 @@ class HydrocarbonWaterBoundaryBranchAssemblerTest extends NeqSimTest {
   @Tag("slow")
   void densePressureAnchorsSelectRegularPressureBeforePseudoArcLength() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidOne(false);
-    double[] temperaturesK = new double[] { 180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0 };
+    double[] temperaturesK = new double[] {180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0};
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result discovery = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
         .setCorrectionControls(32, 80, 1.0e-5, 1.0e-8).setStableScanControls(32, 0.25)
-        .discoverFromStableRegionTransitions(temperaturesK, new double[] { 10.0, 10.5, 11.0 }).getDiscovery();
+        .discoverFromStableRegionTransitions(temperaturesK, new double[] {10.0, 10.5, 11.0}).getDiscovery();
 
     HydrocarbonWaterBoundaryBranchAssembler.Result assembled = new HydrocarbonWaterBoundaryBranchAssembler(fluid)
         .assemble(discovery, 1);
@@ -42,10 +42,10 @@ class HydrocarbonWaterBoundaryBranchAssemblerTest extends NeqSimTest {
   @Tag("slow")
   void fixedPressureFallbackPreservesARegularBranchWhenPseudoArcCannotStart() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidOne(false);
-    double[] temperaturesK = new double[] { 180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0 };
+    double[] temperaturesK = new double[] {180.0, 200.0, 220.0, 240.0, 250.0, 260.0, 270.0, 280.0, 300.0};
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result discovery = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
         .setCorrectionControls(32, 80, 1.0e-5, 1.0e-8).setStableScanControls(32, 0.25)
-        .discoverFromStableRegionTransitions(temperaturesK, new double[] { 10.0, 20.0 }).getDiscovery();
+        .discoverFromStableRegionTransitions(temperaturesK, new double[] {10.0, 20.0}).getDiscovery();
 
     HydrocarbonWaterBoundaryBranchAssembler.Result assembled = new HydrocarbonWaterBoundaryBranchAssembler(fluid)
         .setCorrectorControls(1, 1.0e-14, 2.0e-5).setStepControls(0.25, 0.01, 0.5, 2, 0.35).assemble(discovery, 1);

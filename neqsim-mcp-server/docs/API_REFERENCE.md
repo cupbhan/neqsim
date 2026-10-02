@@ -4,6 +4,10 @@ Detailed parameter documentation for MCP tools and resources.
 For the governance model, tier structure, and stability promises, see
 [MCP_CONTRACT.md](../MCP_CONTRACT.md).
 
+The exact protocol-tested tool, resource, resource-template, prompt, deployment-profile,
+capability, test-source, guide, and known-limit/trust baseline is recorded in
+[MCP published-surface inventory](SURFACE_INVENTORY.md).
+
 ---
 
 ## `runFlash` — Thermodynamic Flash Calculation
@@ -218,6 +222,33 @@ process JSON object per area:
 and routed through `EquipmentFactory`. Equipment that needs non-generic
 construction or custom multi-port semantics may still require a dedicated MCP
 runner or builder extension.
+
+The `getCapabilities` response also includes `implementationInventory`, a compact
+machine-readable trace from all published tools to their implementation classes,
+the canonical name-only `EquipmentFactory` surface, and the bounded
+`generateReport` / `bridgeTaskWorkflow` reporting paths. Use this inventory for
+discovery and audit; availability is not equivalent to benchmark validation or
+engineering approval.
+
+`phase0EvidenceInventory` adds source-counted Java and real-protocol test inventories, eight MCP
+guide paths, acceptance fixtures and their bounded baseline contract, the campaign matrix, and a
+runtime reconciliation of `getBenchmarkTrust`. Its `complete` flag remains false: all 71 tools
+have coverage records, but only 20 have tool-specific trust pages; 47 generic-fallback tools have
+bounded `CONTRACT_TESTED` evidence and 4 remain `CONFIRMED_GAP`. Test presence is not test
+execution, and generic `TESTED` maturity is not a benchmark, accuracy,
+applicability, or no-limitations claim. The default 272 KiB transport response-size guard retains both
+`implementationInventory` and `phase0EvidenceInventory` when larger capability-catalog sections
+must be omitted.
+
+If omission metadata would exceed the remaining byte budget, the guard drops
+optional `summary` prose from omission records. The omitted field names, byte
+counts, retrieval guidance and complete discovery inventories remain available
+when this is sufficient. If necessary, the guard also drops optional per-field
+`approximateBytes` estimates, reason and configuration prose, and shortens
+retrieval guidance. It retains every omitted field name, exact original/returned
+byte counts, the configured limit, and the complete protected inventories in both
+response views. Clients must treat omission summaries and per-field sizes as
+optional metadata.
 
 ---
 
@@ -536,6 +567,33 @@ envelope.
 
 ---
 
+## `runRiskMatrix` — bounded screening
+
+`runRiskMatrix` deterministically scores 1–100 caller-supplied events on the
+existing NeqSim 5×5 matrix. The complete request is limited to 16,384 UTF-8
+bytes. Each event uses exactly one input mode:
+
+- integer `probabilityLevel` and `consequenceLevel`, each from 1 through 5; or
+- non-negative `failuresPerYear` and `productionLossPercent` from 0 through
+  100.
+
+Names are limited to 256 characters and optional mitigation text to 2,048
+characters. Partial or mixed modes, malformed shapes, fractional levels,
+negative frequencies, out-of-range losses, oversized collections, and
+oversized requests fail closed with stable error codes.
+
+The response identifies whether each score came from explicit levels or the
+generic frequency/production-loss thresholds. `screeningOnly=true` and
+`standardConformanceClaimed=false` are mandatory. The existing `standard` key
+is retained with a generic-screening descriptor for response compatibility; it
+does not assert conformance. The matrix does not identify
+hazards, validate safeguards, establish risk acceptance, demonstrate ISO 31000
+or NORSOK Z-013 compliance, authorize plant action, or replace project-specific
+criteria and qualified safety review. See
+[`RISK_MATRIX_SCREENING_CONTRACT.md`](evidence/RISK_MATRIX_SCREENING_CONTRACT.md).
+
+---
+
 ## Browsable MCP Resources (13 Endpoints)
 
 ### Catalog Resources (Static)
@@ -560,3 +618,93 @@ envelope.
 | `neqsim://components/{name}` | Full properties for a component (Tc, Pc, omega, MW, etc.) |
 | `neqsim://standards/{code}` | Parameters for a specific design standard |
 | `neqsim://materials/{type}` | Material grades by type: pipe, plate, casing, etc. |
+
+
+## `compareProcesses` bounded comparison contract
+
+`compareProcesses` accepts one JSON object containing `cases`. The request
+is limited to 1 MiB of UTF-8 text and two to 32 cases. Each case must contain a
+`fluid` object and `process` array in canonical `runProcess` format; an
+optional trimmed case name must be unique and at most 256 characters.
+
+Cases execute sequentially in request order through `ProcessRunner`. The
+response preserves every canonical result and reports `caseCount`,
+`successfulCaseCount`, `failedCaseCount`, and `complete`. When one case
+fails, the outer comparison remains a successful bounded operation with
+`complete=false`, the failed case's canonical error result, and an `errors`
+summary, so partial output cannot be mistaken for full comparison evidence.
+
+The contract validates admission, routing, accounting, discovery, response
+shape, and packaged transport only. Callers remain responsible for compatible
+case definitions, units and comparison bases, convergence, numerical and
+thermodynamic validity, conservation, uncertainty, engineering interpretation,
+and accountable approval.
+
+
+---
+
+## `designUtilities` — Utility-system screening
+
+`designUtilities` accepts one JSON design basis and dispatches `utilityType` to
+the existing NeqSim `Boiler`, `Deaerator`, `RefrigerationCycle`,
+`NitrogenSystem`, or `SteamNetwork` implementation. The result is returned
+through the standard MCP envelope with provenance and validation evidence.
+
+The `CONTRACT_TESTED` classification covers deterministic five-type routing,
+native-model delegation, packaged transport, access enforcement, result
+envelopes, and fail-closed blank, malformed, and unsupported utility types. It
+does not validate the caller's design basis, correlations, property data,
+equipment sizing, reliability, availability, network optimization, emissions
+or cost forecasts, detailed mechanical design, safe operating limits,
+standards conformance, certification, plant action, or accountable engineering
+approval. See
+[`UTILITY_DESIGN_SCREENING_CONTRACT.md`](evidence/UTILITY_DESIGN_SCREENING_CONTRACT.md).
+
+
+---
+
+## `runChemistry` — Canonical chemistry dispatch
+
+`runChemistry` accepts one JSON chemistry specification and delegates its
+`analysis` to the existing `ChemistryRunner`. The runner supports electrolyte
+and multi-mineral scale screening, mechanistic corrosion, Langmuir inhibitor
+screening, packed-bed scavenger breakthrough, authoritative single- and
+multi-mineral electrolyte equilibrium, and Pitzer qualification.
+
+The `CONTRACT_TESTED` classification covers deterministic eight-analysis
+dispatch, packaged transport, access enforcement, structured result and error
+envelopes, and fail-closed blank, malformed, and unknown analyses. It does not
+validate composition or design-basis suitability, model or dataset
+applicability, thermodynamic or kinetic accuracy, convergence for arbitrary
+inputs, uncertainty, chemical dose, safe operating limits, standards
+conformance, certification, plant action, or accountable engineering approval.
+See
+[`CHEMISTRY_SCREENING_CONTRACT.md`](evidence/CHEMISTRY_SCREENING_CONTRACT.md).
+
+
+### runFlareNetwork bounded screening contract
+
+The tool accepts exactly one positive heat-duty basis and up to 200 positive finite
+distances in a request no larger than 16,384 UTF-8 bytes. It delegates to the
+canonical NeqSim `Flare` model and returns deterministic radiation profiles,
+reference-threshold contours, stable error codes, and explicit advisory metadata.
+The result is screening only and does not claim standards conformance or replace
+qualified engineering review.
+
+
+### runHazopScenario simulation-backed software contract
+
+The existing tool builds and runs the caller-supplied canonical `ProcessSystem`, filters quantified
+findings by node, guide word, and parameter, and returns the computed value, caller-owned design
+limit, verdict, standard reference, and auditable limit basis. Inventory 1.47 records the direct Java,
+catalog, server-facade, documentation, comprehensive-protocol, and focused packaged-MCP evidence as
+`CONTRACT_TESTED`.
+
+The MCP response uses `status: "success"` and `validation.valid: true` for a completed calculation,
+with the runner's `status: "ok"` and the full finding payload in `data`. Existing top-level finding
+fields remain available. An invalid scenario retains an error envelope and failed validation.
+
+This classification qualifies software-contract behavior only. It does not establish hazard-
+identification or scenario completeness, source-document fidelity, thermodynamic or process-model
+accuracy, suitability of caller limits, governing-standard applicability or conformance, safe
+operating limits, plant authority, certification, or accountable HAZOP/process-safety approval.

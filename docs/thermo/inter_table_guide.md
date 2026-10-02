@@ -1,9 +1,7 @@
 ---
 title: "INTER Table: Binary Interaction Coefficients Database"
-description: "This guide documents the INTER table in NeqSim, which contains binary interaction parameters (BIPs) for thermodynamic models including equations of state (EoS), activity coefficient models, and CPA as..."
+description: "Reference to NeqSim's INTER database of binary interaction parameters for equations of state, activity-coefficient models, and CPA."
 ---
-
-# INTER Table: Binary Interaction Coefficients Database
 
 This guide documents the INTER table in NeqSim, which contains binary interaction parameters (BIPs) for thermodynamic models including equations of state (EoS), activity coefficient models, and CPA association parameters.
 

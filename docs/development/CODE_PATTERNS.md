@@ -352,6 +352,20 @@ pipe.setRoughness(4.5e-5);       // wall roughness (m)
 // Steady-state initialization
 pipe.run();
 
+// run() does not throw when the solve fails - always check the outcome
+if (!pipe.isSteadyStateConverged()) {
+  if (pipe.isSteadyStatePressureFloorLimited()) {
+    // sections rest on the internal 1 bara floor: the line cannot deliver
+    // this rate at this inlet pressure, so there is no solution to report
+    throw new IllegalStateException("Line has no deliverability at this rate");
+  }
+  throw new IllegalStateException("Steady state did not converge");
+}
+
+// Optional: uniform direct electrical heating (power delivered to the fluid)
+pipe.setDirectElectricalHeatingPower(2.0e6);        // W over the whole length
+// pipe.setDirectElectricalHeatingPowerPerMeter(400.0); // or W/m directly
+
 // Transient simulation
 UUID simId = UUID.randomUUID();
 for (int step = 0; step < 600; step++) {
@@ -363,6 +377,11 @@ double[] pressures = pipe.getPressureProfile();
 double[] holdups = pipe.getLiquidHoldupProfile();
 double inventory = pipe.getLiquidInventory("m3");
 ```
+
+> `TwoFluidPipe` reproduces the rate exponent in pressure drop across a 3x rate range on a long
+> gas-condensate line, but local liquid holdup at low rate is still dominated by terrain trap
+> sections. See [Known limitations](../wiki/two_fluid_model#known-limitations) before quoting valley
+> inventory quantitatively.
 
 ### Two-Fluid Pipe Benchmark (Cross-Validate vs Beggs & Brill)
 

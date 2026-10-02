@@ -38,8 +38,7 @@ class HydrocarbonWaterSecondaryOilTransitionTest extends NeqSimTest {
     roots.add(TwoToThreePhaseBoundaryPointSolver.Result.fromContinuationState(state, 1.0e-9));
     TwoToThreePhaseArcLengthCorrector corrector = new TwoToThreePhaseArcLengthCorrector(fluid, CandidatePhase.GAS,
         CandidatePhase.OIL, CandidatePhase.AQUEOUS).setNumericalControls(200, 1.0e-8, 2.0e-5);
-    for (double targetPressure : new double[] { 275.2, 275.3, 275.5, 276.0, 277.0, 278.0, 279.0, 280.0, 282.0,
-        284.0 }) {
+    for (double targetPressure : new double[] {275.2, 275.3, 275.5, 276.0, 277.0, 278.0, 279.0, 280.0, 282.0, 284.0}) {
       TwoToThreePhaseArcLengthCorrector.Result corrected = corrector.correctAtPressure(state, targetPressure);
       assertTrue(corrected.isConverged(), "P=" + targetPressure + " residual=" + corrected.getMaximumResidual()
           + " failure=" + corrected.getFailureMessage());
@@ -131,7 +130,7 @@ class HydrocarbonWaterSecondaryOilTransitionTest extends NeqSimTest {
     IncipientPhaseStabilityAnalyzer analyzer = new IncipientPhaseStabilityAnalyzer(
         retainedSolver.toThermodynamicSystem(retained)).setMaximumIterations(1000).setDampingFactor(0.15);
     Candidate best = null;
-    for (double amplitude : new double[] { -0.02, 0.02, -0.05, 0.05, -0.1, 0.1, -0.2, 0.2, -0.5, 0.5, -1.0, 1.0 }) {
+    for (double amplitude : new double[] {-0.02, 0.02, -0.05, 0.05, -0.1, 0.1, -0.2, 0.2, -0.5, 0.5, -1.0, 1.0}) {
       Candidate candidate = analyzer.analyzeCandidate(CandidatePhase.OIL,
           perturbAlongMode(retained.getPhaseOneComposition(), mode, amplitude));
       if (candidate.isConverged() && candidate.getPhase() == CandidatePhase.OIL && !candidate.isTrivial()

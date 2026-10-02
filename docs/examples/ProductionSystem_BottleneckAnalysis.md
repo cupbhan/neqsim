@@ -1,12 +1,10 @@
 ---
 layout: default
-title: "ProductionSystem BottleneckAnalysis"
-description: "Jupyter notebook tutorial for NeqSim"
+title: "Production System Optimization & Bottleneck Analysis"
+description: "Notebook for Production System Optimization & Bottleneck Analysis, including NeqSim Python examples and workflow context."
 parent: Examples
 nav_order: 1
 ---
-
-# ProductionSystem BottleneckAnalysis
 
 > **Note:** This is an auto-generated Markdown version of the Jupyter notebook
 > [`ProductionSystem_BottleneckAnalysis.ipynb`](https://github.com/equinor/neqsim/blob/master/docs/examples/ProductionSystem_BottleneckAnalysis.ipynb).
@@ -14,8 +12,6 @@ nav_order: 1
 > or [open in Google Colab](https://colab.research.google.com/github/equinor/neqsim/blob/master/docs/examples/ProductionSystem_BottleneckAnalysis.ipynb).
 
 ---
-
-# Production System Optimization & Bottleneck Analysis
 
 This notebook demonstrates advanced production system modeling with NeqSim, including:
 
@@ -661,6 +657,8 @@ Figure saved as 'scenario_comparison.png'
 
 </details>
 
+![Result figure from cell 14](figures/ProductionSystem_BottleneckAnalysis_cell_14_output_1.png)
+
 ## 7. Well Prioritization Analysis
 
 Determine which wells to prioritize based on their impact on system constraints.
@@ -824,6 +822,8 @@ Figure saved as 'well_prioritization.png'
 ```
 
 </details>
+
+![Result figure from cell 17](figures/ProductionSystem_BottleneckAnalysis_cell_17_output_1.png)
 
 ## 8. Bottleneck Resolution Strategies
 
@@ -1065,6 +1065,8 @@ Figure saved as 'gor_wc_tradeoff.png'
 
 </details>
 
+![Result figure from cell 22](figures/ProductionSystem_BottleneckAnalysis_cell_22_output_1.png)
+
 ## 10. Summary and Recommendations
 
 ### Key Findings
@@ -1208,4 +1210,3 @@ This notebook demonstrated:
 2. Include economic optimization (NPV of production scenarios)
 3. Add time-varying analysis for field decline
 4. Integrate with reservoir simulator for coupled optimization
-

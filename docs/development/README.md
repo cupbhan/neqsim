@@ -3,8 +3,6 @@ title: Development Documentation
 description: Guides for developers contributing to NeqSim, extending models, and creating custom components.
 ---
 
-# Development Documentation
-
 Guides for developers contributing to NeqSim, extending the library with new models, and integrating with Python.
 
 ---
@@ -34,6 +32,7 @@ This folder contains documentation for:
 | Document | Description |
 |----------|-------------|
 | [TASK_SOLVING_GUIDE.md](TASK_SOLVING_GUIDE) | Complete workflow for solving tasks with AI while developing the physics engine, including `study_config.yaml`, intake pauses, document inputs, and deep multi-notebook studies |
+| [CONTINUOUS_TASK_SOLVING.md](CONTINUOUS_TASK_SOLVING) | Living tasks: keep a solved task improving with monitor cycles and solve loops — setup, backtesting, scheduling, headless agents, ledger and baseline promotion |
 | [Solve an Engineering Task](../tutorials/solve-engineering-task) | Hands-on tutorial: from blank screen to validated report |
 | [CODE_PATTERNS.md](CODE_PATTERNS) | Copy-paste code starters for every common task type |
 | [TASK_LOG.md](TASK_LOG) | Persistent memory — searchable log of all solved tasks |
@@ -68,6 +67,7 @@ These guides explain how to add new functionality to NeqSim:
 | [Extending Process Equipment](extending_process_equipment) | Add custom separators, reactors, and other unit operations |
 | [Extending Physical Properties](extending_physical_properties) | Add custom viscosity, conductivity, and diffusivity models |
 | [Extending Thermodynamic Models](extending_thermodynamic_models) | Add custom equations of state and activity models |
+| [Numerical Model Specifications](model_spec_harness) | Sourced numerical cases, explicit absence contracts and fast CI coverage |
 | [Python Extension Patterns](python_extension_patterns) | Use NeqSim from Python, create wrappers, implement interfaces |
 
 ### Extension Quick Reference
@@ -114,6 +114,7 @@ fluid = jneqsim.thermo.system.SystemSrkEos(300.0, 50.0)
 | Document | Description |
 |----------|-------------|
 | [Performance Tuning Guide](performance_tuning) | Speed up simulations — warm-start K-values, flowsheet routing, stability short-circuit, and when to enable each optimization |
+| [Large Steady-State Benchmark](steady_state_performance_benchmark) | Paired JVM measurements, bottleneck attribution, and numerical checks for large process models |
 | [TR/NORSOK Integration Recommendations](TR_NORSOK_integration_recommendations) | Synthesis of Equinor TR and NORSOK standard review with concrete recommendations for skills, agents, Java code, and data access |
 | [AI Extraction Skill Proposal](GITHUB_ISSUE_json_extraction_skill) | Feature proposal: extract process data from unstructured documents (text, PFDs, data sheets) into NeqSim JSON |
 
@@ -138,4 +139,3 @@ For deeper understanding of NeqSim's architecture:
 - [NeqSim Python Package](https://github.com/equinor/neqsim-python)
 - [Main Documentation](../)
 - [Reference Manual](../REFERENCE_MANUAL_INDEX)
-

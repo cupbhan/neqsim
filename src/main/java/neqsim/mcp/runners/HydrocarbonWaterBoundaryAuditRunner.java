@@ -403,7 +403,7 @@ public final class HydrocarbonWaterBoundaryAuditRunner {
     long started = System.currentTimeMillis();
     HydrocarbonWaterStableRegionTransitionScanner.Result scan = new HydrocarbonWaterStableRegionTransitionScanner(
         template).setNumericalControls(32, 1.0e-4, 1.0e-9)
-        .scan(new double[] { lowerTemperatureK, upperTemperatureK }, new double[] { pressureBara });
+        .scan(new double[] {lowerTemperatureK, upperTemperatureK}, new double[] {pressureBara});
     HydrocarbonWaterStableRegionTransitionScanner.TransitionBracket selected = null;
     for (HydrocarbonWaterStableRegionTransitionScanner.TransitionBracket bracket : scan.getBrackets()) {
       if (bracket.getFamily() != family) {
@@ -786,7 +786,7 @@ public final class HydrocarbonWaterBoundaryAuditRunner {
     int forwardCount = 0;
     int stableForwardCount = 0;
     for (double arcStep : arcSteps) {
-      for (int orientation : new int[] { 1, -1 }) {
+      for (int orientation : new int[] {1, -1}) {
         TwoToThreePhaseArcLengthCorrector.Result correction = corrector.correctFromLocalTangent(current, arcStep,
             orientation);
         JsonObject row = new JsonObject();
@@ -2126,8 +2126,8 @@ public final class HydrocarbonWaterBoundaryAuditRunner {
     }
     neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.TwoToThreePhaseArcLengthCorrector.State last = trace
         .getPoints().get(trace.getPoints().size() - 1);
-    for (CandidatePhase criticalPhase : new CandidatePhase[] { branch.getFamily().getRetainedPhaseZero(),
-        branch.getFamily().getRetainedPhaseOne() }) {
+    for (CandidatePhase criticalPhase : new CandidatePhase[] {branch.getFamily().getRetainedPhaseZero(),
+        branch.getFamily().getRetainedPhaseOne()}) {
       HydrocarbonWaterCriticalEndpointSolver.Result critical = new HydrocarbonWaterCriticalEndpointSolver(template,
           branch.getFamily().getRetainedPhaseZero(), branch.getFamily().getRetainedPhaseOne(),
           branch.getFamily().getIncipientPhase(), criticalPhase)

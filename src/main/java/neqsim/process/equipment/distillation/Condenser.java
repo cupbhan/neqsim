@@ -133,7 +133,11 @@ public class Condenser extends SimpleTray {
     if (separation_with_liquid_reflux && (unit == null || unit.trim().isEmpty())) {
       throw new IllegalArgumentException("Fixed liquid reflux requires a flow-rate unit");
     }
-    this.refluxIsSet = separation_with_liquid_reflux;
+    if (separation_with_liquid_reflux) {
+      refluxIsSet = true;
+    } else if (this.separation_with_liquid_reflux) {
+      refluxIsSet = false;
+    }
     this.separation_with_liquid_reflux = separation_with_liquid_reflux;
     this.reflux_value = value;
     this.reflux_unit = separation_with_liquid_reflux ? unit.trim() : unit;
@@ -181,11 +185,24 @@ public class Condenser extends SimpleTray {
   /**
    * Setter for the field <code>refluxRatio</code>.
    *
-   * @param refluxRatio the refluxRatio to set
+   * @param refluxRatio finite non-negative liquid-to-distillate reflux ratio
+   * @throws IllegalArgumentException if the ratio is negative or non-finite
    */
   public void setRefluxRatio(double refluxRatio) {
+    if (!Double.isFinite(refluxRatio) || refluxRatio < 0.0) {
+      throw new IllegalArgumentException("Condenser reflux ratio must be finite and >= 0");
+    }
     this.refluxRatio = refluxRatio;
     refluxIsSet = true;
+  }
+
+  /**
+   * Clear ratio-controlled reflux while leaving fixed liquid-reflux mode unchanged.
+   */
+  public void clearRefluxRatio() {
+    if (!separation_with_liquid_reflux) {
+      refluxIsSet = false;
+    }
   }
 
   /**
@@ -207,6 +224,27 @@ public class Condenser extends SimpleTray {
   public double getDuty(String unit) {
     neqsim.util.unit.PowerUnit powerUnit = new neqsim.util.unit.PowerUnit(duty, "W");
     return powerUnit.getValue(unit);
+  }
+
+  /**
+   * Publish the heat duty of the applied phase streams without flashing the accepted tray again.
+   */
+  void updateDutyFromPublishedStreams() {
+    duty = getMaterialOutletEnthalpy() - calcMixStreamEnthalpy0();
+    if (getEnergyPort("heatDuty").getMode() == EnergyPortMode.CALCULATED) {
+      getEnergyPort("heatDuty").setDuty(duty);
+    }
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  double getMaterialOutletEnthalpy() {
+    double enthalpy = super.getMaterialOutletEnthalpy();
+    StreamInterface liquidProduct = getLiquidProductStream();
+    if (!totalCondenser && liquidProduct != null) {
+      enthalpy += getMaterialStreamEnthalpy(liquidProduct);
+    }
+    return enthalpy;
   }
 
   /** {@inheritDoc} */
@@ -277,6 +315,13 @@ public class Condenser extends SimpleTray {
   /** {@inheritDoc} */
   @Override
   public void run(UUID id) {
+    if (refluxIsSet && !separation_with_liquid_reflux && (!Double.isFinite(refluxRatio) || refluxRatio < 0.0)) {
+      throw new IllegalStateException("Condenser " + getName() + " has invalid reflux ratio " + refluxRatio);
+    }
+    if (totalCondenser && (!refluxIsSet || separation_with_liquid_reflux)) {
+      throw new IllegalStateException(
+          "Total condenser " + getName() + " requires an explicit reflux ratio before it can run");
+    }
     lastAvailableLiquidReflux = Double.NaN;
     lastFixedLiquidReflux = Double.NaN;
     lastFixedLiquidRefluxResidual = Double.NaN;
@@ -287,14 +332,15 @@ public class Condenser extends SimpleTray {
       try {
         testOps.bubblePointTemperatureFlash();
       } catch (Exception e) {
-        logger.error(e.getMessage());
+        throw new IllegalStateException(
+            "Total condenser " + getName() + " could not calculate its bubble-point temperature", e);
       }
       mixedStream.getThermoSystem().init(3);
       // mixedStream.getThermoSystem().prettyPrint();
 
       mixedStreamSplitter = new Splitter("splitter", mixedStream, 2);
       double refluxFraction = refluxRatio <= 0.0 ? 0.0 : refluxRatio / (1.0 + refluxRatio);
-      mixedStreamSplitter.setSplitFactors(new double[] { refluxFraction, 1.0 - refluxFraction });
+      mixedStreamSplitter.setSplitFactors(new double[] {refluxFraction, 1.0 - refluxFraction});
       mixedStreamSplitter.run();
     } else if (!refluxIsSet) {
       UUID oldID = getCalculationIdentifier();
@@ -311,7 +357,7 @@ public class Condenser extends SimpleTray {
       liquidstream.run();
       lastAvailableLiquidReflux = liquidstream.getFlowRate(this.reflux_unit);
       mixedStreamSplitter = new Splitter("splitter", liquidstream, 2);
-      mixedStreamSplitter.setFlowRates(new double[] { this.reflux_value, Splitter.REMAINDER }, this.reflux_unit);
+      mixedStreamSplitter.setFlowRates(new double[] {this.reflux_value, Splitter.REMAINDER}, this.reflux_unit);
       mixedStreamSplitter.run();
       lastFixedLiquidReflux = mixedStreamSplitter.getSplitStream(0).getFlowRate(this.reflux_unit);
       lastFixedLiquidRefluxResidual = reflux_value == 0.0 ? 0.0

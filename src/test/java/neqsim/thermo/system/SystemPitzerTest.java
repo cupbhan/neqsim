@@ -3,13 +3,19 @@ package neqsim.thermo.system;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import neqsim.chemicalreactions.chemicalreaction.ChemicalReaction;
+import neqsim.chemicalreactions.chemicalreaction.ChemicalReactionConcentrationBasis;
+import neqsim.thermo.component.IapwsHenryLaw;
 import neqsim.thermo.phase.PhaseInterface;
 import neqsim.thermo.phase.PhasePitzer;
+import neqsim.thermo.phase.PitzerParameterDatasets;
 import neqsim.thermodynamicoperations.ThermodynamicOperations;
+import neqsim.thermodynamicoperations.flashops.saturationops.SaltSaturationResult;
 
 /**
  * Consolidated regression tests for the Pitzer activity model in thermodynamic systems.
@@ -241,19 +247,176 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
   }
 
   /**
-   * Verify NaCl mean ionic activity and osmotic coefficients against standard Pitzer literature values at 25 C.
+   * Verifies that adding saturation ions after water-only initialization refreshes the default catalog and is
+   * independent of component initialization order.
    */
   @Test
-  public void testNaClActivityAndOsmoticCoefficientAgainstLiterature() {
-    double[] molalities = { 0.1, 0.5, 1.0, 2.0, 3.0 };
-    double[] meanActivityCoefficients = { 0.778, 0.681, 0.657, 0.668, 0.714 };
-    double[] osmoticCoefficients = { 0.932, 0.921, 0.936, 1.002, 1.085 };
+  public void testCalcSaltSaturationRefreshesCatalogAfterWaterOnlyInitialization() throws Exception {
+    SystemPitzer lateIonSystem = new SystemPitzer(404.15, 995.0);
+    lateIonSystem.addComponent("water", 55.508);
+    lateIonSystem.setMixingRule("classic");
 
-    for (int i = 0; i < molalities.length; i++) {
+    SystemPitzer earlyIonSystem = new SystemPitzer(404.15, 995.0);
+    earlyIonSystem.addComponent("water", 55.508);
+    earlyIonSystem.addComponent("Ca++", 1.0e-12);
+    earlyIonSystem.addComponent("SO4--", 1.0e-12);
+    earlyIonSystem.setMixingRule("classic");
+
+    ThermodynamicOperations lateIonOperations = new ThermodynamicOperations(lateIonSystem);
+    ThermodynamicOperations earlyIonOperations = new ThermodynamicOperations(earlyIonSystem);
+    lateIonOperations.calcSaltSaturation("CaSO4_A");
+    earlyIonOperations.calcSaltSaturation("CaSO4_A");
+
+    assertEquals(PitzerParameterDatasets.PHREEQC_PITZER_CATALOG_ID,
+        lateIonSystem.getPitzerParameterQualification().getDatasetId());
+    assertEquals(PitzerParameterDatasets.PHREEQC_PITZER_CATALOG_ID,
+        earlyIonSystem.getPitzerParameterQualification().getDatasetId());
+    assertEquals(1.0, lateIonOperations.getRelativeScalePotential("CaSO4_A"), 1.0e-3);
+    assertEquals(1.0, earlyIonOperations.getRelativeScalePotential("CaSO4_A"), 1.0e-3);
+    assertEquals(earlyIonSystem.getComponent("Ca++").getNumberOfmoles(),
+        lateIonSystem.getComponent("Ca++").getNumberOfmoles(), 1.0e-8);
+  }
+
+  /**
+   * Verifies that dissolved-salt saturation diagnostics report the existing Pitzer solve deterministically.
+   */
+  @Test
+  public void testCalcSaltSaturationDiagnosticsAreDeterministic() throws Exception {
+    SystemPitzer firstSystem = new SystemPitzer(404.15, 995.0);
+    firstSystem.addComponent("water", 55.508);
+    firstSystem.setMixingRule("classic");
+
+    SystemPitzer secondSystem = new SystemPitzer(404.15, 995.0);
+    secondSystem.addComponent("water", 55.508);
+    secondSystem.setMixingRule("classic");
+
+    SaltSaturationResult firstResult = new ThermodynamicOperations(firstSystem)
+        .calcSaltSaturationWithDiagnostics("CaSO4_A");
+    SaltSaturationResult secondResult = new ThermodynamicOperations(secondSystem)
+        .calcSaltSaturationWithDiagnostics("CaSO4_A");
+
+    assertEquals("CaSO4_A", firstResult.getSaltName());
+    assertTrue(firstResult.getInitialSaturationRatio() >= 0.0);
+    assertTrue(firstResult.getInitialSaturationRatio() < 1.0);
+    assertEquals(1.0, firstResult.getFinalSaturationRatio(), 1.0e-3);
+    assertTrue(firstResult.getAddedSaltMoles() > 0.0);
+    assertTrue(firstResult.getBracketIterations() > 0);
+    assertTrue(firstResult.getSolveIterations() > 0);
+    assertEquals(firstResult.getBracketIterations() + firstResult.getSolveIterations() + 2,
+        firstResult.getThermodynamicInitializationCount());
+    assertFalse(firstResult.isAlreadySaturated());
+    assertTrue(firstResult.isConverged());
+    assertFalse(firstResult.isIterationLimitReached());
+    assertEquals(Math.abs(firstResult.getFinalSaturationRatio() - 1.0),
+        firstResult.getAbsoluteSaturationRatioResidual(), 0.0);
+
+    assertEquals(firstResult.getAddedSaltMoles(), secondResult.getAddedSaltMoles(), 1.0e-10);
+    assertEquals(firstResult.getFinalSaturationRatio(), secondResult.getFinalSaturationRatio(), 1.0e-12);
+    assertEquals(firstResult.getBracketIterations(), secondResult.getBracketIterations());
+    assertEquals(firstResult.getSolveIterations(), secondResult.getSolveIterations());
+    assertEquals(firstResult.getThermodynamicInitializationCount(), secondResult.getThermodynamicInitializationCount());
+  }
+
+  /** Verifies that salt saturation preserves the explicit legacy compatibility selection. */
+  @Test
+  public void testCalcSaltSaturationPreservesExplicitLegacyParameters() throws Exception {
+    SystemPitzer system = new SystemPitzer(298.15, 1.01325);
+    system.useLegacyPitzerParameters();
+    system.addComponent("water", 55.508);
+    system.setMixingRule("classic");
+
+    ThermodynamicOperations operations = new ThermodynamicOperations(system);
+    operations.calcSaltSaturation("NaCl");
+
+    assertEquals(PhasePitzer.DEFAULT_PARAMETER_DATASET_ID, system.getPitzerParameterQualification().getDatasetId());
+    assertEquals(1.0, operations.getRelativeScalePotential("NaCl"), 1.0e-3);
+  }
+
+  /** Verifies that adding a saturation ion preserves an already initialized reactive Pitzer topology. */
+  @Test
+  public void testCalcSaltSaturationPreservesReactivePitzerTopology() throws Exception {
+    SystemPitzer system = new SystemPitzer(298.15, 10.0);
+    system.addComponent("CO2", 0.01);
+    system.addComponent("water", 55.508);
+    system.addComponent("Na+", 1.0e-3);
+    system.addComponent("Cl-", 1.0e-3);
+    system.chemicalReactionInit();
+    system.createDatabase(true);
+    system.setMixingRule("classic");
+
+    ThermodynamicOperations operations = new ThermodynamicOperations(system);
+    IllegalStateException exception = assertThrows(IllegalStateException.class,
+        () -> operations.calcSaltSaturation("CaCO3"));
+
+    assertTrue(system.isChemicalSystem());
+    assertTrue(exception.getMessage().contains("Failed running TPflash"));
+    assertTrue(exception.getCause().getMessage().contains("Pitzer parameter coverage incomplete"));
+    assertFalse(exception.getCause().getMessage().contains("reaction state is stale"));
+  }
+
+  /** Pitzer reaction quotients use solute molality with solvent mole-fraction activity. */
+  @Test
+  public void testReactionQuotientUsesPitzerMolalityBasis() {
+    SystemInterface system = new SystemPitzer(298.15, 1.01325);
+    system.addComponent("water", 55.508);
+    system.addComponent("Na+", 1.0);
+    system.addComponent("Cl-", 1.0);
+    system.setMixingRule("classic");
+    system.init(0);
+    system.init(1);
+
+    PhaseInterface phase = system.getPhase(1);
+    int waterNumber = phase.getComponent("water").getComponentNumber();
+    double sodiumMolality = phase.getComponent("Na+").getMolality(phase);
+    double chlorideMolality = phase.getComponent("Cl-").getMolality(phase);
+    double sodiumGamma = phase.getActivityCoefficient(phase.getComponent("Na+").getComponentNumber(), waterNumber);
+    double chlorideGamma = phase.getActivityCoefficient(phase.getComponent("Cl-").getComponentNumber(), waterNumber);
+    double expectedLogQuotient = Math.log(sodiumMolality * sodiumGamma) + Math.log(chlorideMolality * chlorideGamma);
+
+    ChemicalReaction ionicProduct = new ChemicalReaction("PitzerMolalityProbe", new String[] {"Na+", "Cl-"},
+        new double[] {1.0, 1.0}, new double[] {0.0, 0.0, 0.0, 0.0}, 0.0, 0.0, 298.15);
+
+    assertEquals(ChemicalReactionConcentrationBasis.SOLUTE_MOLALITY, system.getChemicalReactionConcentrationBasis());
+    assertEquals(sodiumMolality * chlorideMolality, ionicProduct.calcKx(system, 1), 1.0e-12);
+    assertEquals(expectedLogQuotient, ionicProduct.calcLogReactionQuotient(system, 1), 1.0e-12);
+  }
+
+  /**
+   * Validate dilute-to-moderate NaCl activity and osmotic coefficients against traceable 25 C reference values.
+   *
+   * <p>
+   * Reference values are from Partanen and Partanen (2020), Tables 6 and 10, DOI 10.1021/acs.jced.0c00402 (CC BY 4.0).
+   * The Pitzer parameters are not fitted in this test.
+   * </p>
+   */
+  @Test
+  public void testNaClActivityAndOsmoticCoefficientAgainstPartanen2020() {
+    assertNaClReferenceValues(new double[][] {{0.2, 0.735, 0.924}, {0.5, 0.684, 0.924}, {1.0, 0.662, 0.940}});
+  }
+
+  /**
+   * Validate concentrated NaCl behavior on reference points excluded from the core validation set.
+   */
+  @Test
+  public void testConcentratedNaClActivityAndOsmoticCoefficientHoldout() {
+    assertNaClReferenceValues(new double[][] {{2.0, 0.677, 0.989}, {3.0, 0.721, 1.047}});
+  }
+
+  /**
+   * Compare Pitzer results with independent traceable NaCl reference values.
+   *
+   * @param referenceRows rows of molality, mean molal activity coefficient and osmotic coefficient
+   */
+  private static void assertNaClReferenceValues(double[][] referenceRows) {
+    final double maximumMeanActivityRelativeDeviation = 0.02;
+    final double maximumOsmoticRelativeDeviation = 0.0075;
+
+    for (double[] referenceRow : referenceRows) {
+      double molality = referenceRow[0];
       SystemInterface system = new SystemPitzer(298.15, 1.01325);
       system.addComponent("water", 55.508);
-      system.addComponent("Na+", molalities[i]);
-      system.addComponent("Cl-", molalities[i]);
+      system.addComponent("Na+", molality);
+      system.addComponent("Cl-", molality);
       system.setMixingRule("classic");
       system.init(0);
       system.init(1);
@@ -261,12 +424,16 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
       PhaseInterface phase = system.getPhase(1);
       int sodiumComponentNumber = phase.getComponent("Na+").getComponentNumber();
       int chlorideComponentNumber = phase.getComponent("Cl-").getComponentNumber();
+      double actualMolality = phase.getComponent("Na+").getMolality(phase);
+      double meanActivityCoefficient = phase.getMeanIonicActivity(sodiumComponentNumber, chlorideComponentNumber);
+      double osmoticCoefficient = phase.getOsmoticCoefficientOfWater();
 
-      assertEquals(meanActivityCoefficients[i],
-          phase.getMeanIonicActivity(sodiumComponentNumber, chlorideComponentNumber),
-          0.08 * meanActivityCoefficients[i]);
-      assertEquals(osmoticCoefficients[i], phase.getOsmoticCoefficientOfWater(), 0.04 * osmoticCoefficients[i]);
-      assertEquals(phase.getOsmoticCoefficientOfWater(), phase.getOsmoticCoefficientOfWaterMolality(), 1.0e-12);
+      assertEquals(molality, actualMolality, 1.0e-4, "Reference composition must be on the molality basis");
+      assertEquals(referenceRow[1], meanActivityCoefficient, maximumMeanActivityRelativeDeviation * referenceRow[1]);
+      assertEquals(referenceRow[2], osmoticCoefficient, maximumOsmoticRelativeDeviation * referenceRow[2]);
+      assertEquals(meanActivityCoefficient, phase.getMeanIonicActivity(sodiumComponentNumber, chlorideComponentNumber),
+          0.0, "Repeated mean activity evaluation must be deterministic");
+      assertEquals(osmoticCoefficient, phase.getOsmoticCoefficientOfWaterMolality(), 1.0e-12);
     }
   }
 
@@ -278,11 +445,34 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
     system.setMixingRule("classic");
     system.init(0);
     system.init(1);
-    system.getPhase(1).getComponent("methane").setHenryCoefParameter(new double[] { 11.2605, 0.0, 0.0, 0.0 });
+    system.getPhase(1).getComponent("methane").setHenryCoefParameter(new double[] {11.2605, 0.0, 0.0, 0.0});
     double henry = system.getPhase(1).getComponent("methane").getHenryCoef(298.15);
     double vap = system.getPhase(1).getComponent("water").getAntoineVaporPressure(298.15);
     assertEquals(1.4e5, henry, 1e3);
     assertEquals(0.0318, vap, 1e-3);
+  }
+
+  /** Neutral-solute Henry fugacity uses the same molality standard state as Pitzer activity. */
+  @Test
+  public void testNeutralHenryFugacityUsesMolalityBasis() {
+    SystemPitzer system = new SystemPitzer(298.15, 1.01325);
+    system.addComponent("water", 55.508);
+    system.addComponent("nitrogen", 1.0e-4);
+    system.setMixingRule("classic");
+    system.init(0);
+    system.init(1);
+
+    PhaseInterface aqueous = system.getPhase(1);
+    double moleFraction = aqueous.getComponent("nitrogen").getx();
+    double molality = aqueous.getComponent("nitrogen").getMolality(aqueous);
+    double gamma = aqueous.getActivityCoefficient(aqueous.getComponent("nitrogen").getComponentNumber());
+    double henryCoefficient = IapwsHenryLaw.getHenryCoefficientBar("N2", aqueous.getTemperature())
+        * IapwsHenryLaw.WATER_MOLAR_MASS_KG_PER_MOL;
+    double expectedFugacityCoefficient = gamma * henryCoefficient * molality / (moleFraction * aqueous.getPressure());
+
+    assertTrue(molality / moleFraction > 50.0);
+    assertEquals(expectedFugacityCoefficient, aqueous.getComponent("nitrogen").getFugacityCoefficient(),
+        expectedFugacityCoefficient * 1.0e-12);
   }
 
   @Test
@@ -351,8 +541,8 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
    */
   @Test
   public void testAqueousPhasePropertyPackageConsistency() {
-    double[] temperatures = { 298.15, 373.15, 423.15 };
-    double[] pressures = { 1.01325, 50.0, 100.0 };
+    double[] temperatures = {298.15, 373.15, 423.15};
+    double[] pressures = {1.01325, 50.0, 100.0};
 
     for (int i = 0; i < temperatures.length; i++) {
       SystemInterface system = new SystemPitzer(temperatures[i], pressures[i]);
@@ -671,14 +861,14 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
    */
   @Test
   public void testThetaPsiMixing() {
-    SystemInterface system = new SystemPitzer(298.15, 1.0);
+    SystemPitzer system = new SystemPitzer(298.15, 1.0);
+    system.useLegacyPitzerParameters();
     system.addComponent("water", 55.5);
     system.addComponent("Na+", 1.0);
     system.addComponent("K+", 0.5);
     system.addComponent("Cl-", 1.5);
     system.setMixingRule("classic");
     system.init(0);
-    system.init(1);
 
     PhasePitzer liq = (PhasePitzer) system.getPhase(1);
     int na = liq.getComponent("Na+").getComponentNumber();
@@ -686,12 +876,23 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
     int cl = liq.getComponent("Cl-").getComponentNumber();
     int water = liq.getComponent("water").getComponentNumber();
 
-    // Get baseline gamma without theta
+    assertFalse(liq.getPitzerParameterCoverage().isComplete());
+    assertTrue(liq.getPitzerParameterCoverage().getMissingThetaPairs().contains("K+|Na+"));
+    assertTrue(liq.getPitzerParameterCoverage().getMissingPsiTuples().contains("K+|Na+|Cl-"));
+    IllegalStateException missingParameters = assertThrows(IllegalStateException.class,
+        liq::requireCompletePitzerParameterCoverage);
+    assertTrue(missingParameters.getMessage().contains("missingTheta=[K+|Na+]"));
+    assertTrue(missingParameters.getMessage().contains("missingPsi=[K+|Na+|Cl-]"));
+
+    // Explicit zero definitions are scientifically distinct from absent parameters.
+    liq.setTheta(na, k, 0.0);
+    liq.setPsi(na, k, cl, 0.0);
+    assertTrue(liq.getPitzerParameterCoverage().isComplete());
+    system.init(1);
     double gammaBaseline = system.getPhase(1).getActivityCoefficient(na, water);
 
-    // Set Na-K theta (cation-cation interaction)
-    liq.setTheta(na, k, -0.012); // Harvie & Weare value
-
+    liq.setTheta(na, k, -0.012);
+    liq.setPsi(na, k, cl, -0.0018);
     system.init(1);
     double gammaWithTheta = system.getPhase(1).getActivityCoefficient(na, water);
 
@@ -706,7 +907,8 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
    */
   @Test
   public void testDatabaseLoadMultipleSalts() {
-    SystemInterface system = new SystemPitzer(298.15, 1.0);
+    SystemPitzer system = new SystemPitzer(298.15, 1.0);
+    system.useLegacyPitzerParameters();
     system.addComponent("water", 55.5);
     system.addComponent("Na+", 0.5);
     system.addComponent("K+", 0.1);
@@ -716,17 +918,13 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
     system.addComponent("SO4--", 0.05);
     system.setMixingRule("classic");
 
-    ThermodynamicOperations ops = new ThermodynamicOperations(system);
-    assertDoesNotThrow(() -> ops.TPflash());
-
-    // Verify all ion gammas are finite
     PhasePitzer liq = (PhasePitzer) system.getPhase(1);
-    int water = liq.getComponent("water").getComponentNumber();
-    for (int i = 0; i < system.getPhase(1).getNumberOfComponents(); i++) {
-      double gamma = system.getPhase(1).getActivityCoefficient(i, water);
-      assertTrue(Double.isFinite(gamma),
-          "Activity coefficient for " + system.getPhase(1).getComponent(i).getName() + " must be finite: " + gamma);
-    }
+    system.init(0);
+    assertFalse(liq.getPitzerParameterCoverage().isComplete());
+    IllegalStateException missingParameters = assertThrows(IllegalStateException.class,
+        liq::requireCompletePitzerParameterCoverage);
+    assertTrue(missingParameters.getMessage().contains("missingTheta="));
+    assertTrue(missingParameters.getMessage().contains("missingPsi="));
 
     // Verify parameters were loaded for common salt pairs.
     assertTrue(liq.isParametersLoaded(), "Pitzer parameters should be loaded from database");
@@ -742,18 +940,18 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
    */
   @Test
   public void testDatabaseLoadAllPopulatedPitzerPairs() {
-    String[][] ionPairs = { { "Na+", "Cl-", "true", "true", "false" }, { "Na+", "SO4--", "true", "true", "false" },
-        { "K+", "Cl-", "true", "true", "false" }, { "K+", "SO4--", "true", "true", "false" },
-        { "Ca++", "Cl-", "true", "true", "false" }, { "Ca++", "SO4--", "true", "true", "true" },
-        { "Mg++", "Cl-", "true", "true", "false" }, { "Mg++", "SO4--", "true", "true", "true" },
-        { "Ba++", "Cl-", "true", "true", "false" }, { "Sr++", "Cl-", "true", "true", "false" },
-        { "Sr++", "SO4--", "true", "true", "true" }, { "Fe++", "Cl-", "true", "true", "false" },
-        { "Fe++", "SO4--", "true", "true", "true" }, { "Na+", "HCO3-", "true", "true", "false" },
-        { "Na+", "CO3--", "true", "true", "false" }, { "Ca++", "HCO3-", "true", "true", "false" },
-        { "Mg++", "HCO3-", "true", "true", "false" }, { "Na+", "OH-", "true", "true", "false" },
-        { "K+", "HCO3-", "true", "true", "false" }, { "K+", "CO3--", "true", "true", "false" },
-        { "H+", "Cl-", "true", "true", "false" }, { "H+", "SO4--", "true", "true", "false" },
-        { "Ba++", "HCO3-", "true", "true", "false" } };
+    String[][] ionPairs = {{"Na+", "Cl-", "true", "true", "false"}, {"Na+", "SO4--", "true", "true", "false"},
+        {"K+", "Cl-", "true", "true", "false"}, {"K+", "SO4--", "true", "true", "false"},
+        {"Ca++", "Cl-", "true", "true", "false"}, {"Ca++", "SO4--", "true", "true", "true"},
+        {"Mg++", "Cl-", "true", "true", "false"}, {"Mg++", "SO4--", "true", "true", "true"},
+        {"Ba++", "Cl-", "true", "true", "false"}, {"Sr++", "Cl-", "true", "true", "false"},
+        {"Sr++", "SO4--", "true", "true", "true"}, {"Fe++", "Cl-", "true", "true", "false"},
+        {"Fe++", "SO4--", "true", "true", "true"}, {"Na+", "HCO3-", "true", "true", "false"},
+        {"Na+", "CO3--", "true", "true", "false"}, {"Ca++", "HCO3-", "true", "true", "false"},
+        {"Mg++", "HCO3-", "true", "true", "false"}, {"Na+", "OH-", "true", "true", "false"},
+        {"K+", "HCO3-", "true", "true", "false"}, {"K+", "CO3--", "true", "true", "false"},
+        {"H+", "Cl-", "true", "true", "false"}, {"H+", "SO4--", "true", "true", "false"},
+        {"Ba++", "HCO3-", "true", "true", "false"}};
 
     for (int i = 0; i < ionPairs.length; i++) {
       assertPopulatedPitzerPairCanBeUsed(ionPairs[i][0], ionPairs[i][1], Boolean.parseBoolean(ionPairs[i][2]),
@@ -801,7 +999,8 @@ public class SystemPitzerTest extends neqsim.NeqSimTest {
    */
   private static void assertPopulatedPitzerPairCanBeUsed(String cation, String anion, boolean expectBeta0,
       boolean expectBeta1, boolean expectBeta2) {
-    SystemInterface system = new SystemPitzer(298.15, 1.01325);
+    SystemPitzer system = new SystemPitzer(298.15, 1.01325);
+    system.useLegacyPitzerParameters();
     system.addComponent("water", 55.508);
     system.addComponent(cation, 0.1 * getAbsoluteChargeFromIonName(anion));
     system.addComponent(anion, 0.1 * getAbsoluteChargeFromIonName(cation));

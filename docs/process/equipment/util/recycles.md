@@ -3,13 +3,12 @@ title: Recycles
 description: Documentation for recycle handling in NeqSim process simulation.
 ---
 
-# Recycles
-
 Documentation for recycle handling in NeqSim process simulation.
 
 ## Table of Contents
 - [Overview](#overview)
 - [Recycle Class](#recycle-class)
+- [Steady-to-Dynamic Handoff](#steady-to-dynamic-handoff)
 - [Convergence](#convergence)
 - [Acceleration Methods](#acceleration-methods)
 - [Usage Examples](#usage-examples)
@@ -66,6 +65,40 @@ process.run();
 
 ---
 
+## Steady-to-Dynamic Handoff
+
+Use the same `Recycle` object for the converged steady state and the following
+transient. In steady state, `ProcessSystem` iterates the tear stream with the
+configured direct-substitution, Wegstein, or Broyden method. In transient mode,
+the previously accepted recycle outlet is consumed upstream before the current
+recycle inlet is published for the next flowsheet evaluation. This ordered
+dependency break avoids introducing a separate transient recycle class.
+
+```java
+process.run();
+
+if (!recycle.solved()) {
+    throw new IllegalStateException("Initial recycle did not converge");
+}
+
+recycle.setCalculateSteadyState(false);
+process.runTransient(0.25, UUID.randomUUID());
+```
+
+The transient update temporarily uses direct substitution and restores the
+configured steady-state acceleration method afterward. It does not iterate the
+recycle loop to steady convergence inside each physical timestep and does not
+add independent material inventory. Equipment such as separators, piping, and
+volumes owns the differential state.
+
+`ProcessSystem` detects `Recycle` and `RecycleFlowCoordinator` units and falls
+back to insertion-order sequential transient execution when required, even if
+parallel transient execution is enabled. A pressure-driven anti-surge topology
+can use `RecycleFlowCoordinator` to reconcile a valve-requested recycle flow
+with its discharge splitter while preserving mass balance.
+
+---
+
 ## Configuration
 
 ### Tolerance
@@ -80,6 +113,16 @@ recycle.setCompositionTolerance(1e-6);
 recycle.setTemperatureTolerance(0.1);  // K
 recycle.setPressureTolerance(0.01);    // bar
 ```
+
+`setFlowTolerance()` retains its legacy units: **kg/s below 1 kg/s** loop
+flow and **percent at or above 1 kg/s**. For example, the default 0.01 permits
+0.01 kg/s change on a 0.02 kg/s loop, which is 50% of that loop flow. Choose a
+smaller flow tolerance for small loops.
+
+`getAbsoluteFlowChange()` always reports kg/hr. `setAbsoluteFlowTolerance()`
+adds an **OR** acceptance criterion: it can relax the legacy criterion, but it
+cannot make a loose legacy tolerance stricter. Tighten `setFlowTolerance()`
+first when an absolute limit should govern convergence.
 
 ### Maximum Iterations
 
@@ -119,6 +162,37 @@ import neqsim.process.equipment.util.BroydenAccelerator;
 BroydenAccelerator accelerator = new BroydenAccelerator();
 recycle.setAccelerationMethod(accelerator);
 ```
+
+The accelerator solves the fixed-point residual `g(x) - x` with a damped
+inverse-Jacobian step. It uses direct substitution for its first two calls;
+the first Broyden step is taken on the third call. Monitor convergence on a
+representative process before using this option for a difficult recycle.
+
+A `Recycle` requires a configured tear outlet before `run()`; wire an existing
+stream using `setOutletStream(stream)`. If missing, `run()` reports the recycle
+name and the required configuration. Before wiring, `getOutletStream()` returns
+`null` so process modules can inspect the connection without running the recycle.
+
+### Composition acceleration and diagnostics
+
+Per-recycle Wegstein and Broyden acceleration operates on overall component mole
+fractions. Temperature, pressure and total molar flow use the current return
+stream values. The accelerated composition updates component inventories and
+is TP-flashed before publication; the gas and liquid phases retain distinct
+equilibrium compositions. Negative proposals are clipped and normalized; an
+invalid proposal or failed flash falls back to the unaccelerated return.
+
+The composition convergence residual compares overall mole fractions **before**
+acceleration. This prevents a damped or clipped step from reporting a false
+converged state. A changed component list resets the acceleration history.
+
+`getCompositionWegsteinQFactors()` returns one factor per component.
+`getWegsteinQFactors()` preserves the `3 + n` layout, with three reserved zeros
+for the unaccelerated T/P/flow entries followed by the composition factors.
+Factors describe the proposal before clipping and normalization. The per-recycle
+Broyden matrix contains only the `n` composition coordinates. See the
+[acceleration guide](../../../simulation/recycle_acceleration_guide.md#per-recycle-acceleration-coordinates)
+for coordinate definitions and compatibility guidance.
 
 ### Direct Substitution
 

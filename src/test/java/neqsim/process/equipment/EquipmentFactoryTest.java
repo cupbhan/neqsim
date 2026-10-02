@@ -1,9 +1,11 @@
 package neqsim.process.equipment;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import neqsim.process.equipment.ejector.Ejector;
 import neqsim.process.equipment.powergeneration.WindTurbine;
@@ -91,10 +93,66 @@ public class EquipmentFactoryTest extends neqsim.NeqSimTest {
   }
 
   @Test
+  public void createEquipmentFromAutomaticallyDiscoveredPackages() {
+    ProcessEquipmentInterface motor = EquipmentFactory.createEquipment("motor", "ElectricMotor");
+    assertInstanceOf(neqsim.process.equipment.energy.ElectricMotor.class, motor);
+
+    ProcessEquipmentInterface preparation = EquipmentFactory.createEquipment("preparation", "BioFeedstockPreparation");
+    assertInstanceOf(neqsim.process.equipment.solidhandling.BioFeedstockPreparation.class, preparation);
+
+    ProcessEquipmentInterface converter = EquipmentFactory.createEquipment("converter", "ClausCatalyticConverter");
+    assertInstanceOf(neqsim.process.equipment.reactor.sulfurrecovery.ClausCatalyticConverter.class, converter);
+  }
+
+  @Test
+  public void constructibleEquipmentInventoryIncludesAutomaticallyDiscoveredPackages() {
+    assertTrue(EquipmentFactory.getConstructibleEquipmentTypes().contains("ElectricMotor"));
+    assertTrue(EquipmentFactory.getConstructibleEquipmentTypes().contains("BioFeedstockPreparation"));
+    assertTrue(EquipmentFactory.getConstructibleEquipmentTypes().contains("ClausCatalyticConverter"));
+  }
+
+  @Test
+  public void supportedEquipmentInventoryExcludesContextDependentTypes() {
+    assertTrue(EquipmentFactory.supportsEquipmentType("ElectricMotor"));
+    assertTrue(EquipmentFactory.supportsEquipmentType("DistillationColumn"));
+    assertFalse(EquipmentFactory.supportsEquipmentType("Ejector"));
+    assertFalse(EquipmentFactory.supportsEquipmentType("GORfitter"));
+    assertFalse(EquipmentFactory.supportsEquipmentType("ReservoirCVDsim"));
+    assertTrue(EquipmentFactory.getSupportedEquipmentTypes().contains("ElectricMotor"));
+    assertTrue(EquipmentFactory.getSupportedEquipmentTypes().contains("DistillationColumn"));
+    assertFalse(EquipmentFactory.getSupportedEquipmentTypes().contains("Ejector"));
+  }
+
+  @Test
+  public void everyAdvertisedEquipmentTypeIsNameOnlyConstructible() {
+    for (String equipmentType : EquipmentFactory.getSupportedEquipmentTypes()) {
+      ProcessEquipmentInterface equipment = EquipmentFactory.createEquipment("audit unit", equipmentType);
+      assertNotNull(equipment, equipmentType + " was advertised but could not be constructed");
+      assertEquals("audit unit", equipment.getName());
+    }
+  }
+
+  @Test
   public void columnEnumMapsToDistillationColumn() {
     ProcessEquipmentInterface column = EquipmentFactory.createEquipment("col", EquipmentEnum.Column);
     assertInstanceOf(neqsim.process.equipment.distillation.DistillationColumn.class, column);
     assertEquals("col", column.getName());
+  }
+
+  @Test
+  public void unisimConvertedEquipmentTypesResolve() {
+    // Types emitted by the UniSim .usc converter for firedheaterop,
+    // pemelectrolyzer/alkalineelectrolyzer and gasifier blocks. They are not
+    // listed in EquipmentEnum and must resolve through classpath discovery,
+    // otherwise a converted flowsheet fails to build.
+    assertInstanceOf(neqsim.process.equipment.heatexchanger.FiredHeater.class,
+        EquipmentFactory.createEquipment("FH-100", "FiredHeater"));
+    assertInstanceOf(neqsim.process.equipment.electrolyzer.Electrolyzer.class,
+        EquipmentFactory.createEquipment("EL-100", "Electrolyzer"));
+    assertInstanceOf(neqsim.process.equipment.reactor.GibbsReactor.class,
+        EquipmentFactory.createEquipment("GS-100", "GibbsReactor"));
+    assertInstanceOf(neqsim.process.equipment.pipeline.PipeBeggsAndBrills.class,
+        EquipmentFactory.createEquipment("PIPE-100", "PipeBeggsAndBrills"));
   }
 
   @Test

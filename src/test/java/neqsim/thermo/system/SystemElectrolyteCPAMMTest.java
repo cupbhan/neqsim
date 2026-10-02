@@ -1,6 +1,7 @@
 package neqsim.thermo.system;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -562,7 +563,7 @@ public class SystemElectrolyteCPAMMTest {
   @DisplayName("Test NaCl activity coefficients at different concentrations")
   void testNaClActivityCoefficientConcentrationDependence() {
     // Test at multiple concentrations to verify concentration dependence
-    double[] molalities = { 0.1, 0.5, 1.0, 2.0 };
+    double[] molalities = {0.1, 0.5, 1.0, 2.0};
     double[] gammaMeanValues = new double[molalities.length];
 
     for (int i = 0; i < molalities.length; i++) {
@@ -849,9 +850,9 @@ public class SystemElectrolyteCPAMMTest {
     // 5.0 | 0.874 | 1.271
     // 6.0 | 0.986 | 1.368
 
-    double[] molalities = { 0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 3.0 };
-    double[] gammaLit = { 0.965, 0.902, 0.778, 0.681, 0.657, 0.668, 0.714 };
-    double[] phiLit = { 0.988, 0.968, 0.932, 0.921, 0.936, 1.002, 1.085 };
+    double[] molalities = {0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 3.0};
+    double[] gammaLit = {0.965, 0.902, 0.778, 0.681, 0.657, 0.668, 0.714};
+    double[] phiLit = {0.988, 0.968, 0.932, 0.921, 0.936, 1.002, 1.085};
 
     logger.info("=================================================================");
     logger.info("NaCl in water at 25°C - Comparison to Literature");
@@ -912,8 +913,8 @@ public class SystemElectrolyteCPAMMTest {
   void testCompareToFurstModel() {
     // Compare our MM model with the existing Furst electrolyte model
     // Literature values from Robinson & Stokes (1959) for NaCl at 25C
-    double[] molalities = { 0.1, 0.5, 1.0, 2.0 };
-    double[] gammaLit = { 0.778, 0.681, 0.657, 0.668 }; // from R&S
+    double[] molalities = {0.1, 0.5, 1.0, 2.0};
+    double[] gammaLit = {0.778, 0.681, 0.657, 0.668}; // from R&S
 
     logger.info("=================================================================");
     logger.info("Comparison: MM e-CPA vs Furst Electrolyte Model vs Literature");
@@ -1021,8 +1022,8 @@ public class SystemElectrolyteCPAMMTest {
   @Test
   @DisplayName("Test MM model with short-range term enabled")
   void testMMWithShortRangeEnabled() {
-    double[] molalities = { 0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 3.0 };
-    double[] gammaLit = { 0.965, 0.902, 0.778, 0.681, 0.657, 0.668, 0.714 };
+    double[] molalities = {0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 3.0};
+    double[] gammaLit = {0.965, 0.902, 0.778, 0.681, 0.657, 0.668, 0.714};
 
     logger.info("=================================================================");
     logger.info("NaCl: MM model DH+Born ONLY vs DH+Born+SR (short-range enabled)");
@@ -1112,17 +1113,17 @@ public class SystemElectrolyteCPAMMTest {
     double m = 1.0;
     double molesWater = 55.508;
 
-    String[] labels = { "DH+Born+SR (full)", "Born+SR (no DH)", "DH+SR (no Born)", "SR only (no DH, no Born)",
-        "DH only (no Born, no SR)", "None (pure SRK+CPA)" };
+    String[] labels = {"DH+Born+SR (full)", "Born+SR (no DH)", "DH+SR (no Born)", "SR only (no DH, no Born)",
+        "DH only (no Born, no SR)", "None (pure SRK+CPA)"};
 
     boolean[][] configs = {
         // DH, Born, SR
-        { true, true, true }, // full
-        { false, true, true }, // no DH
-        { true, false, true }, // no Born
-        { false, false, true }, // no DH, no Born
-        { true, false, false }, // DH only
-        { false, false, false } // none
+        {true, true, true}, // full
+        {false, true, true}, // no DH
+        {true, false, true}, // no Born
+        {false, false, true}, // no DH, no Born
+        {true, false, false}, // DH only
+        {false, false, false} // none
     };
 
     logger.info("=================================================================");
@@ -1310,9 +1311,9 @@ public class SystemElectrolyteCPAMMTest {
     double molesWater = 55.508;
 
     // Salt specifications: {cation, anion, nu_cation, nu_anion, molality, gamma_lit}
-    String[][] salts = { { "Na+", "Cl-", "1", "1", "1.0", "0.657" }, { "Ca++", "Cl-", "1", "2", "1.0", "0.518" },
-        { "Ba++", "Cl-", "1", "2", "1.0", "0.500" }, { "Na+", "SO4--", "2", "1", "1.0", "0.445" },
-        { "Mg++", "Cl-", "1", "2", "1.0", "0.529" }, };
+    String[][] salts = {{"Na+", "Cl-", "1", "1", "1.0", "0.657"}, {"Ca++", "Cl-", "1", "2", "1.0", "0.518"},
+        {"Ba++", "Cl-", "1", "2", "1.0", "0.500"}, {"Na+", "SO4--", "2", "1", "1.0", "0.445"},
+        {"Mg++", "Cl-", "1", "2", "1.0", "0.529"},};
 
     System.out.println("==========================================================================");
     logger.info("SCALE POTENTIAL COMPARISON: MM e-CPA vs Pitzer at 1 molal, 298.15 K");
@@ -1464,41 +1465,23 @@ public class SystemElectrolyteCPAMMTest {
     assertTrue(Double.isFinite(gammaSO4Mix) && gammaSO4Mix > 0,
         "SO4-- activity coefficient should be finite and positive");
 
-    // Now compare with Pitzer for the same mixed water
-    SystemPitzer pitzerMix = new SystemPitzer(298.15, 10.0);
-    pitzerMix.addComponent("methane", 0.01);
-    pitzerMix.addComponent("water", molesWater);
-    pitzerMix.addComponent("Na+", 0.74);
-    pitzerMix.addComponent("Cl-", 0.731);
-    pitzerMix.addComponent("Ba++", 0.0005);
-    pitzerMix.addComponent("SO4--", 0.005);
-    pitzerMix.setMixingRule("classic");
-    pitzerMix.init(0);
-    pitzerMix.init(1);
-    ThermodynamicOperations pitzerMixOps = new ThermodynamicOperations(pitzerMix);
-    pitzerMixOps.TPflash();
+    // A Pitzer comparison for this Na/Ba/Cl/SO4 brine is not qualified until all
+    // same-sign and ternary interactions are supplied from one mapped parameter dataset.
+    SystemPitzer unqualifiedPitzerMix = new SystemPitzer(298.15, 10.0);
+    unqualifiedPitzerMix.addComponent("methane", 0.01);
+    unqualifiedPitzerMix.addComponent("water", molesWater);
+    unqualifiedPitzerMix.addComponent("Na+", 0.74);
+    unqualifiedPitzerMix.addComponent("Cl-", 0.731);
+    unqualifiedPitzerMix.addComponent("Ba++", 0.0005);
+    unqualifiedPitzerMix.addComponent("SO4--", 0.005);
+    unqualifiedPitzerMix.setMixingRule("classic");
 
-    // Aqueous phase is at index 1 for SystemPitzer
-    int baIdxP = pitzerMix.getPhase(1).getComponent("Ba++").getComponentNumber();
-    int so4IdxP = pitzerMix.getPhase(1).getComponent("SO4--").getComponentNumber();
-    int watIdxP = pitzerMix.getPhase(1).getComponent("water").getComponentNumber();
-    double gammaBaP = pitzerMix.getPhase(1).getActivityCoefficient(baIdxP, watIdxP);
-    double gammaSO4P = pitzerMix.getPhase(1).getActivityCoefficient(so4IdxP, watIdxP);
-    double xBaP = pitzerMix.getPhase(1).getComponent("Ba++").getx();
-    double xSO4P = pitzerMix.getPhase(1).getComponent("SO4--").getx();
-    double xWaterP = pitzerMix.getPhase(1).getComponent("water").getx();
-    double mBaP = xBaP / (xWaterP * 0.018015);
-    double mSO4P = xSO4P / (xWaterP * 0.018015);
-    double aBaP = gammaBaP * mBaP;
-    double aSO4P = gammaSO4P * mSO4P;
-    double logIAPp = Math.log10(Math.abs(aBaP * aSO4P) + 1e-30);
-    double siPitzer = logIAPp - logKspBaSO4;
-
-    logger.info("Pitzer model comparison:");
-    logger.info(String.format("  gamma(Ba++) = %.4f (MM: %.4f)", gammaBaP, gammaBaMix));
-    logger.info(String.format("  gamma(SO4--) = %.4f (MM: %.4f)", gammaSO4P, gammaSO4Mix));
-    logger.info(String.format("  SI(Pitzer) = %.2f, SI(MM) = %.2f", siPitzer, sI));
-    logger.info(String.format("  Delta SI = %.2f", sI - siPitzer));
+    unqualifiedPitzerMix.init(0);
+    IllegalStateException missingParameters = assertThrows(IllegalStateException.class,
+        () -> unqualifiedPitzerMix.init(1));
+    assertTrue(missingParameters.getMessage().contains("missingTheta"));
+    assertTrue(missingParameters.getMessage().contains("Ba++|Na+"));
+    assertTrue(missingParameters.getMessage().contains("Cl-|SO4--"));
   }
 
   /**
@@ -1517,8 +1500,8 @@ public class SystemElectrolyteCPAMMTest {
   }
 
   @Test
-  @DisplayName("Pure liquid: MM e-CPA and Pitzer with no gas phase")
-  void testPureLiquidBothModels() {
+  @DisplayName("Liquid properties: MM e-CPA and Pitzer aqueous phases")
+  void testLiquidPropertiesBothModels() {
     // Pure aqueous NaCl 1 molal at 1 bar, 298.15 K — should stay single liquid phase
     double molesWater = 55.508;
     double m = 1.0;
@@ -1544,12 +1527,12 @@ public class SystemElectrolyteCPAMMTest {
     assertTrue(Double.isFinite(gammaMM) && gammaMM > 0,
         "MM gamma± must be finite and positive in pure liquid (got " + gammaMM + ")");
 
-    // ----- Pitzer: pure liquid -----
-    // Architectural note: SystemPitzer uses phase[0]=SRK(gas) and phase[1]=Pitzer(aqueous).
-    // Without a gas component, TPflash stays in the SRK phase, giving gamma±=1.0.
-    // The standard pattern is to add trace methane + moderate pressure to force 2 phases.
+    // ----- Pitzer: explicit aqueous phase -----
+    // SystemPitzer uses phase[0]=SRK(gas) and phase[1]=Pitzer(aqueous). Use a methane inventory
+    // that exceeds the qualified IAPWS pure-water solubility at this state, so the flash retains
+    // an explicit gas plus aqueous topology while the aqueous properties are checked.
     SystemPitzer pitzerSys = new SystemPitzer(298.15, 10.0);
-    pitzerSys.addComponent("methane", 0.01); // trace gas for 2-phase split
+    pitzerSys.addComponent("methane", 5.0);
     pitzerSys.addComponent("water", molesWater);
     pitzerSys.addComponent("Na+", m);
     pitzerSys.addComponent("Cl-", m);
@@ -1574,7 +1557,7 @@ public class SystemElectrolyteCPAMMTest {
     assertTrue(Double.isFinite(gammaPitzer) && gammaPitzer > 0,
         "Pitzer gamma± must be finite and positive in pure liquid (got " + gammaPitzer + ")");
 
-    logger.info("=== Pure Liquid (no gas) ===");
+    logger.info("=== Liquid properties ===");
     logger.info(String.format("  MM e-CPA:  γ± = %.4f, Vm = %.6e m3/mol, phases = %d", gammaMM, mmVm,
         mmSys.getNumberOfPhases()));
     logger.info(String.format("  Pitzer:    γ± = %.4f, Vm = %.6e m3/mol, phases = %d", gammaPitzer, pitzerVm,
@@ -1893,7 +1876,7 @@ public class SystemElectrolyteCPAMMTest {
     System.out.println("==========================================================================");
 
     // Helper: print phase table for a given system
-    String[] modelNames = { "MM e-CPA", "Pitzer", "CPA-Statoil", "CPA-Advanced" };
+    String[] modelNames = {"MM e-CPA", "Pitzer", "CPA-Statoil", "CPA-Advanced"};
     double[] aqGammas = new double[4];
 
     // ===================== 1. MM e-CPA =====================

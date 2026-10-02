@@ -3,8 +3,6 @@ title: Mechanical Design Framework
 description: NeqSim provides a comprehensive mechanical design framework for sizing and specifying process equipment according to industry standards. This document describes the architecture, usage patterns, and J...
 ---
 
-# Mechanical Design Framework
-
 NeqSim provides a comprehensive mechanical design framework for sizing and specifying process equipment according to industry standards. This document describes the architecture, usage patterns, and JSON export capabilities.
 
 > **📘 Related Documentation**
@@ -47,6 +45,8 @@ MechanicalDesign (base class)
 │   └── PipeMechanicalDesignCalculator (wall thickness, stress, cost)
 ├── AdsorberMechanicalDesign       → ASME VIII
 ├── AbsorberMechanicalDesign       → ASME VIII
+├── DistillationColumnMechanicalDesign
+│   └── Tray/packing flood, Fs, demister K-factor, pressure drop, and bottleneck rating
 ├── EjectorMechanicalDesign        → HEI
 ├── SafetyValveMechanicalDesign    → API 520/521
 └── WellMechanicalDesign           → NORSOK D-010 / API 5CT / API Bull 5C3
@@ -134,7 +134,7 @@ mecDesign.calcDesign();
 
 // Access results
 double weight = mecDesign.getWeightTotal();           // kg
-double wallThickness = mecDesign.getWallThickness();  // mm
+double wallThickness = mecDesign.getWallThickness();  // m for this separator
 double innerDiameter = mecDesign.getInnerDiameter();  // m
 double length = mecDesign.getTantanLength();          // m
 double designPressure = mecDesign.getMaxDesignPressure(); // bara
@@ -142,6 +142,37 @@ double designPressure = mecDesign.getMaxDesignPressure(); // bara
 // Display results in GUI
 mecDesign.displayResults();
 ```
+
+### Consistent separator sizing results
+
+`SeparatorMechanicalDesign.calcDesign()` calculates pressure-wall thickness using the final
+sized inner diameter, including any liquid-separation sizing override. Outside diameter,
+shell weight, internals and dependent module weights then use that same geometry. The
+`autoSize()` sizing path and `GasScrubberMechanicalDesign.calcDesign()` follow the same order.
+An unchanged design does not require a second `setDesign()` / `calcDesign()` cycle to obtain
+consistent thickness and weights. Use `setDesign()` to apply the design's process-side settings.
+
+For separators and gas scrubbers, `getWallThickness()` returns metres and
+`setCorrosionAllowance(double)` takes millimetres. Outside diameter is inner diameter plus
+twice the wall thickness. Changing the pressure basis, corrosion allowance or process flow
+requires recalculating the design before consuming its geometry or weights. The existing
+pressure-code correlations and empirical weight estimates are unchanged; this consistency
+fix does not add fabrication details or code certification.
+
+### Gas-liquid contactor capacity
+
+The mechanical design attached to `PackedColumn`, `AbsorptionColumn`, `StrippingColumn`, and
+`DistillationColumn` is a `DistillationColumnMechanicalDesign`. After the process column has
+converged, it can rate a fixed vessel or size new internals and expose the controlling utilization
+through `ContactorCapacityResult`.
+
+For packed brownfield contactors, configure the actual diameter, packing flood target, optional
+vendor-supported relative capacity factor, outlet demister database subtype, and maximum pressure
+drop. The result and `toJson()` include Fs, packing or tray flood, wetting status, demister
+Souders-Brown K-factor, pressure drop, overall utilization, estimated gas headroom, and bottleneck.
+`comparePackedInternals(...)` holds vessel diameter and process conditions fixed while screening a
+candidate packing and demister. See [Absorbers and Strippers](equipment/absorbers#mechanical-design-and-debottlenecking)
+for the executable TEG contactor example and the correlation limitations.
 
 ### Declared design conditions and units
 
@@ -263,7 +294,8 @@ String json = separator.getMechanicalDesign().toJson();
   "maxDesignTemperature": 80.0,
   "innerDiameter": 2.4,
   "tangentLength": 7.2,
-  "wallThickness": 28.5,
+  "wallThickness": 0.0285,
+  "wallThicknessUnit": "m",
   "moduleLength": 10.0,
   "moduleWidth": 5.0,
   "moduleHeight": 4.5,
@@ -271,6 +303,116 @@ String json = separator.getMechanicalDesign().toJson();
 }
 */
 ```
+
+### JSON for 3D geometry and design calculations
+
+Use `toDesignDataJson()` on any mechanical design for the versioned, unit-labelled
+contract. The same snapshot is included as `designData` in response-based
+`toJson()` exports. The dedicated method also works for equipment with its own
+legacy exporter. Run the process and `calcDesign()` after changing inputs, then
+export; exporting does not run calculations or change the equipment.
+
+```java
+// After running the process:
+MechanicalDesign design = separator.getMechanicalDesign();
+design.calcDesign();
+String designDataJson = design.toDesignDataJson();
+java.nio.file.Files.write(java.nio.file.Paths.get("separator-design.json"),
+    designDataJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+```
+
+The contract has `schemaVersion: "1.0"`. Every numeric quantity inside `geometry`,
+`operatingConditions` and `designBasis` has `value`, `unit`, `source` and `status`.
+Lengths use **m**, absolute pressures **Pa**, temperatures **K**, power/duty **W**,
+mass flow **kg/s**, area **m2**, conductance **W/K**, and efficiency **1**.
+Unavailable or non-finite values are JSON `null` with status `unavailable`.
+`available` means a finite getter value is present; it does **not** establish
+calculation completion, freshness, compliance or fabrication readiness.
+`calculationStatus` is explicitly `not_tracked`. Configured operating/design limits
+are marked `configured_or_default` and kept separate from live stream conditions.
+
+| Equipment | Legacy `getWallThickness()` / JSON unit | Normalized geometry and calculation interpretation |
+|---|---|---|
+| Separator, absorber | m | Sized cylindrical shell; orientation from process owner; head type/profile unavailable |
+| Compressor | m | Envelope gap, **not pressure-casing thickness**; `pressureCasingWallThickness` and `pressureCasingInnerDiameter` come separately from the casing calculator |
+| Heat exchanger, heater/cooler | m | Selected sizing envelope; an equivalent diameter does not imply a cylindrical exchanger |
+| Pump | mm | Casing envelope, impeller and shaft sizes converted to m |
+| Pipeline/riser | mm | Geometry uses the pipe's specified ID/thickness/length; `designBasis.designWallThickness` preserves the design getter separately (minimum sizing result after `calcDesign`) |
+| Valve | m | Envelope; face-to-face, body thickness and stem getters use mm where documented |
+| Distillation column | mm | Column envelope; height exported separately |
+| Filter, adsorber | m | Getter dimensions exported with the diameter/thickness consistency check |
+| Membrane | mm | Getter dimensions converted; detailed housing layout is not inferred |
+| Other design classes | Unqualified | Thickness is unavailable in normalized output until its unit contract is qualified |
+
+Existing getter numeric units remain unchanged. Legacy response JSON now declares
+`wallThicknessUnit`; for example separator `wallThickness = 0.0285 m`, whereas
+its explicitly millimetre-valued `shellThickness = 28.5 mm`. Compressor and pump
+impeller/shaft legacy fields remain mm. Previously unpopulated floating-point
+response fields use `Double.NaN` in the Java DTO and now serialize as `null`, and non-finite nested calculator values
+also become `null` in response-based exports. Compact and pretty response exports
+have the same fields. Legacy zero counts/false flags are not a completeness test;
+consume the versioned contract for geometry automation.
+
+Compressor inlet/outlet pressures and efficiencies come from the live compressor,
+not the design envelope defaults. Compressor, pump and valve maximum design
+pressure/temperature fields use their own calculation results. Heat-exchanger
+exports now use their specialized response, selected type, required area and
+thermal coefficient. Shell dimensions are populated only for a shell-and-tube
+selection. No head thickness or product geometry is invented when its source is
+absent.
+
+`geometryConsistency` checks whether positive finite ID, OD and thickness satisfy
+`OD = ID + 2t`. It is `consistent`, `inconsistent` or `incomplete`. This checks
+geometric arithmetic only, not pressure-code adequacy. Correct an inconsistent
+source design before meshing it. A missing head type is expected: the separator
+model does not specify a fabrication head profile.
+
+Compressor snapshots also expose `impellerSizingFeasible` and `impellerSizingIssues`.
+Check these before using impeller dimensions: diameter, shaft speed, tip speed,
+equal-stage head and inlet flow coefficient are screened together. An infeasible
+candidate retains its head-based dimensions even outside the sizing limits; shell
+`geometryConsistency` does not qualify it. The unit-labelled `designBasis` includes
+the sizing speed (rpm), tip speed (m/s), inlet flow coefficient, head per stage
+(J/kg) and stage count. See [Compressor Mechanical Design](CompressorMechanicalDesign#2-impeller-sizing)
+for the assumptions and limits. These checks do not establish aerodynamic or
+fabrication qualification.
+
+An invalid compressor sizing attempt clears the previous envelope, shaft, rotor,
+weight and layout results. Their JSON quantities are unavailable instead of
+retaining values from an earlier successful run, and the casing calculation is absent.
+
+The runnable [JSON-to-mesh example](../../examples/mechanical_design_json_to_mesh.py)
+uses `trimesh` and rejects missing units, unavailable dimensions and inconsistent
+shell geometry. With the JSON above saved as `separator-design.json`:
+
+```bash
+python -m pip install trimesh numpy
+python examples/mechanical_design_json_to_mesh.py separator-design.json separator-shell.stl
+# For a compressor, pump or exchanger plot-space envelope:
+python examples/mechanical_design_json_to_mesh.py compressor-design.json compressor-skid.glb --mode envelope
+```
+
+The shell mesh is an **open-ended tube wall**, without heads, nozzles or supports.
+Horizontal vessels have their axis along X; vertical vessels along Z. The example
+checks watertightness of the wall solid and its mesh volume against
+`pi * (OD^2 - ID^2) * tangentLength / 4`. The STL/GLB sidecar retains metre units,
+source design data, bounds, representation and the volume error. STL itself does
+not encode units. Envelope mode creates a plot-space box including access
+allowances, so its volume must not be interpreted as metal volume or used for mass.
+
+For design calculations, retain the JSON's sources and statuses alongside each
+result. Wall-metal volume times a separately specified material density gives a
+shell-only mass estimate. Pressure-thickness or hoop-stress calculations also need
+an explicitly selected pressure differential, material allowable stress, joint
+factor, corrosion allowance and applicable design method. Absolute operating
+pressure is not automatically the pressure differential across a wall. Existing
+mechanical/casing calculators remain the source of their design results; a CAD
+mesh is not a substitute for those calculations or a fabrication drawing.
+
+The regression test `MechanicalDesignJsonContractTest` runs the equipment, checks
+getter/JSON values and unit conversions, preserves configured limits across
+reruns, checks missing values, and writes separator/compressor JSON fixtures for
+the mesh example under `target/design-json/`.
 
 ### Exporting System-Wide Design
 
@@ -384,7 +526,8 @@ mechReport.writeJsonReport("mechanical_design_report.json");
       "mechanicalDesign": {
         "designPressure": 55.0,
         "designTemperature": 80.0,
-        "wallThickness": 28.5,
+        "wallThickness": 0.0285,
+        "wallThicknessUnit": "m",
         "weight": 15420.5,
         ...
       }
@@ -457,7 +600,10 @@ ValveMechanicalDesignResponse valveResponse =
     (ValveMechanicalDesignResponse) valve.getMechanicalDesign().getResponse();
 
 int ansiClass = valveResponse.getAnsiPressureClass();
+double cvRequired = valveResponse.getCvRequired();
 double cvMax = valveResponse.getCvMax();
+double trimUtilization = valveResponse.getTrimCvUtilization();
+boolean trimFeasible = valveResponse.isTrimFeasible();
 double faceToFace = valveResponse.getFaceToFace();  // mm
 String valveType = valveResponse.getValveType();
 ```
@@ -801,6 +947,7 @@ ValveMechanicalDesign valveDesign =
 
 // Key parameters
 double cvMax = valveDesign.getValveCvMax();
+double requiredCv = valveDesign.getRequiredCv();
 int ansiClass = valveDesign.getAnsiPressureClass();
 double faceToFace = valveDesign.getFaceToFace();           // mm
 double actuatorThrust = valveDesign.getRequiredActuatorThrust(); // N
@@ -808,6 +955,8 @@ double actuatorThrust = valveDesign.getRequiredActuatorThrust(); // N
 
 Design calculations include:
 - Cv/Kv sizing per IEC 60534
+- Explicit vendor trim catalogs with relative trim size, maximum design Cv, utilization, margin, and feasibility
+- Material/construction provenance for severe-service trims without unsupported generic derating factors
 - ANSI pressure class selection
 - Body sizing and wall thickness
 - Actuator sizing
@@ -1009,6 +1158,6 @@ System.out.println("Driver power: " + compResponse.getDriverPower() + " kW");
 
 ## See Also
 
-- [Process Equipment](./
+- [Process Equipment](README.md)
 - [Pipeline Mechanical Design](pipeline_mechanical_design)
 - [Design Standards](../standards/)

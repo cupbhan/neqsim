@@ -187,7 +187,7 @@ public final class HydrocarbonWaterBoundaryAnchorDiscoverer {
           .setNumericalControls(scanIntervals, maximumBisections, temperatureToleranceK, tangentPlaneTolerance);
       for (double pressureBara : sortedUnique(anchorPressuresBara)) {
         HydrocarbonWaterBranchSeedScanner.Result scan = new HydrocarbonWaterBranchSeedScanner(template,
-            family.incipientPhase).scan(seedTemperaturesK, new double[] { pressureBara });
+            family.incipientPhase).scan(seedTemperaturesK, new double[] {pressureBara});
         gridEvaluations += scan.getEvaluatedPointCount();
         List<Seed> threePhaseSeeds = new ArrayList<Seed>();
         for (Seed seed : scan.getSeeds()) {

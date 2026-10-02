@@ -1,15 +1,21 @@
 package neqsim.process.equipment.util;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.google.gson.GsonBuilder;
+import neqsim.process.dynamics.TransientStateParticipant;
 import neqsim.process.equipment.ProcessEquipmentBaseClass;
 import neqsim.process.equipment.mixer.MixerInterface;
 import neqsim.process.equipment.stream.StreamInterface;
+import neqsim.process.processmodel.ProcessSystem;
 import neqsim.process.util.monitor.RecycleResponse;
 import neqsim.process.util.report.ReportConfig;
 import neqsim.process.util.report.ReportConfig.DetailLevel;
@@ -22,14 +28,21 @@ import neqsim.util.ExcludeFromJacocoGeneratedReport;
  *
  * <p>
  * This class implements convergence acceleration methods for recycle calculations, including direct substitution,
- * Wegstein acceleration, and Broyden's method.
+ * Wegstein acceleration, and Broyden's method. Per-recycle acceleration acts on overall component mole fractions.
+ * Temperature, pressure and total molar flow retain the current mixed/flashed return-stream values. Accelerated
+ * compositions are applied through component inventories and a new TP flash, rather than by overwriting phase
+ * fractions.
  *
  * @author Even Solbraa
  * @version $Id: $Id
  */
-public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface {
+public class Recycle extends ProcessEquipmentBaseClass
+    implements MixerInterface, TransientStateParticipant<Recycle.TransientState> {
   /** Serialization version UID. */
   private static final long serialVersionUID = 1000;
+
+  /** Stable identity used for transaction provenance and foreign-snapshot rejection. */
+  private String transientStateIdentity = UUID.randomUUID().toString();
   /** Logger object for class. */
   static Logger logger = LogManager.getLogger(Recycle.class);
 
@@ -111,7 +124,7 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
 
   // Broyden acceleration
   /** Broyden accelerator instance for multi-variable acceleration. */
-  private transient BroydenAccelerator broydenAccelerator = null;
+  private BroydenAccelerator broydenAccelerator = null;
 
   /**
    * Constructor for Recycle.
@@ -159,9 +172,11 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
   }
 
   /**
-   * Setter for the field <code>flowTolerance</code>.
+   * Sets the legacy flow tolerance: kg/sec below 1 kg/sec loop flow, percent otherwise. For example, 0.01 permits 0.01
+   * kg/sec change on a 0.02 kg/sec loop (50%). The optional absolute tolerance is an OR criterion and cannot tighten
+   * this threshold.
    *
-   * @param flowTolerance a double
+   * @param flowTolerance tolerance in the units returned by flowBalanceCheck()
    */
   public void setFlowTolerance(double flowTolerance) {
     this.flowTolerance = flowTolerance;
@@ -434,6 +449,7 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
   /** {@inheritDoc} */
   @Override
   public void run(UUID id) {
+    requireOutletStream();
     iterations++;
     isActive(true);
     /*
@@ -476,18 +492,26 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
     }
     mixedStream.setCalculationIdentifier(id);
 
-    // Apply convergence acceleration if enabled and past delay period
-    if (accelerationMethod == AccelerationMethod.WEGSTEIN && iterations > wegsteinDelayIterations
-        && lastIterationStream != null) {
-      applyWegsteinToStream();
-    } else if (accelerationMethod == AccelerationMethod.BROYDEN && lastIterationStream != null) {
-      applyBroydenToStream();
-    }
-
+    // Test the fixed-point residual before damping or clipping can hide a nonconverged return.
     setErrorCompositon(compositionBalanceCheck());
     setErrorFlow(flowBalanceCheck());
     setErrorTemperature(temperatureBalanceCheck());
     setErrorPressure(pressureBalanceCheck());
+
+    // A changed component list invalidates all previous secant information.
+    boolean sameComponents = hasSameComponentOrder(lastIterationStream, mixedStream);
+    if (!sameComponents) {
+      resetAccelerationState();
+    }
+
+    // Apply convergence acceleration if enabled and past delay period.
+    if (sameComponents && accelerationMethod == AccelerationMethod.WEGSTEIN && iterations > wegsteinDelayIterations
+        && lastIterationStream != null) {
+      applyWegsteinToStream();
+    } else if (sameComponents && accelerationMethod == AccelerationMethod.BROYDEN && lastIterationStream != null) {
+      applyBroydenToStream();
+    }
+
     updateAdaptiveAcceleration();
     lastIterationStream = mixedStream.clone();
     outletStream.setThermoSystem(mixedStream.getThermoSystem());
@@ -502,6 +526,46 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
     // logger.info("beta " + mixedStream.getThermoSystem().getBeta());
     // outStream.setThermoSystem(mixedStream.getThermoSystem());
     setCalculationIdentifier(id);
+  }
+
+  /**
+   * Advances this recycle by one transient process evaluation.
+   *
+   * <p>
+   * The same recycle object is used in both simulation modes. A steady-state {@link ProcessSystem} may call
+   * {@link #run(UUID)} repeatedly until the tear stream converges. A transient process calls this method once in
+   * flowsheet order for each evaluation of an accepted physical timestep, so the previously accepted outlet state is
+   * consumed upstream before the current inlet state is published for the following evaluation. This breaks the
+   * algebraic loop without requiring the flowsheet to replace its steady-state recycle with a separate dynamic unit.
+   * </p>
+   *
+   * <p>
+   * Steady-state Wegstein or Broyden acceleration is temporarily disabled during the transient evaluation. Applying
+   * convergence acceleration between physical timesteps would introduce a non-physical state correction. The configured
+   * acceleration method is restored unchanged for the next steady-state solve. This method deliberately works
+   * regardless of {@link #getCalculateSteadyState()}, because a recycle has no independent differential inventory and
+   * its transient role is an ordered algebraic transport evaluation.
+   * </p>
+   *
+   * @param dt timestep in seconds
+   * @param id calculation identifier shared by the physical timestep
+   */
+  @Override
+  public void runTransient(double dt, UUID id) {
+    boolean alreadyEvaluatedForStep = id != null && id.equals(getCalculationIdentifier());
+    AccelerationMethod configuredAccelerationMethod = accelerationMethod;
+    boolean configuredAdaptiveAcceleration = adaptiveAcceleration;
+    try {
+      accelerationMethod = AccelerationMethod.DIRECT_SUBSTITUTION;
+      adaptiveAcceleration = false;
+      run(id);
+    } finally {
+      accelerationMethod = configuredAccelerationMethod;
+      adaptiveAcceleration = configuredAdaptiveAcceleration;
+    }
+    if (!alreadyEvaluatedForStep) {
+      increaseTime(dt);
+    }
   }
 
   /**
@@ -536,19 +600,20 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
   }
 
   /**
-   * compositionBalanceCheck.
+   * Calculates the sum of absolute overall mole-fraction residuals. Phase fractions are not independent tear
+   * coordinates and may change when the stream crosses a phase boundary.
    *
-   * @return a double
+   * @return overall composition residual, or 10 when the component lists do not match
    */
   public double compositionBalanceCheck() {
-    if (lastIterationStream.getFluid().getNumberOfComponents() != mixedStream.getFluid().getNumberOfComponents()) {
+    if (!hasSameComponentOrder(lastIterationStream, mixedStream)) {
       return 10.0;
     }
 
     double abs_sum_error = 0.0;
     for (int i = 0; i < mixedStream.getThermoSystem().getPhase(0).getNumberOfComponents(); i++) {
-      abs_sum_error += Math.abs(mixedStream.getThermoSystem().getPhase(0).getComponent(i).getx()
-          - lastIterationStream.getThermoSystem().getPhase(0).getComponent(i).getx());
+      abs_sum_error += Math.abs(mixedStream.getThermoSystem().getComponent(i).getz()
+          - lastIterationStream.getThermoSystem().getComponent(i).getz());
     }
 
     return abs_sum_error;
@@ -821,11 +886,28 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
   }
 
   /**
-   * Gets the current Wegstein q-factors for each variable.
+   * Gets the current Wegstein q-factors in the legacy layout [T, P, molar flow, composition...]. The first three
+   * entries are always zero because these properties use direct substitution. The remaining entries describe overall
+   * mole fractions in component order, before clipping and normalization. Use {@link #getCompositionWegsteinQFactors()}
+   * for the actual composition-only accelerator coordinates.
    *
-   * @return array of q-factors, or null if not yet calculated
+   * @return defensive copy with three reserved zero entries, or null if not yet calculated
    */
   public double[] getWegsteinQFactors() {
+    if (wegsteinQFactors == null) {
+      return null;
+    }
+    double[] factors = new double[3 + wegsteinQFactors.length];
+    System.arraycopy(wegsteinQFactors, 0, factors, 3, wegsteinQFactors.length);
+    return factors;
+  }
+
+  /**
+   * Gets the Wegstein factors for the accelerated overall mole fractions in component order.
+   *
+   * @return defensive copy of composition factors before clipping and normalization, or null before calculation
+   */
+  public double[] getCompositionWegsteinQFactors() {
     return wegsteinQFactors != null ? wegsteinQFactors.clone() : null;
   }
 
@@ -854,23 +936,38 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
   }
 
   /**
-   * Extracts the current tear stream values as an array. The array contains: [temperature, pressure, total_flow,
-   * mole_fractions...]
+   * Checks the identity and order of the component coordinates in two streams.
+   *
+   * @param first previous tear estimate
+   * @param second current return stream
+   * @return true when the coordinates can share acceleration history
+   */
+  private boolean hasSameComponentOrder(StreamInterface first, StreamInterface second) {
+    if (first == null || second == null
+        || first.getFluid().getNumberOfComponents() != second.getFluid().getNumberOfComponents()) {
+      return false;
+    }
+    for (int i = 0; i < first.getFluid().getNumberOfComponents(); i++) {
+      if (!first.getFluid().getComponent(i).getComponentName()
+          .equals(second.getFluid().getComponent(i).getComponentName())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Extracts only the overall mole fractions that are actually accelerated. Neither phase compositions nor the
+   * independently flashed temperature, pressure and total molar flow enter the secant system.
    *
    * @param stream the stream to extract values from
-   * @return array of stream property values
+   * @return overall mole fractions in component order
    */
   private double[] extractStreamValues(StreamInterface stream) {
     SystemInterface fluid = stream.getThermoSystem();
-    int numComponents = fluid.getPhase(0).getNumberOfComponents();
-    double[] values = new double[3 + numComponents]; // T, P, flow, + compositions
-
-    values[0] = fluid.getTemperature();
-    values[1] = fluid.getPressure();
-    values[2] = fluid.getFlowRate("mole/sec");
-
-    for (int i = 0; i < numComponents; i++) {
-      values[3 + i] = fluid.getPhase(0).getComponent(i).getx();
+    double[] values = new double[fluid.getNumberOfComponents()];
+    for (int i = 0; i < values.length; i++) {
+      values[i] = fluid.getComponent(i).getz();
     }
     return values;
   }
@@ -879,7 +976,7 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
    * Applies Wegstein acceleration to calculate accelerated values.
    *
    * <p>
-   * The Wegstein method uses the formula: x_{n+1} = q * g(x_n) + (1-q) * x_n where q = s / (s - 1) and s is the slope
+   * The Wegstein method uses the formula: x_{n+1} = q * x_n + (1-q) * g(x_n) where q = s / (s - 1) and s is the slope
    * estimate.
    *
    * <p>
@@ -895,7 +992,7 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
     double[] acceleratedValues = new double[n];
 
     // Initialize q-factors array if needed
-    if (wegsteinQFactors == null) {
+    if (wegsteinQFactors == null || wegsteinQFactors.length != n) {
       wegsteinQFactors = new double[n];
     }
 
@@ -924,7 +1021,7 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
       if (Math.abs(slope - 1.0) > 1e-10) {
         q = slope / (slope - 1.0);
       } else {
-        // slope ≈ 1 means diverging, use minimum q for maximum damping
+        // slope ≈ 1 has an unbounded secant factor; use the configured lower bound
         q = wegsteinQMin;
       }
 
@@ -932,39 +1029,58 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
       q = Math.max(wegsteinQMin, Math.min(wegsteinQMax, q));
       wegsteinQFactors[i] = q;
 
-      // Apply Wegstein formula: x_{n+1} = q * g(x_n) + (1-q) * x_n
-      acceleratedValues[i] = q * currentOutput[i] + (1.0 - q) * currentInput[i];
+      // Apply Wegstein formula: x_{n+1} = q * x_n + (1-q) * g(x_n)
+      acceleratedValues[i] = q * currentInput[i] + (1.0 - q) * currentOutput[i];
     }
 
     return acceleratedValues;
   }
 
   /**
-   * Applies accelerated values to the mixed stream.
+   * Applies a proposed overall composition as a new, thermodynamically consistent tear estimate. Temperature, pressure
+   * and total molar flow are retained from the flashed return. Negative proposals are clipped and the remainder is
+   * normalized. Invalid proposals or a failed flash retain the unaccelerated return and reset the accelerator.
    *
-   * @param values array containing [temperature, pressure, flow, mole_fractions...]
+   * @param values overall mole fractions in component order
    */
   private void applyStreamValues(double[] values) {
     SystemInterface fluid = mixedStream.getThermoSystem();
-    int numComponents = fluid.getPhase(0).getNumberOfComponents();
-
-    // Only apply composition changes - T, P, and flow are handled elsewhere
-    // This is because the recycle primarily needs to converge on composition
-    if (values.length >= 3 + numComponents) {
-      double[] newFractions = new double[numComponents];
-      double sum = 0.0;
-      for (int i = 0; i < numComponents; i++) {
-        newFractions[i] = Math.max(0.0, values[3 + i]); // Ensure non-negative
-        sum += newFractions[i];
+    int numComponents = fluid.getNumberOfComponents();
+    if (values.length != numComponents) {
+      resetAccelerationState();
+      return;
+    }
+    double[] fractions = new double[numComponents];
+    double sum = 0.0;
+    for (int i = 0; i < numComponents; i++) {
+      if (!Double.isFinite(values[i])) {
+        resetAccelerationState();
+        return;
       }
-
-      // Normalize to ensure sum = 1
-      if (sum > 1e-15) {
-        for (int i = 0; i < numComponents; i++) {
-          fluid.getPhase(0).getComponent(i).setx(newFractions[i] / sum);
-          fluid.getPhase(1).getComponent(i).setx(newFractions[i] / sum);
-        }
-      }
+      fractions[i] = Math.max(0.0, values[i]);
+      sum += fractions[i];
+    }
+    if (!Double.isFinite(sum) || sum <= 1e-15) {
+      resetAccelerationState();
+      return;
+    }
+    boolean changed = false;
+    for (int i = 0; i < numComponents; i++) {
+      fractions[i] /= sum;
+      changed |= Math.abs(fractions[i] - fluid.getComponent(i).getz()) > 1e-15;
+    }
+    if (!changed) {
+      return;
+    }
+    // Work on a clone so a rejected flash cannot corrupt the valid return stream.
+    SystemInterface candidate = fluid.clone();
+    try {
+      candidate.setMolarComposition(fractions);
+      new ThermodynamicOperations(candidate).TPflash();
+      mixedStream.setThermoSystem(candidate);
+    } catch (RuntimeException ex) {
+      resetAccelerationState();
+      logger.debug("Recycle {} rejected accelerated composition: {}", getName(), ex.getMessage());
     }
   }
 
@@ -1147,9 +1263,30 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
     return downstreamProperty;
   }
 
-  /** {@inheritDoc} */
+  /**
+   * {@inheritDoc}
+   *
+   * <p>
+   * Returns {@code null} until the tear outlet is configured. Process-module assembly inspects this getter before
+   * wiring the recycle; {@link #run(UUID)} requires an outlet and reports a configuration error if it is absent.
+   * </p>
+   */
   @Override
   public StreamInterface getOutletStream() {
+    return outletStream;
+  }
+
+  /**
+   * Returns the configured tear stream or explains the missing recycle connection.
+   *
+   * @return configured outlet stream
+   * @throws IllegalStateException if the caller has not configured an outlet stream
+   */
+  private StreamInterface requireOutletStream() {
+    if (outletStream == null) {
+      throw new IllegalStateException(
+          "Recycle '" + getName() + "' has no outlet stream; call setOutletStream(...) before wiring or running it");
+    }
     return outletStream;
   }
 
@@ -1305,6 +1442,264 @@ public class Recycle extends ProcessEquipmentBaseClass implements MixerInterface
   public void setMinimumFlow(double minimumFlow) {
     this.minimumFlow = minimumFlow;
     super.setMinimumFlow(minimumFlow);
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public String getTransientStateIdentity() {
+    if (transientStateIdentity == null || transientStateIdentity.trim().isEmpty()) {
+      transientStateIdentity = UUID.randomUUID().toString();
+    }
+    return "equipment:recycle:" + transientStateIdentity;
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public String getTransientStateCoverageIssue() {
+    if (getClass() != Recycle.class) {
+      return "recycle subclass " + getClass().getName() + " must extend the snapshot for subclass-owned mutable state";
+    }
+    String baseIssue = getBaseTransientStateCoverageIssue();
+    if (baseIssue != null) {
+      return baseIssue;
+    }
+    if (numberOfInputStreams != streams.size()) {
+      return "input-stream count does not match the registered stream identities";
+    }
+    if (streams.isEmpty() || mixedStream == null || lastIterationStream == null || outletStream == null) {
+      return "recycle streams must be fully connected before transient state can be captured";
+    }
+    for (StreamInterface stream : streams) {
+      if (stream == null || stream.getThermoSystem() == null) {
+        return "recycle contains a null stream or thermodynamic system";
+      }
+    }
+    if (mixedStream.getThermoSystem() == null || lastIterationStream.getThermoSystem() == null
+        || outletStream.getThermoSystem() == null) {
+      return "recycle-owned stream thermodynamic state is incomplete";
+    }
+    return null;
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public TransientState captureTransientState() {
+    String coverageIssue = getTransientStateCoverageIssue();
+    if (coverageIssue != null) {
+      throw new IllegalStateException("Cannot capture recycle '" + getName() + "': " + coverageIssue);
+    }
+    return new TransientState(this);
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public void restoreTransientState(TransientState snapshot) {
+    Objects.requireNonNull(snapshot, "recycle transient snapshot cannot be null");
+    if (!getTransientStateIdentity().equals(snapshot.stateIdentity)) {
+      throw new IllegalArgumentException("Transient snapshot belongs to another recycle");
+    }
+
+    restoreBaseTransientState(snapshot.baseState);
+    streams.clear();
+    streams.addAll(snapshot.streams);
+    downstreamProperty = new ArrayList<String>(snapshot.downstreamProperty);
+    numberOfInputStreams = snapshot.numberOfInputStreams;
+    mixedStream = snapshot.mixedStream;
+    lastIterationStream = snapshot.lastIterationStream;
+    outletStream = snapshot.outletStream;
+    for (StreamTransientState streamState : snapshot.streamStates) {
+      streamState.restore();
+    }
+
+    priority = snapshot.priority;
+    firstTime = snapshot.firstTime;
+    iterations = snapshot.iterations;
+    maxIterations = snapshot.maxIterations;
+    errorComposition = snapshot.errorComposition;
+    errorFlow = snapshot.errorFlow;
+    errorTemperature = snapshot.errorTemperature;
+    errorPressure = snapshot.errorPressure;
+    flowTolerance = snapshot.flowTolerance;
+    compositionTolerance = snapshot.compositionTolerance;
+    temperatureTolerance = snapshot.temperatureTolerance;
+    pressureTolerance = snapshot.pressureTolerance;
+    absoluteFlowChange = snapshot.absoluteFlowChange;
+    absoluteFlowTolerance = snapshot.absoluteFlowTolerance;
+    absoluteFlowToleranceExplicit = snapshot.absoluteFlowToleranceExplicit;
+    minimumFlow = snapshot.minimumFlow;
+    accelerationMethod = snapshot.accelerationMethod;
+    accelerationMethodExplicit = snapshot.accelerationMethodExplicit;
+    adaptiveAcceleration = snapshot.adaptiveAcceleration;
+    adaptiveAccelerationExplicit = snapshot.adaptiveAccelerationExplicit;
+    adaptiveAccelerationAutoManaged = snapshot.adaptiveAccelerationAutoManaged;
+    accelerationAutoUpgraded = snapshot.accelerationAutoUpgraded;
+    previousErrorFlow = snapshot.previousErrorFlow;
+    stallingPasses = snapshot.stallingPasses;
+    wegsteinQMaxExplicit = snapshot.wegsteinQMaxExplicit;
+    wegsteinQMin = snapshot.wegsteinQMin;
+    wegsteinQMax = snapshot.wegsteinQMax;
+    wegsteinDelayIterations = snapshot.wegsteinDelayIterations;
+    previousInputValues = copyTransientArray(snapshot.previousInputValues);
+    previousOutputValues = copyTransientArray(snapshot.previousOutputValues);
+    wegsteinQFactors = copyTransientArray(snapshot.wegsteinQFactors);
+    if (snapshot.broydenState == null) {
+      broydenAccelerator = null;
+    } else {
+      if (broydenAccelerator == null) {
+        broydenAccelerator = new BroydenAccelerator();
+      }
+      broydenAccelerator.restoreState(snapshot.broydenState);
+    }
+  }
+
+  private static double[] copyTransientArray(double[] source) {
+    return source == null ? null : source.clone();
+  }
+
+  private static ArrayList<StreamTransientState> captureStreamStates(Recycle source) {
+    ArrayList<StreamTransientState> states = new ArrayList<StreamTransientState>();
+    Map<StreamInterface, Boolean> captured = new IdentityHashMap<StreamInterface, Boolean>();
+    for (StreamInterface stream : source.streams) {
+      captureStreamState(stream, captured, states);
+    }
+    captureStreamState(source.mixedStream, captured, states);
+    captureStreamState(source.lastIterationStream, captured, states);
+    captureStreamState(source.outletStream, captured, states);
+    return states;
+  }
+
+  private static void captureStreamState(StreamInterface stream, Map<StreamInterface, Boolean> captured,
+      ArrayList<StreamTransientState> states) {
+    if (stream != null && captured.put(stream, Boolean.TRUE) == null) {
+      states.add(new StreamTransientState(stream));
+    }
+  }
+
+  /** Immutable serializable state for one configured recycle. */
+  public static final class TransientState implements Serializable {
+    private static final long serialVersionUID = 1000L;
+    private final String stateIdentity;
+    private final ProcessEquipmentTransientState baseState;
+    private final ArrayList<StreamInterface> streams;
+    private final ArrayList<String> downstreamProperty;
+    private final int numberOfInputStreams;
+    private final StreamInterface mixedStream;
+    private final StreamInterface lastIterationStream;
+    private final StreamInterface outletStream;
+    private final ArrayList<StreamTransientState> streamStates;
+    private final int priority;
+    private final boolean firstTime;
+    private final int iterations;
+    private final int maxIterations;
+    private final double errorComposition;
+    private final double errorFlow;
+    private final double errorTemperature;
+    private final double errorPressure;
+    private final double flowTolerance;
+    private final double compositionTolerance;
+    private final double temperatureTolerance;
+    private final double pressureTolerance;
+    private final double absoluteFlowChange;
+    private final double absoluteFlowTolerance;
+    private final boolean absoluteFlowToleranceExplicit;
+    private final double minimumFlow;
+    private final AccelerationMethod accelerationMethod;
+    private final boolean accelerationMethodExplicit;
+    private final boolean adaptiveAcceleration;
+    private final boolean adaptiveAccelerationExplicit;
+    private final boolean adaptiveAccelerationAutoManaged;
+    private final boolean accelerationAutoUpgraded;
+    private final double previousErrorFlow;
+    private final int stallingPasses;
+    private final boolean wegsteinQMaxExplicit;
+    private final double wegsteinQMin;
+    private final double wegsteinQMax;
+    private final int wegsteinDelayIterations;
+    private final double[] previousInputValues;
+    private final double[] previousOutputValues;
+    private final double[] wegsteinQFactors;
+    private final BroydenAccelerator.Snapshot broydenState;
+
+    private TransientState(Recycle source) {
+      stateIdentity = source.getTransientStateIdentity();
+      baseState = source.captureBaseTransientState();
+      streams = new ArrayList<StreamInterface>(source.streams);
+      downstreamProperty = new ArrayList<String>(source.downstreamProperty);
+      numberOfInputStreams = source.numberOfInputStreams;
+      mixedStream = source.mixedStream;
+      lastIterationStream = source.lastIterationStream;
+      outletStream = source.outletStream;
+      streamStates = captureStreamStates(source);
+      priority = source.priority;
+      firstTime = source.firstTime;
+      iterations = source.iterations;
+      maxIterations = source.maxIterations;
+      errorComposition = source.errorComposition;
+      errorFlow = source.errorFlow;
+      errorTemperature = source.errorTemperature;
+      errorPressure = source.errorPressure;
+      flowTolerance = source.flowTolerance;
+      compositionTolerance = source.compositionTolerance;
+      temperatureTolerance = source.temperatureTolerance;
+      pressureTolerance = source.pressureTolerance;
+      absoluteFlowChange = source.absoluteFlowChange;
+      absoluteFlowTolerance = source.absoluteFlowTolerance;
+      absoluteFlowToleranceExplicit = source.absoluteFlowToleranceExplicit;
+      minimumFlow = source.minimumFlow;
+      accelerationMethod = source.accelerationMethod;
+      accelerationMethodExplicit = source.accelerationMethodExplicit;
+      adaptiveAcceleration = source.adaptiveAcceleration;
+      adaptiveAccelerationExplicit = source.adaptiveAccelerationExplicit;
+      adaptiveAccelerationAutoManaged = source.adaptiveAccelerationAutoManaged;
+      accelerationAutoUpgraded = source.accelerationAutoUpgraded;
+      previousErrorFlow = source.previousErrorFlow;
+      stallingPasses = source.stallingPasses;
+      wegsteinQMaxExplicit = source.wegsteinQMaxExplicit;
+      wegsteinQMin = source.wegsteinQMin;
+      wegsteinQMax = source.wegsteinQMax;
+      wegsteinDelayIterations = source.wegsteinDelayIterations;
+      previousInputValues = copyTransientArray(source.previousInputValues);
+      previousOutputValues = copyTransientArray(source.previousOutputValues);
+      wegsteinQFactors = copyTransientArray(source.wegsteinQFactors);
+      broydenState = source.broydenAccelerator == null ? null : source.broydenAccelerator.captureState();
+    }
+  }
+
+  /** Identity-preserving checkpoint for one stream owned or referenced by the recycle. */
+  private static final class StreamTransientState implements Serializable {
+    private static final long serialVersionUID = 1000L;
+    private final StreamInterface stream;
+    private final String name;
+    private final SystemInterface thermoSystem;
+    private final UUID calculationIdentifier;
+    private final boolean calculateSteadyState;
+    private final double time;
+    private final boolean runInSteps;
+    private final boolean active;
+    private final boolean lockedInactive;
+
+    private StreamTransientState(StreamInterface stream) {
+      this.stream = stream;
+      name = stream.getName();
+      thermoSystem = stream.getThermoSystem().clone();
+      calculationIdentifier = stream.getCalculationIdentifier();
+      calculateSteadyState = stream.getCalculateSteadyState();
+      time = stream.getTime();
+      runInSteps = stream.isRunInSteps();
+      active = stream.isActive();
+      lockedInactive = stream.isLockedInactive();
+    }
+
+    private void restore() {
+      stream.setName(name);
+      stream.setThermoSystem(thermoSystem.clone());
+      stream.setCalculationIdentifier(calculationIdentifier);
+      stream.setCalculateSteadyState(calculateSteadyState);
+      stream.setTime(time);
+      stream.setRunInSteps(runInSteps);
+      stream.setLockedInactive(lockedInactive);
+      stream.isActive(active);
+    }
   }
 
   /** {@inheritDoc} */

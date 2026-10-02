@@ -3,8 +3,6 @@ title: Integrated Field Development Framework
 description: This document describes how NeqSim integrates PVT, reservoir, well, and process simulations
 ---
 
-# Integrated Field Development Framework
-
 ## Overview
 
 This document describes how NeqSim integrates PVT, reservoir, well, and process simulations
@@ -77,7 +75,7 @@ NeqSim provides comprehensive PVT modeling capabilities:
 SystemInterface fluid = new SystemSrkEos(373.15, 250.0);
 fluid.addComponent("methane", 0.60);
 fluid.addComponent("ethane", 0.08);
-fluid.addTBPfraction("C7+", 0.20, 220.0, 0.85);  // mole frac, MW, SG
+fluid.addTBPfraction("C7+", 0.20, 220.0 / 1000.0, 0.85);  // mole frac, MW [g/mol], SG
 fluid.setMixingRule("classic");
 
 // Characterize plus-fraction using Pedersen method

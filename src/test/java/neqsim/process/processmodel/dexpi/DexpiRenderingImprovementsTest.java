@@ -1,6 +1,7 @@
 package neqsim.process.processmodel.dexpi;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
@@ -309,7 +310,7 @@ public class DexpiRenderingImprovementsTest extends NeqSimTest {
     feed.setPressure(60.0, "bara");
 
     Cooler cooler = new Cooler("inlet cooler", feed);
-    cooler.setOutTemperature(273.15 + 30.0);
+    cooler.setOutletTemperature(273.15 + 30.0);
 
     ThreePhaseSeparator sep = new ThreePhaseSeparator("inlet separator", cooler.getOutletStream());
 
@@ -472,6 +473,12 @@ public class DexpiRenderingImprovementsTest extends NeqSimTest {
     assertTrue(xml.contains("Owner:"), "Title block must include the ISO 7200 owner field");
     assertTrue(xml.contains("Scale:"), "Title block must include the ISO 7200 scale field");
     assertTrue(xml.contains("Sheet:"), "Title block must include the ISO 7200 sheet field");
+    assertTrue(xml.contains("String=\"PROPOSAL\""),
+        "Unapproved generated drawings must be marked as engineering proposals");
+    assertTrue(xml.contains("Engineering Proposal"),
+        "Initial revision history must preserve the proposal-only engineering boundary");
+    assertFalse(xml.contains("String=\"IFC\""), "Generated drawings must not default to issued-for-construction");
+    assertFalse(xml.contains("Issued for Design"), "Generated drawings must not imply accountable design issue");
   }
 
   /**

@@ -107,7 +107,7 @@ class FieldFluidRunnerTest extends NeqSimTest {
 
   @Test
   void calculatesSelectedCubicModelForWaterAmmoniaCarbonDioxide() {
-    for (String eos : new String[] { "SRK", "PR", "CPA" }) {
+    for (String eos : new String[] {"SRK", "PR", "CPA"}) {
       String request = "{\"components\":{\"water\":0.90,\"ammonia\":0.05,\"CO2\":0.05},"
           + "\"temperatureC\":200.0,\"pressureBara\":15.0,\"temperatureMinC\":20.0,"
           + "\"temperatureMaxC\":350.0,\"pointCount\":31,\"eos\":\"" + eos + "\",\"reactive\":false}";
@@ -139,7 +139,7 @@ class FieldFluidRunnerTest extends NeqSimTest {
   }
 
   @Test
-  void excludesDiscontinuousReactiveBoundaryPoints() {
+  void excludesInvalidReactiveBoundaryPointsAndAccountsForEverySample() {
     String request = "{\"components\":{\"water\":0.90,\"ammonia\":0.05,\"CO2\":0.05},"
         + "\"temperatureC\":200.0,\"pressureBara\":15.0,\"temperatureMinC\":20.0,"
         + "\"temperatureMaxC\":350.0,\"pointCount\":31,\"reactive\":true}";
@@ -152,6 +152,7 @@ class FieldFluidRunnerTest extends NeqSimTest {
     assertTrue(quality.get("boundaryContinuityPassed").getAsBoolean(), result.toString());
     assertTrue(quality.get("rejectedBoundaryPointCount").getAsInt() >= 1, result.toString());
     assertTrue(result.getAsJsonArray("envelope").size() >= 24, result.toString());
+    assertEquals(31, result.getAsJsonArray("envelope").size() + quality.get("rejectedBoundaryPointCount").getAsInt());
   }
 
   @Test

@@ -3,12 +3,14 @@ title: "Heat Exchanger Thermal-Hydraulic Design"
 description: "Comprehensive guide to shell-and-tube heat exchanger thermal-hydraulic design in NeqSim. Covers tube-side and shell-side heat transfer coefficients (Gnielinski, Kern, Bell-Delaware), overall U, pressure drops, LMTD correction factors, vibration screening, zone-by-zone analysis, and rating mode."
 ---
 
-# Heat Exchanger Thermal-Hydraulic Design
-
 NeqSim provides a complete thermal-hydraulic design toolkit for shell-and-tube heat
 exchangers. The toolkit connects rigorous thermodynamic property predictions from
 the process simulation to industry-standard heat transfer and pressure drop
 correlations.
+
+For gasketed plate geometry, Martin chevron correlations, port losses, frame/bolt
+headroom and counterflow effectiveness–NTU, see
+[Plate Heat Exchanger Design](plate_heat_exchanger_design).
 
 > **Two-Phase Services:** For condensation (Shah), boiling (Chen, Gungor-Winterton),
 > two-phase pressure drop (Friedel, MSH), dynamic fouling (Ebert-Panchal),
@@ -88,6 +90,9 @@ System.out.println("Shell-side dP: " + calc.getShellSidePressureDropBar() + " ba
 ```
 
 ### Rating Mode in Process Simulation
+
+For uniform tube deposits, reduced flow bore and optional pressure losses applied to outlet
+streams, see [Fouling thermal-hydraulic rating](fouling_thermal_hydraulic_rating).
 
 ```java
 import neqsim.process.equipment.heatexchanger.HeatExchanger;

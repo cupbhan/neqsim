@@ -37,6 +37,7 @@ import neqsim.thermodynamicoperations.flashops.TSFlash;
 import neqsim.thermodynamicoperations.flashops.TUflash;
 import neqsim.thermodynamicoperations.flashops.TVflash;
 import neqsim.thermodynamicoperations.flashops.VHflashQfunc;
+import neqsim.thermodynamicoperations.flashops.VUflashPureEOSCG;
 import neqsim.thermodynamicoperations.flashops.VUflashSingleComp;
 import neqsim.thermodynamicoperations.flashops.dTPflash;
 import neqsim.thermodynamicoperations.flashops.saturationops.AddIonToScaleSaturation;
@@ -46,6 +47,7 @@ import neqsim.thermodynamicoperations.flashops.saturationops.BubblePointPressure
 import neqsim.thermodynamicoperations.flashops.saturationops.BubblePointPressureFlashDer;
 import neqsim.thermodynamicoperations.flashops.saturationops.BubblePointTemperatureNoDer;
 import neqsim.thermodynamicoperations.flashops.saturationops.CalcSaltSatauration;
+import neqsim.thermodynamicoperations.flashops.saturationops.CalciumSulfatePhaseBoundaryQualification;
 import neqsim.thermodynamicoperations.flashops.saturationops.CapillaryDewPointFlash;
 import neqsim.thermodynamicoperations.flashops.saturationops.CheckScalePotential;
 import neqsim.thermodynamicoperations.flashops.saturationops.ConstantDutyFlashInterface;
@@ -54,6 +56,9 @@ import neqsim.thermodynamicoperations.flashops.saturationops.ConstantDutyTempera
 import neqsim.thermodynamicoperations.flashops.saturationops.CricondenbarFlash;
 import neqsim.thermodynamicoperations.flashops.saturationops.DewPointPressureFlash;
 import neqsim.thermodynamicoperations.flashops.saturationops.DewPointTemperatureFlashDer;
+import neqsim.thermodynamicoperations.flashops.saturationops.ElectrolytePhaseBoundaryFlash;
+import neqsim.thermodynamicoperations.flashops.saturationops.ElectrolytePhaseBoundaryResult;
+import neqsim.thermodynamicoperations.flashops.saturationops.FreezingPointResult;
 import neqsim.thermodynamicoperations.flashops.saturationops.FreezingPointTemperatureFlash;
 import neqsim.thermodynamicoperations.flashops.saturationops.HCdewPointPressureFlash;
 import neqsim.thermodynamicoperations.flashops.saturationops.HydrateEquilibriumLine;
@@ -61,6 +66,10 @@ import neqsim.thermodynamicoperations.flashops.saturationops.HydrateFormationPre
 import neqsim.thermodynamicoperations.flashops.saturationops.HydrateFormationTemperatureFlash;
 import neqsim.thermodynamicoperations.flashops.saturationops.HydrateInhibitorConcentrationFlash;
 import neqsim.thermodynamicoperations.flashops.saturationops.HydrateInhibitorwtFlash;
+import neqsim.thermodynamicoperations.flashops.saturationops.MultiSaltPrecipitation;
+import neqsim.thermodynamicoperations.flashops.saturationops.MultiSaltPrecipitationResult;
+import neqsim.thermodynamicoperations.flashops.saturationops.SaltPrecipitationResult;
+import neqsim.thermodynamicoperations.flashops.saturationops.SaltSaturationResult;
 import neqsim.thermodynamicoperations.flashops.saturationops.SolidComplexTemperatureCalc;
 import neqsim.thermodynamicoperations.flashops.saturationops.WATcalc;
 import neqsim.thermodynamicoperations.flashops.saturationops.WaterDewPointEquilibriumLine;
@@ -133,7 +142,11 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
   }
 
   /**
-   * TPSolidflash.
+   * Perform a temperature-pressure flash with fluid phases and one pure solid phase. Components selected through
+   * {@link SystemInterface#setSolidPhaseCheck(String)} remain the only allowed solid candidates. When solid checking
+   * has not been enabled, all components are checked.
+   *
+   * @throws UnsupportedOperationException if multiple selected components are predicted to precipitate
    */
   public void TPSolidflash() {
     operation = new SolidFlash1(system);
@@ -304,9 +317,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
    * Perform a TP flash targeting gas-hydrate equilibrium without aqueous phase.
    *
    * <p>
-   * This method calculates equilibrium between gas and hydrate phases, attempting to eliminate the aqueous phase when
-   * water content is low enough. This is useful for modeling scenarios where trace water in gas is entirely consumed by
-   * hydrate formation.
+   * This method uses the conservative hydrate TP flash for trace-water systems. The residual-fluid equilibrium
+   * determines whether an aqueous phase remains. Equilibrium water in gas and oil is retained; no phase is removed
+   * merely because the feed water content is small.
    * </p>
    *
    * <p>
@@ -652,9 +665,19 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
   }
 
   /**
-   * PSflash.
+   * Solve temperature and phase split at the current pressure and specified total entropy.
    *
-   * @param Sspec a double
+   * <p>
+   * Normal return requires an entropy residual no larger than {@code max(1e-7 * totalMoles, 1e-9 * abs(Sspec))} J/K,
+   * finite positive temperature and pressure, and finite normalized phase fractions. Iteration normally requires a ten
+   * times tighter residual; the stated bound is used only at cold-bracket temperature resolution. Pure fluids retain
+   * the saturation/phase-fraction solve and the tighter residual. The fluid is modified in place; a failed calculation
+   * must not be used as a solved state.
+   * </p>
+   *
+   * @param Sspec total entropy in J/K for the current system amount
+   * @throws IllegalArgumentException if entropy is non-finite or temperature, pressure or amount is invalid
+   * @throws IllegalStateException if the equilibrium calculation cannot satisfy the specification
    */
   public void PSflash(double Sspec) {
     if (system.getPhase(0).getNumberOfComponents() == 1) {
@@ -670,6 +693,8 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
    *
    * @param Sspec is the entropy in the specified unit
    * @param unit Supported units are J/K, J/molK, J/kgK and kJ/kgK
+   * @throws IllegalArgumentException if the converted target or initial state is invalid
+   * @throws IllegalStateException if the convergence postconditions of {@link #PSflash(double)} are not met
    */
   public void PSflash(double Sspec, String unit) {
     double conversionFactor = 1.0;
@@ -759,9 +784,12 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
   }
 
   /**
-   * PSflash2.
+   * Solve a PS flash directly with the temperature solver, including the entropy postcondition.
    *
-   * @param Sspec a double
+   * @param Sspec total entropy in J/K
+   * @throws IllegalArgumentException if the target or initial state is invalid
+   * @throws IllegalStateException if the entropy specification cannot be satisfied
+   * @see #PSflash(double)
    */
   public void PSflash2(double Sspec) {
     operation = new PSFlash(system, Sspec, 0);
@@ -1114,12 +1142,18 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
    * @param warmStartInitialization whether the initialization TP flash may reuse current K-values
    */
   public void VUflash(double Vspec, double Uspec, boolean warmStartInitialization) {
-    if (isPureComponentWithinInternalEnergyRange(Uspec)) {
+    if (isPureEOSCGSystem()) {
+      operation = new VUflashPureEOSCG(system, Vspec, Uspec);
+    } else if (isPureComponentWithinInternalEnergyRange(Uspec)) {
       operation = new VUflashSingleComp(system, Vspec, Uspec);
     } else {
       operation = new OptimizedVUflash(system, Vspec, Uspec, warmStartInitialization);
     }
     getOperation().run();
+  }
+
+  private boolean isPureEOSCGSystem() {
+    return system.getPhase(0).getNumberOfComponents() == 1 && "EOS-CG".equals(system.getModelName());
   }
 
   private boolean isPureComponentWithinInternalEnergyRange(double Uspec) {
@@ -1161,9 +1195,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
   public void bubblePointTemperatureFlash() throws IsNaNException {
     ConstantDutyFlashInterface operation = new BubblePointTemperatureNoDer(system);
     operation.run();
-    if (Double.isNaN(system.getTemperature()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this, "bubblePointTemperatureFlash",
-      // "Could not find solution - possible no bubble point exists");
+    if (!Double.isFinite(system.getTemperature()) || system.getTemperature() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "bubblePointTemperatureFlash",
+          "Could not find solution - possible no bubble point exists");
     }
   }
 
@@ -1173,12 +1207,23 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
    * @throws neqsim.util.exception.IsNaNException if any.
    */
   public void freezingPointTemperatureFlash() throws IsNaNException {
+    freezingPointTemperatureFlashResult();
+  }
+
+  /**
+   * Runs a freezing-point flash and returns structured convergence diagnostics.
+   *
+   * @return freezing-point calculation result
+   * @throws neqsim.util.exception.IsNaNException if the calculated temperature is not finite
+   */
+  public FreezingPointResult freezingPointTemperatureFlashResult() throws IsNaNException {
     operation = new FreezingPointTemperatureFlash(system);
     getOperation().run();
     if (Double.isNaN(system.getTemperature())) {
-      throw new neqsim.util.exception.IsNaNException(this, "freezingPointTemperatureFlash",
+      throw new IsNaNException(this, "freezingPointTemperatureFlashResult",
           "Could not find solution - possible no freezing point exists");
     }
+    return ((FreezingPointTemperatureFlash) operation).getResult();
   }
 
   /**
@@ -1188,12 +1233,51 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
    * @throws neqsim.util.exception.IsNaNException if any.
    */
   public void freezingPointTemperatureFlash(String phaseName) throws IsNaNException {
-    operation = new FreezingPointTemperatureFlash(system);
-    getOperation().run();
-    if (Double.isNaN(system.getTemperature())) {
-      throw new neqsim.util.exception.IsNaNException(this, "freezingPointTemperatureFlash",
-          "Could not find solution - possible no freezing point exists");
-    }
+    freezingPointTemperatureFlashResult();
+  }
+
+  /**
+   * Brackets an electrolyte VLE or VLLE phase boundary at constant temperature.
+   *
+   * <p>
+   * Every pressure evaluation uses the system's complete TP flash on an isolated clone. This is the preferred
+   * saturation-pressure path when gas, oil and model-specific aqueous roles may coexist. The supplied system is left at
+   * the target-present side of the final bracket.
+   * </p>
+   *
+   * @param targetPhase phase whose appearance or disappearance is bracketed
+   * @param lowerPressureBara lower pressure in bara
+   * @param upperPressureBara upper pressure in bara
+   * @param toleranceBara maximum final bracket width in bara
+   * @param maximumIterations maximum bisection iterations
+   * @return boundary, topology and scientific acceptance diagnostics
+   */
+  public ElectrolytePhaseBoundaryResult electrolytePhaseBoundaryPressureFlash(PhaseType targetPhase,
+      double lowerPressureBara, double upperPressureBara, double toleranceBara, int maximumIterations) {
+    return new ElectrolytePhaseBoundaryFlash(system, ElectrolytePhaseBoundaryResult.Specification.PRESSURE, targetPhase,
+        lowerPressureBara, upperPressureBara, toleranceBara, maximumIterations).solve();
+  }
+
+  /**
+   * Brackets an electrolyte VLE or VLLE phase boundary at constant pressure.
+   *
+   * <p>
+   * Every temperature evaluation uses the system's complete TP flash on an isolated clone. This is the preferred
+   * saturation-temperature path when gas, oil and model-specific aqueous roles may coexist. The supplied system is left
+   * at the target-present side of the final bracket.
+   * </p>
+   *
+   * @param targetPhase phase whose appearance or disappearance is bracketed
+   * @param lowerTemperatureK lower temperature in K
+   * @param upperTemperatureK upper temperature in K
+   * @param toleranceK maximum final bracket width in K
+   * @param maximumIterations maximum bisection iterations
+   * @return boundary, topology and scientific acceptance diagnostics
+   */
+  public ElectrolytePhaseBoundaryResult electrolytePhaseBoundaryTemperatureFlash(PhaseType targetPhase,
+      double lowerTemperatureK, double upperTemperatureK, double toleranceK, int maximumIterations) {
+    return new ElectrolytePhaseBoundaryFlash(system, ElectrolytePhaseBoundaryResult.Specification.TEMPERATURE,
+        targetPhase, lowerTemperatureK, upperTemperatureK, toleranceK, maximumIterations).solve();
   }
 
   /**
@@ -1258,18 +1342,94 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
   }
 
   /**
-   * calcSaltSaturation.
+   * Adds a dissolved salt to activity saturation.
    *
-   * @param saltName a {@link java.lang.String} object
-   * @throws neqsim.util.exception.IsNaNException if any.
+   * @param saltName salt name from the COMPSALT database
+   * @throws neqsim.util.exception.IsNaNException if the calculation returns an invalid state
    */
   public void calcSaltSaturation(String saltName) throws IsNaNException {
-    operation = new CalcSaltSatauration(system, saltName);
-    getOperation().run();
+    calcSaltSaturationWithDiagnostics(saltName);
+  }
+
+  /**
+   * Adds a dissolved salt to activity saturation and returns convergence diagnostics.
+   *
+   * <p>
+   * This method uses the same calculation and mutates the system in the same way as
+   * {@link #calcSaltSaturation(String)}. The result reports the existing solver's work and does not represent a solid
+   * phase or qualify the underlying thermodynamic parameters.
+   * </p>
+   *
+   * @param saltName salt name from the COMPSALT database
+   * @return immutable saturation-ratio, added-amount and convergence diagnostics
+   * @throws neqsim.util.exception.IsNaNException if the calculation returns an invalid state
+   */
+  public SaltSaturationResult calcSaltSaturationWithDiagnostics(String saltName) throws IsNaNException {
+    CalcSaltSatauration saltOperation = new CalcSaltSatauration(system, saltName);
+    operation = saltOperation;
+    saltOperation.run();
     if (Double.isNaN(system.getTemperature())) {
-      throw new neqsim.util.exception.IsNaNException(this, "calcSaltSaturation",
+      throw new neqsim.util.exception.IsNaNException(this, "calcSaltSaturationWithDiagnostics",
           "Could not find solution - possible no dew point exists");
     }
+    return saltOperation.getResult();
+  }
+
+  /**
+   * Precipitates one supersaturated pure salt to aqueous activity equilibrium.
+   *
+   * <p>
+   * The dissolved system is updated and reflashed. The returned immutable result carries the pure-solid amount needed
+   * to close the material ledger; the solid is not inserted as a NeqSim phase.
+   * </p>
+   *
+   * @param saltName salt name from the COMPSALT database, for example {@code "CaSO4_A"}
+   * @return precipitation amount, saturation and material-balance diagnostics
+   */
+  public SaltPrecipitationResult precipitateScale(String saltName) {
+    CalcSaltSatauration saltOperation = new CalcSaltSatauration(system, saltName);
+    operation = saltOperation;
+    return saltOperation.precipitate();
+  }
+
+  /**
+   * Equilibrates several competing pure COMPSALT minerals against the active aqueous model.
+   *
+   * <p>
+   * The dissolved system is updated and reflashed after each active-set adjustment. The immutable result contains the
+   * non-negative pure-solid material ledger; solids are not inserted as NeqSim phases.
+   * </p>
+   *
+   * @param saltNames unique COMPSALT mineral names
+   * @return simultaneous precipitation/dissolution result and convergence diagnostics
+   */
+  public MultiSaltPrecipitationResult precipitateScales(String... saltNames) {
+    return new MultiSaltPrecipitation(system, saltNames).solve();
+  }
+
+  /**
+   * Re-equilibrates an existing pure-mineral ledger after temperature, pressure, or composition changes.
+   *
+   * @param previousResult previous simultaneous-mineral result whose solid inventory accompanies this fluid
+   * @return updated absolute solid ledger and convergence diagnostics
+   */
+  public MultiSaltPrecipitationResult equilibrateScales(MultiSaltPrecipitationResult previousResult) {
+    return new MultiSaltPrecipitation(system, previousResult).solve();
+  }
+
+  /**
+   * Qualifies the authoritative COMPSALT gypsum/anhydrite phase boundary against independent evidence.
+   *
+   * <p>
+   * This operation evaluates the existing mineral correlations without fitting or changing them. The result separates
+   * mineral-standard-state evidence from Pitzer or electrolyte-EOS aqueous parameter qualification and fails closed
+   * outside the registered atmospheric-pressure envelope.
+   * </p>
+   *
+   * @return immutable source-traceable calcium-sulfate phase-boundary qualification
+   */
+  public CalciumSulfatePhaseBoundaryQualification qualifyCalciumSulfatePhaseBoundary() {
+    return new CalciumSulfatePhaseBoundaryQualification(system);
   }
 
   /**
@@ -1362,6 +1522,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
    * @throws neqsim.util.exception.IsNaNException if any.
    */
   public void hydrateFormationPressure() throws IsNaNException {
+    if (runPitzerHydrateFlash(true, 0)) {
+      return;
+    }
     operation = new HydrateFormationPressureFlash(system);
     getOperation().run();
     if (Double.isNaN(system.getTemperature())) {
@@ -1371,16 +1534,25 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
   }
 
   /**
-   * calcWAT.
+   * Calculates the numerical wax appearance temperature at the current pressure.
+   *
+   * <p>
+   * Requires characterized wax formers and {@code addSolidComplexPhase("wax")}. Independent TP flashes bracket the
+   * transition through a wax mass fraction of 1e-8 within 1e-4 K. On success the system contains the verified warm
+   * endpoint phase state; no artificial wax phase is appended. The search is bounded to 100-1000 K and preserves the
+   * configured fluid phase checks. An unsuccessful search leaves the input state unchanged.
+   * </p>
    *
    * @throws neqsim.util.exception.IsNaNException if any.
+   * @throws IllegalArgumentException if feed conditions or wax configuration are invalid
+   * @throws IllegalStateException if the TP appearance bracket or a balanced endpoint cannot be verified
    */
   public void calcWAT() throws IsNaNException {
     operation = new WATcalc(system);
     getOperation().run();
     if (Double.isNaN(system.getTemperature())) {
       throw new neqsim.util.exception.IsNaNException(this, "calcWAT",
-          "Could not find solution - possible no dew point exists");
+          "Could not find a finite wax appearance temperature");
     }
   }
 
@@ -1545,6 +1717,14 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
    * @param initialTemperatureGuess a double
    */
   public void hydrateFormationTemperature(double initialTemperatureGuess) {
+    if (system instanceof neqsim.thermo.system.SystemPitzer) {
+      if (!Double.isFinite(initialTemperatureGuess) || initialTemperatureGuess < 273.15
+          || initialTemperatureGuess > 323.15) {
+        throw new IllegalArgumentException("Pitzer hydrate temperature guess must be within 273.15-323.15 K");
+      }
+      runPitzerHydrateFlash(false, 0);
+      return;
+    }
     system.setTemperature(initialTemperatureGuess);
     operation = new HydrateFormationTemperatureFlash(system);
     for (int i = 0; i < system.getPhase(4).getNumberOfComponents(); i++) {
@@ -1563,6 +1743,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
    * @throws neqsim.util.exception.IsNaNException if any.
    */
   public void hydrateFormationTemperature() throws IsNaNException {
+    if (runPitzerHydrateFlash(false, 0)) {
+      return;
+    }
     // guessing temperature
     double factor = 1.0;
     if (system.getPhase(0).hasComponent("methanol")) {
@@ -1584,19 +1767,53 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
     if (system.getTemperature() < 200.0) {
       system.setTemperature(200.0); // Don't start too low
     }
-    // logger.info("guess hydrate temperature " + system.getTemperature());
-    operation = new HydrateFormationTemperatureFlash(system);
 
-    for (int i = 0; i < system.getPhase(4).getNumberOfComponents(); i++) {
-      ((ComponentHydrate) system.getPhase(4).getComponent(i)).getHydrateStructure();
+    runHydrateFormationTemperatureFlash();
+
+    // The secant search is sensitive to where it starts, so one failed start does not mean the
+    // fluid has no hydrate temperature. Concentrated brines in particular converge from a start
+    // near the ice point but not from the pressure based guess above. Retrying across the range
+    // where hydrates of the common formers are stable can recover a verified root. If every
+    // attempt fails, report that no result is available; this does not prove the absence of hydrates.
+    double[] retryTemperatures = {273.15, 268.15, 278.15, 263.15, 283.15, 258.15};
+    for (int attempt = 0; attempt < retryTemperatures.length && Double.isNaN(system.getTemperature()); attempt++) {
+      system.setTemperature(retryTemperatures[attempt]);
+      runHydrateFormationTemperatureFlash();
     }
-    if (!isRunAsThread()) {
-      getOperation().run();
-    } else {
-      run();
+
+    if (Double.isNaN(system.getTemperature())) {
+      throw new neqsim.util.exception.IsNaNException(this, "hydrateFormationTemperature",
+          "Hydrate formation temperature did not converge at " + system.getPressure()
+              + " bara. No hydrate equilibrium temperature is available for this fluid.");
     }
     // logger.info("Hydrate structure " + (((ComponentHydrate)
     // system.getPhase(4).getComponent("water")).getHydrateStructure() + 1));
+  }
+
+  /**
+   * Run a single hydrate formation temperature flash from the current system temperature.
+   */
+  private void runHydrateFormationTemperatureFlash() {
+    operation = new HydrateFormationTemperatureFlash(system);
+    for (int i = 0; i < system.getPhase(4).getNumberOfComponents(); i++) {
+      ((ComponentHydrate) system.getPhase(4).getComponent(i)).getHydrateStructure();
+    }
+    try {
+      if (!isRunAsThread()) {
+        getOperation().run();
+      } else {
+        run();
+      }
+    } catch (java.util.concurrent.CancellationException ex) {
+      throw ex;
+    } catch (IllegalStateException ex) {
+      if (ex.getMessage() == null || (!ex.getMessage().startsWith("Hydrate fluid inventory")
+          && !ex.getMessage().startsWith("Reactive CO2/brine"))) {
+        throw ex;
+      }
+      // The operation restores the original feed and reports NaN before rejecting an
+      // invalid phase split or reactive equilibrium. The no-argument wrapper may retry from another temperature.
+    }
   }
 
   /**
@@ -1606,6 +1823,13 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
    * @throws neqsim.util.exception.IsNaNException if any.
    */
   public void hydrateFormationTemperature(int structure) throws IsNaNException {
+    if (system instanceof neqsim.thermo.system.SystemPitzer) {
+      if (structure != 1 && structure != 2) {
+        throw new IllegalArgumentException("Pitzer hydrate structure must be 1 or 2; ice equilibrium is not supported");
+      }
+      runPitzerHydrateFlash(false, structure);
+      return;
+    }
     system.setTemperature(273.0 + 1.0);
     if (structure == 0) {
       system.setSolidPhaseCheck("water");
@@ -1628,6 +1852,29 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
       throw new neqsim.util.exception.IsNaNException(this, "hydrateFormationTemperature",
           "Could not find solution - possible no dew point exists");
     }
+  }
+
+  /**
+   * Dispatches Pitzer hydrate calculations to the activity-consistent bounded solver.
+   *
+   * @param solvePressure true to solve pressure, false to solve temperature
+   * @param structure 0 for automatic selection, 1 for sI, 2 for sII
+   * @return true when this is a Pitzer system and the operation was dispatched
+   */
+  private boolean runPitzerHydrateFlash(boolean solvePressure, int structure) {
+    if (!(system instanceof neqsim.thermo.system.SystemPitzer)) {
+      return false;
+    }
+    neqsim.thermodynamicoperations.flashops.saturationops.PitzerHydrateFlash flash = new neqsim.thermodynamicoperations.flashops.saturationops.PitzerHydrateFlash(
+        (neqsim.thermo.system.SystemPitzer) system, solvePressure);
+    flash.setStructure(structure);
+    operation = flash;
+    if (!isRunAsThread()) {
+      flash.run();
+    } else {
+      run();
+    }
+    return true;
   }
 
   /**
@@ -1714,9 +1961,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
     system.setBeta(1, 1.0 - 1e-10);
     system.setBeta(0, 1e-10);
     operation.run();
-    if (Double.isNaN(system.getPressure()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this, "bubblePointPressureFlash",
-      // "Could not find solution - possible no dew point exists");
+    if (!Double.isFinite(system.getPressure()) || system.getPressure() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "bubblePointPressureFlash",
+          "Could not find solution - possible no dew point exists");
     }
   }
 
@@ -1736,11 +1983,13 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
     try {
       operation.run();
     } catch (Exception e) {
-      logger.error(e.getMessage(), e);
+      IsNaNException failure = new IsNaNException(this, "bubblePointPressureFlash", "saturation calculation failed");
+      failure.initCause(e);
+      throw failure;
     }
-    if (Double.isNaN(system.getPressure()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this, "bubblePointPressureFlash",
-      // "Could not find solution - possible no bubble point exists");
+    if (!Double.isFinite(system.getPressure()) || system.getPressure() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "bubblePointPressureFlash",
+          "Could not find solution - possible no bubble point exists");
     }
   }
 
@@ -1762,9 +2011,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
     system.setBeta(1, 1.0 - fraction);
     system.setBeta(0, fraction);
     operation.run();
-    if (Double.isNaN(system.getPressure()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this, "constantPhaseFractionPressureFlash",
-      // "Could not find solution - possible no dew point exists");
+    if (!Double.isFinite(system.getPressure()) || system.getPressure() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "constantPhaseFractionPressureFlash",
+          "Could not find solution - possible no dew point exists");
     }
   }
 
@@ -1787,10 +2036,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
     system.setBeta(1, 1.0 - fraction);
     system.setBeta(0, fraction);
     operation.run();
-    if (Double.isNaN(system.getPressure()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this,
-      // "constantPhaseFractionTemperatureFlash",
-      // "Could not find solution - possible no dew point exists");
+    if (!Double.isFinite(system.getTemperature()) || system.getTemperature() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "constantPhaseFractionTemperatureFlash",
+          "Could not find solution - possible no dew point exists");
     }
   }
 
@@ -1855,9 +2103,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
     ConstantDutyFlashInterface operation = new neqsim.thermodynamicoperations.flashops.saturationops.DewPointTemperatureFlash(
         system);
     operation.run();
-    if (Double.isNaN(system.getTemperature()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this, "dewPointTemperatureFlash",
-      // "Could not find solution - possible no dew point exists");
+    if (!Double.isFinite(system.getTemperature()) || system.getTemperature() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "dewPointTemperatureFlash",
+          "Could not find solution - possible no dew point exists");
     }
   }
 
@@ -1874,9 +2122,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
       operation = new DewPointTemperatureFlashDer(system);
     }
     operation.run();
-    if (Double.isNaN(system.getTemperature()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this, "dewPointTemperatureFlash",
-      // "Could not find solution - possible no dew point exists");
+    if (!Double.isFinite(system.getTemperature()) || system.getTemperature() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "dewPointTemperatureFlash",
+          "Could not find solution - possible no dew point exists");
     }
   }
 
@@ -1894,10 +2142,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
   public void capillaryDewPointTemperatureFlash(double poreRadiusM) throws IsNaNException {
     ConstantDutyFlashInterface operation = new CapillaryDewPointFlash(system, poreRadiusM);
     operation.run();
-    if (Double.isNaN(system.getTemperature()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this,
-      // "capillaryDewPointTemperatureFlash",
-      // "Could not find solution - possible no dew point exists");
+    if (!Double.isFinite(system.getTemperature()) || system.getTemperature() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "capillaryDewPointTemperatureFlash",
+          "Could not find solution - possible no dew point exists");
     }
   }
 
@@ -1911,10 +2158,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
   public void capillaryDewPointTemperatureFlash(double poreRadiusM, double contactAngleRad) throws IsNaNException {
     ConstantDutyFlashInterface operation = new CapillaryDewPointFlash(system, poreRadiusM, contactAngleRad);
     operation.run();
-    if (Double.isNaN(system.getTemperature()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this,
-      // "capillaryDewPointTemperatureFlash",
-      // "Could not find solution - possible no dew point exists");
+    if (!Double.isFinite(system.getTemperature()) || system.getTemperature() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "capillaryDewPointTemperatureFlash",
+          "Could not find solution - possible no dew point exists");
     }
   }
 
@@ -1928,9 +2174,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
     system.init(0);
     ConstantDutyFlashInterface operation = new HCdewPointPressureFlash(system);
     operation.run();
-    if (Double.isNaN(system.getPressure()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this, "dewPointPressureFlashHC",
-      // "Could not find solution - possible no dew point exists");
+    if (!Double.isFinite(system.getPressure()) || system.getPressure() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "dewPointPressureFlashHC",
+          "Could not find solution - possible no dew point exists");
     }
     // }
   }
@@ -1945,9 +2191,9 @@ public class ThermodynamicOperations implements java.io.Serializable, Cloneable 
     system.init(0);
     ConstantDutyFlashInterface operation = new DewPointPressureFlash(system);
     operation.run();
-    if (Double.isNaN(system.getPressure()) || operation.isSuperCritical()) {
-      // throw new neqsim.util.exception.IsNaNException(this, "dewPointPressureFlash",
-      // "Could not find solution - possible no dew point exists");
+    if (!Double.isFinite(system.getPressure()) || system.getPressure() <= 0.0 || operation.isSuperCritical()) {
+      throw new neqsim.util.exception.IsNaNException(this, "dewPointPressureFlash",
+          "Could not find solution - possible no dew point exists");
     }
     // }
   }

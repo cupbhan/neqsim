@@ -17,8 +17,8 @@ class HydrocarbonWaterBoundaryAnchorDiscovererTest extends NeqSimTest {
   void fluidTwoPreservesEveryCorrectedRootAcrossAllBoundaryFamiliesAtFiftyBara() {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result result = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
-        .setCorrectionControls(32, 60, 2.0e-5, 1.0e-8).discover(
-            new double[] { 180.0, 220.0, 260.0, 300.0, 350.0, 425.0, 500.0 }, new double[] { 50.0 }, 100.0, 650.0);
+        .setCorrectionControls(32, 60, 2.0e-5, 1.0e-8)
+        .discover(new double[] {180.0, 220.0, 260.0, 300.0, 350.0, 425.0, 500.0}, new double[] {50.0}, 100.0, 650.0);
 
     int correctedRoots = 0;
     int ordinaryAnchors = 0;
@@ -86,7 +86,7 @@ class HydrocarbonWaterBoundaryAnchorDiscovererTest extends NeqSimTest {
     SystemInterface fluid = LindeloffMichelsenReferenceFluidTest.fluidTwo(false);
     HydrocarbonWaterBoundaryAnchorDiscoverer.Result result = new HydrocarbonWaterBoundaryAnchorDiscoverer(fluid)
         .setCorrectionControls(32, 60, 2.0e-5, 1.0e-8)
-        .discover(new double[] { 180.0, 220.0, 260.0, 300.0, 350.0, 425.0, 500.0 }, new double[] { 40.0, 50.0, 60.0 },
+        .discover(new double[] {180.0, 220.0, 260.0, 300.0, 350.0, 425.0, 500.0}, new double[] {40.0, 50.0, 60.0},
             100.0, 650.0);
 
     int preserved = result.getEndpointCandidateCount();
@@ -137,7 +137,7 @@ class HydrocarbonWaterBoundaryAnchorDiscovererTest extends NeqSimTest {
       HydrocarbonWaterBoundaryAnchorDiscoverer.AnchorPoint anchor) {
     HydrocarbonWaterBranchSeedScanner.Result stable = new HydrocarbonWaterBranchSeedScanner(fluid,
         CandidatePhase.AQUEOUS).setCompositionDeduplicationTolerance(1.0e-10)
-        .scan(new double[] { anchor.getTemperatureK() }, new double[] { anchor.getPressureBara() });
+        .scan(new double[] {anchor.getTemperatureK()}, new double[] {anchor.getPressureBara()});
     if (stable.getSeeds().isEmpty()) {
       System.out.printf("    stable TP comparison unavailable failures=%d%n", stable.getFailures().size());
       return;

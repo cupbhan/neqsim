@@ -3,7 +3,6 @@ title: "Chemistry and Integrity Modelling in NeqSim"
 description: "Open standards-traceable framework for chemical integrity management — Davies and Pitzer mineral-scale prediction, production-chemical scenarios, mechanistic CO2 corrosion, H2S scavenger breakthrough, deposition coupling, and explainable root-cause analysis."
 ---
 
-# Chemistry and Integrity Modelling
 
 NeqSim ships an open, standards-traceable chemistry stack for chemical-integrity
 management of oil & gas, CCS and hydrogen systems. Every routine carries an
@@ -78,8 +77,15 @@ Every analysis is exposed over the NeqSim MCP server:
 ```
 
 Send this to the `runChemistry` tool. Supported `analysis` values:
-`electrolyteScale`, `mechanisticCorrosion`, `langmuirInhibitor`,
-`packedBedScavenger`.
+`electrolyteScale`, `multiMineralScale`, `electrolyteScaleEquilibrium`,
+`electrolyteMultiScaleEquilibrium`, `mechanisticCorrosion`,
+`langmuirInhibitor`, `packedBedScavenger`, and `pitzerQualification`.
+`electrolyteScaleEquilibrium` and `electrolyteMultiScaleEquilibrium` are the
+authoritative pure-mineral operations for Pitzer GE and electrolyte CPA; the
+screening analyses retain their separate Davies/BDOT semantics. The last is a setup/publication
+gate over the authoritative Java Pitzer dataset coverage, observable
+qualification, and declared state envelope; it does not perform a flash or
+adopt parameters.
 
 See [MCP chemistry tool reference](mcp.md) for the full schema.
 

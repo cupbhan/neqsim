@@ -1,12 +1,15 @@
 package neqsim.thermo.system;
 
 import neqsim.chemicalreactions.ChemicalReactionOperations;
+import neqsim.chemicalreactions.chemicalreaction.ChemicalReactionConcentrationBasis;
+import neqsim.chemicalreactions.chemicalreaction.ChemicalReactionDataSource;
 import neqsim.physicalproperties.PhysicalPropertyType;
 import neqsim.physicalproperties.interfaceproperties.InterphasePropertiesInterface;
 import neqsim.physicalproperties.system.PhysicalPropertyModel;
 import neqsim.thermo.ThermodynamicConstantsInterface;
 import neqsim.thermo.characterization.OilAssayCharacterisation;
 import neqsim.thermo.characterization.PseudoComponentCombiner;
+import neqsim.thermo.characterization.TbpClosure;
 import neqsim.thermo.characterization.WaxModelInterface;
 import neqsim.thermo.component.ComponentInterface;
 import neqsim.thermo.mixingrule.EosMixingRuleType;
@@ -320,21 +323,271 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
    * @param density specific gravity (relative density), i.e. density in g/cm3. Typical range: 0.65 to 1.1. Values above
    * 1.5 are auto-converted from kg/m3.
    * @param criticalTemperature critical temperature in K
-   * @param criticalPressure critical pressure in Pa
-   * @param acentricFactor acentric factor (dimensionless)
+   * @param criticalPressure critical pressure in bara
+   * @param acentricFactor acentric factor (dimensionless). Note that for TBP models which correlate the EOS m parameter
+   * (the Pedersen models), this value is currently overwritten by the value back-calculated from m.
    */
   public void addTBPfraction(String componentName, double numberOfMoles, double molarMass, double density,
       double criticalTemperature, double criticalPressure, double acentricFactor);
 
   /**
-   * addTBPfraction2.
+   * Add a true boiling point (TBP) fraction defined by molar mass and normal boiling point.
    *
-   * @param componentName a {@link java.lang.String} object
-   * @param numberOfMoles a double
-   * @param molarMass a double
-   * @param boilingPoint a double
+   * <p>
+   * The specific gravity is obtained from the Riazi-Daubert (1980) correlation
+   * <code>M = 4.5673e-5 * Tb^2.1962 * SG^-1.0164</code> (Tb in degrees Rankine, M in g/mol) inverted analytically for
+   * SG, and the supplied boiling point is then used directly by the selected TBP model. Note that molar mass and
+   * boiling point are not independent in this correlation, so the resulting specific gravity carries roughly the same
+   * relative error as the supplied molar mass. If the pseudo-component's PNA character is known, prefer
+   * {@link #calculateDensityFromBoilingPointAndWatsonK(double, double)} followed by
+   * {@link #addTBPfraction(String, double, double, double)}, which is considerably more accurate.
+   * </p>
+   *
+   * @param componentName selected name of the component to be added
+   * @param numberOfMoles number of moles to be added
+   * @param molarMass molar mass in kg/mol. Correlation validated for 0.070 to 0.300 kg/mol.
+   * @param boilingPoint normal boiling point in K. Correlation validated for 300 to 620 K.
+   * @deprecated use {@link #addTBPfraction_Mw_Tb(String, double, double, double)}, whose name states which two
+   * properties are supplied.
    */
+  @Deprecated
   public void addTBPfraction2(String componentName, double numberOfMoles, double molarMass, double boilingPoint);
+
+  /**
+   * Add a TBP fraction defined by molar mass and specific gravity.
+   *
+   * <p>
+   * The named <code>addTBPfraction_*</code> family states in the method name which properties the caller supplies, in
+   * the order the arguments appear. Canonical token order is <code>Mw</code>, <code>Sg</code>, <code>Tb</code>,
+   * <code>Kw</code>, <code>Pna</code>, <code>Crit</code>, so there is never a question whether a method is
+   * <code>_Tb_Mw</code> or <code>_Mw_Tb</code>. The correlation used to close the definition is selected with a
+   * {@link neqsim.thermo.characterization.TbpClosure} argument rather than being encoded in the name.
+   * </p>
+   *
+   * <p>
+   * This is the fully determined case for the characterization models: the boiling point and critical properties follow
+   * from molar mass and specific gravity with no closure needed. It is identical to
+   * {@link #addTBPfraction(String, double, double, double)}.
+   * </p>
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param molarMass molar mass in kg/mol
+   * @param density specific gravity (relative density), i.e. density in g/cm3
+   */
+  public void addTBPfraction_Mw_Sg(String componentName, double numberOfMoles, double molarMass, double density);
+
+  /**
+   * Add a TBP fraction defined by molar mass and normal boiling point.
+   *
+   * <p>
+   * Uses {@link neqsim.thermo.characterization.TbpClosure#RIAZI_DAUBERT_1980} to obtain the specific gravity. That
+   * closure is not the most accurate of the family, but it is the only one that is monotonic in specific gravity and
+   * therefore the only one that can be inverted for it; see {@link neqsim.thermo.characterization.TbpClosure}. Because
+   * molar mass and boiling point are not independent in the correlation, the resulting specific gravity carries roughly
+   * the same relative error as the supplied molar mass.
+   * </p>
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param molarMass molar mass in kg/mol
+   * @param boilingPoint normal boiling point in K
+   */
+  public void addTBPfraction_Mw_Tb(String componentName, double numberOfMoles, double molarMass, double boilingPoint);
+
+  /**
+   * Add a TBP fraction defined by molar mass and normal boiling point, with an explicit closure.
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param molarMass molar mass in kg/mol
+   * @param boilingPoint normal boiling point in K
+   * @param closure correlation used to obtain the specific gravity. Must satisfy
+   * {@link neqsim.thermo.characterization.TbpClosure#supportsDensityFromMolarMass()}.
+   */
+  public void addTBPfraction_Mw_Tb(String componentName, double numberOfMoles, double molarMass, double boilingPoint,
+      TbpClosure closure);
+
+  /**
+   * Add a TBP fraction defined by specific gravity and normal boiling point.
+   *
+   * <p>
+   * Uses {@link neqsim.thermo.characterization.TbpClosure#RIAZI_DAUBERT_1987} to obtain the molar mass, which
+   * reproduces the paraffins in the component database to about 1.7 % and is the most accurate closure available for
+   * this direction.
+   * </p>
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param density specific gravity (relative density), i.e. density in g/cm3
+   * @param boilingPoint normal boiling point in K
+   */
+  public void addTBPfraction_Sg_Tb(String componentName, double numberOfMoles, double density, double boilingPoint);
+
+  /**
+   * Add a TBP fraction defined by specific gravity and normal boiling point, with an explicit closure.
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param density specific gravity (relative density), i.e. density in g/cm3
+   * @param boilingPoint normal boiling point in K
+   * @param closure correlation used to obtain the molar mass
+   */
+  public void addTBPfraction_Sg_Tb(String componentName, double numberOfMoles, double density, double boilingPoint,
+      TbpClosure closure);
+
+  /**
+   * Add a TBP fraction defined by normal boiling point and Watson characterization factor.
+   *
+   * <p>
+   * The specific gravity follows exactly from the definition of the Watson factor,
+   * <code>SG = (1.8*Tb)^(1/3) / Kw</code>, with no correlation error. Only the molar mass needs a closure, which
+   * defaults to {@link neqsim.thermo.characterization.TbpClosure#RIAZI_DAUBERT_1987}.
+   * </p>
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param boilingPoint normal boiling point in K
+   * @param watsonK Watson characterization factor. About 12.8 for paraffins, 11.0 for naphthenes and 10.1 for
+   * aromatics.
+   */
+  public void addTBPfraction_Tb_Kw(String componentName, double numberOfMoles, double boilingPoint, double watsonK);
+
+  /**
+   * Add a TBP fraction defined by normal boiling point and Watson factor, with an explicit closure.
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param boilingPoint normal boiling point in K
+   * @param watsonK Watson characterization factor
+   * @param closure correlation used to obtain the molar mass
+   */
+  public void addTBPfraction_Tb_Kw(String componentName, double numberOfMoles, double boilingPoint, double watsonK,
+      TbpClosure closure);
+
+  /**
+   * Add a TBP fraction defined by normal boiling point and PNA distribution.
+   *
+   * <p>
+   * This is the overload for a cut characterized by a detailed hydrocarbon analysis, where the boiling point and the
+   * paraffin / naphthene / aromatic split are measured but neither molar mass nor density is. The PNA fractions are
+   * blended linearly into a Watson factor using the default family values of
+   * {@link #calculateWatsonKFromPna(double, double, double)}, and the fraction is then added as if
+   * {@link #addTBPfraction_Tb_Kw(String, double, double, double)} had been called.
+   * </p>
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param boilingPoint normal boiling point in K
+   * @param paraffinFraction paraffin fraction, 0 to 1
+   * @param naphtheneFraction naphthene fraction, 0 to 1
+   * @param aromaticFraction aromatic fraction, 0 to 1. The three fractions must sum to 1.
+   */
+  public void addTBPfraction_Tb_Pna(String componentName, double numberOfMoles, double boilingPoint,
+      double paraffinFraction, double naphtheneFraction, double aromaticFraction);
+
+  /**
+   * Add a TBP fraction defined by normal boiling point and PNA distribution, with explicit family Watson factors and
+   * closure.
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param boilingPoint normal boiling point in K
+   * @param paraffinFraction paraffin fraction, 0 to 1
+   * @param naphtheneFraction naphthene fraction, 0 to 1
+   * @param aromaticFraction aromatic fraction, 0 to 1. The three fractions must sum to 1.
+   * @param paraffinWatsonK Watson factor representing a pure paraffin
+   * @param naphtheneWatsonK Watson factor representing a pure naphthene
+   * @param aromaticWatsonK Watson factor representing a pure aromatic
+   * @param closure correlation used to obtain the molar mass
+   */
+  public void addTBPfraction_Tb_Pna(String componentName, double numberOfMoles, double boilingPoint,
+      double paraffinFraction, double naphtheneFraction, double aromaticFraction, double paraffinWatsonK,
+      double naphtheneWatsonK, double aromaticWatsonK, TbpClosure closure);
+
+  /**
+   * Add a TBP fraction with molar mass, specific gravity and normal boiling point all supplied.
+   *
+   * <p>
+   * Nothing is correlated. The boiling point is applied to the selected TBP model for the duration of the call only; it
+   * reaches the critical properties for the boiling-point-based models (Lee-Kesler, Twu, Cavett), while for the
+   * Pedersen models it affects only the stored boiling point and the ideal gas heat capacity.
+   * </p>
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param molarMass molar mass in kg/mol
+   * @param density specific gravity (relative density), i.e. density in g/cm3
+   * @param boilingPoint normal boiling point in K
+   */
+  public void addTBPfraction_Mw_Sg_Tb(String componentName, double numberOfMoles, double molarMass, double density,
+      double boilingPoint);
+
+  /**
+   * Add a TBP fraction with molar mass, specific gravity and measured critical properties.
+   *
+   * <p>
+   * Nothing is correlated. Use this when the critical properties come from measurement or an external regression rather
+   * than from a characterization correlation.
+   * </p>
+   *
+   * @param componentName name of the fraction, e.g. "C7"
+   * @param numberOfMoles number of moles to be added
+   * @param molarMass molar mass in kg/mol
+   * @param density specific gravity (relative density), i.e. density in g/cm3
+   * @param criticalTemperature critical temperature in K
+   * @param criticalPressure critical pressure in bara
+   * @param acentricFactor acentric factor (dimensionless)
+   */
+  public void addTBPfraction_Mw_Sg_Crit(String componentName, double numberOfMoles, double molarMass, double density,
+      double criticalTemperature, double criticalPressure, double acentricFactor);
+
+  /**
+   * Watson characterization factor of a cut from its PNA distribution.
+   *
+   * <p>
+   * Uses the default family values derived from the pure components in the shipped component database: 12.8 for
+   * paraffins, 11.0 for naphthenes and 10.1 for aromatics. The blend is linear in the supplied fractions; the Watson
+   * factor is conventionally blended on a volume or mass basis, so mass or volume fractions are expected rather than
+   * mole fractions.
+   * </p>
+   *
+   * @param paraffinFraction paraffin fraction, 0 to 1
+   * @param naphtheneFraction naphthene fraction, 0 to 1
+   * @param aromaticFraction aromatic fraction, 0 to 1. The three fractions must sum to 1.
+   * @return Watson characterization factor
+   */
+  public double calculateWatsonKFromPna(double paraffinFraction, double naphtheneFraction, double aromaticFraction);
+
+  /**
+   * Watson characterization factor of a cut from its PNA distribution and explicit family values.
+   *
+   * @param paraffinFraction paraffin fraction, 0 to 1
+   * @param naphtheneFraction naphthene fraction, 0 to 1
+   * @param aromaticFraction aromatic fraction, 0 to 1. The three fractions must sum to 1.
+   * @param paraffinWatsonK Watson factor representing a pure paraffin
+   * @param naphtheneWatsonK Watson factor representing a pure naphthene
+   * @param aromaticWatsonK Watson factor representing a pure aromatic
+   * @return Watson characterization factor
+   */
+  public double calculateWatsonKFromPna(double paraffinFraction, double naphtheneFraction, double aromaticFraction,
+      double paraffinWatsonK, double naphtheneWatsonK, double aromaticWatsonK);
+
+  /**
+   * Calculate specific gravity from a normal boiling point and a Watson characterization factor.
+   *
+   * <p>
+   * Inverts the definition <code>Kw = (1.8 * Tb)^(1/3) / SG</code>. Because the Watson factor encodes the paraffinic /
+   * naphthenic / aromatic character of the cut directly, this route is typically accurate to better than 1 % when the
+   * PNA split is known, against roughly 5 % for a molar-mass-based correlation. Indicative values: about 12.7 for
+   * paraffinic cuts, 11.0 for naphthenic and 10.0 for aromatic.
+   * </p>
+   *
+   * @param boilingPoint normal boiling point in K
+   * @param watsonK Watson characterization factor, dimensionless. Typical range 9.5 to 13.5.
+   * @return specific gravity (relative density), i.e. density in g/cm3
+   */
+  public double calculateDensityFromBoilingPointAndWatsonK(double boilingPoint, double watsonK);
 
   /**
    * Calculate density from boiling point and molar mass using TBP correlation.
@@ -497,7 +750,12 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public void checkStability(boolean val);
 
   /**
-   * chemicalReactionInit.
+   * Initialize chemical-reaction topology for the current component identities.
+   *
+   * <p>
+   * Adding, removing, or renaming a component after this call makes the reaction state stale. Before the next reactive
+   * calculation, call this method again, repopulate the component database, and reapply the mixing rule.
+   * </p>
    */
   public void chemicalReactionInit();
 
@@ -507,7 +765,12 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public void clearAll();
 
   /**
-   * clone.
+   * Creates an independently mutable copy of this thermodynamic system.
+   *
+   * <p>
+   * Phase, component, and initialized chemical-reaction state in the returned system are owned by the copy. Changing or
+   * solving a reactive clone must therefore not mutate the source system.
+   * </p>
    *
    * @return a {@link neqsim.thermo.system.SystemInterface} object
    */
@@ -640,6 +903,29 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
    * @return a {@link neqsim.chemicalreactions.ChemicalReactionOperations} object
    */
   public ChemicalReactionOperations getChemicalReactionOperations();
+
+  /**
+   * Get the reaction-data source appropriate for this thermodynamic model.
+   *
+   * <p>
+   * The default source is shared by electrolyte EOS and electrolyte GE systems. Models with a dedicated
+   * parameterization override this method explicitly.
+   * </p>
+   *
+   * @return reaction-data source used by {@link #chemicalReactionInit()}
+   */
+  public default ChemicalReactionDataSource getChemicalReactionDataSource() {
+    return ChemicalReactionDataSource.STANDARD;
+  }
+
+  /**
+   * Get the concentration basis used to evaluate chemical-reaction quotients.
+   *
+   * @return reaction concentration basis used by chemical equilibrium
+   */
+  public default ChemicalReactionConcentrationBasis getChemicalReactionConcentrationBasis() {
+    return ChemicalReactionConcentrationBasis.MOLE_FRACTION;
+  }
 
   /**
    * getCompFormulaes.
@@ -822,6 +1108,32 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public double getEnthalpy();
 
   /**
+   * Select formation-based enthalpy for every component and phase. Supported phases use the standard Cp-polynomial plus
+   * EOS-departure enthalpy. Native caloric models with independent references, solids and aqueous ions are not
+   * supported by this option. Add components and any user-supplied formation data before enabling it. All streams
+   * connected in an energy balance must use the same reference. Entropy is unchanged.
+   *
+   * @param useFormationEnthalpy true for Hf(298.15 K) plus the Cp integral from 298.15 K; false for the legacy sensible
+   * enthalpy reference at 273.15 K (default)
+   * @throws IllegalStateException if any component lacks reviewed formation data or a phase uses an unsupported caloric
+   * reference
+   */
+  public default void setUseIdealGasEnthalpyOfFormation(boolean useFormationEnthalpy) {
+    if (useFormationEnthalpy) {
+      throw new IllegalStateException("Formation reference is unsupported by this system");
+    }
+  }
+
+  /**
+   * Check the selected system enthalpy reference.
+   *
+   * @return true if formation enthalpies are included in stream enthalpy
+   */
+  public default boolean isUsingIdealGasEnthalpyOfFormation() {
+    return false;
+  }
+
+  /**
    * method to return total enthalpy in a specified unit.
    *
    * @param unit Supported units are 'J', 'J/mol', 'kJ/kmol', 'J/kg' and 'kJ/kg'
@@ -864,9 +1176,10 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   /**
    * method to return flow rate of fluid.
    *
-   * @param flowunit Supported units are kg/sec, kg/min, kg/hr, kg/day, m3/sec, m3/min, m3/hr, idSm3/hr, Sm3/sec,
-   * Sm3/hr, Sm3/day, MSm3/day, MSm3/hr, mole/sec, mol/sec, mole/min, mol/min, mole/hr, mol/hr, kmole/sec, kmol/sec,
-   * kmole/min, kmol/min, kmole/hr, kmol/hr, kmole/day, kmol/day, lbmole/hr, lb/hr, barrel/day, gallons/min
+   * @param flowunit Supported units are kg/sec, kg/min, kg/hr, kg/day, m3/sec, Am3/sec, m3/min, Am3/min, m3/hr, Am3/hr,
+   * m3/day, Am3/day, idSm3/sec, idSm3/min, idSm3/hr, idSm3/day, Sm3/sec, Sm3/min, Sm3/hr, Sm3/day, MSm3/day, MSm3/hr,
+   * mole/sec, mol/sec, mole/min, mol/min, mole/hr, mol/hr, kmole/sec, kmol/sec, kmole/min, kmol/min, kmole/hr, kmol/hr,
+   * kmole/day, kmol/day, lbmole/hr, lb/hr, barrel/day, gallons/min
    * @return flow rate in specified unit
    */
   public double getFlowRate(String flowunit);
@@ -1395,20 +1708,57 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public String[][] getResultTable();
 
   /**
-   * Get the speed of sound of a system. The sound speed is implemented based on a molar average over the phases
+   * Legacy molar-phase-fraction weighted average of phase sound speeds.
+   *
+   * <p>
+   * This is neither a homogeneous-equilibrium derivative nor a frozen-phase mixture acoustic model. For decompression
+   * studies use {@link #calculateEquilibriumSoundSpeed()}.
+   * </p>
    *
    * @return speed of sound in m/s
    */
   public double getSoundSpeed();
 
   /**
-   * Get the speed of sound of a system in a specific unit. The sound speed is implemented based on a molar average over
-   * the phases
+   * Legacy molar-phase-fraction weighted average of phase sound speeds in a specified unit.
    *
-   * @param unit Supported units are m/s, km/h
-   * @return speed of sound in m/s
+   * <p>
+   * See {@link #getSoundSpeed()} for the averaging semantics and acoustic-model limitations.
+   * </p>
+   *
+   * @param unit supported units are m/s, km/hr and ft/sec
+   * @return legacy phase average in the requested unit
    */
   public double getSoundSpeed(String unit);
+
+  /**
+   * Calculate the homogeneous-equilibrium sound speed at fixed specific entropy and composition.
+   *
+   * <p>
+   * Uses cloned fluids, EOS total density, checked entropy roots and step refinement. The result includes convergence,
+   * closure and phase-boundary stencil diagnostics. The input is unchanged.
+   * </p>
+   *
+   * @return equilibrium acoustic result in SI units; inspect isConverged before using the speed
+   * @throws IllegalArgumentException for nonphysical input
+   * @see neqsim.thermo.util.EquilibriumSoundSpeed
+   */
+  public default neqsim.thermo.util.EquilibriumSoundSpeed.Result calculateEquilibriumSoundSpeed() {
+    return neqsim.thermo.util.EquilibriumSoundSpeed.calculate(this);
+  }
+
+  /**
+   * Calculate an equilibrium acoustic derivative with a specified initial pressure step.
+   *
+   * @param relativePressureStep pressure increment divided by centre pressure, [1e-6, 0.05]
+   * @return equilibrium acoustic result with convergence and stencil diagnostics
+   * @throws IllegalArgumentException for invalid input or step
+   * @see #calculateEquilibriumSoundSpeed()
+   */
+  public default neqsim.thermo.util.EquilibriumSoundSpeed.Result calculateEquilibriumSoundSpeed(
+      double relativePressureStep) {
+    return neqsim.thermo.util.EquilibriumSoundSpeed.calculate(this, relativePressureStep);
+  }
 
   /**
    * Getter for property standard.
@@ -1901,10 +2251,17 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public void orderByDensity();
 
   /**
-   * phaseToSystem.
+   * Creates an independent system containing the component inventory of the selected physical phase.
    *
-   * @param phaseNumber a int
-   * @return a {@link neqsim.thermo.system.SystemInterface} object
+   * <p>
+   * The result retains the source model, mixing rule, multiphase and solid-check settings. Every configured phase
+   * storage slot is initialized with the extracted inventory, including inactive slots that may be reused by a later
+   * flash. Extracting gas after a solid flash therefore excludes the removed solids without disabling subsequent
+   * solid-equilibrium calculations. The source system is unchanged.
+   * </p>
+   *
+   * @param phaseNumber logical phase index in the source system
+   * @return a single-phase system initialized with the selected phase type and inventory
    */
   public SystemInterface phaseToSystem(int phaseNumber);
 
@@ -1926,10 +2283,10 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public SystemInterface phaseToSystem(PhaseInterface newPhase);
 
   /**
-   * phaseToSystem.
+   * Extracts a named phase using the inventory and configuration semantics of {@link #phaseToSystem(int)}.
    *
-   * @param phaseName a {@link java.lang.String} object
-   * @return a {@link neqsim.thermo.system.SystemInterface} object
+   * @param phaseName phase name, for example "gas", "oil" or "aqueous"
+   * @return an independent extracted system; falls back to phase zero if the name is not found
    */
   public SystemInterface phaseToSystem(String phaseName);
 
@@ -2247,10 +2604,11 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public void setMixingRule(String typename, String GEmodel);
 
   /**
-   * setModel.
+   * Creates a system using the requested model and copies this fluid's components and amounts.
    *
    * @param model a {@link java.lang.String} object
-   * @return a {@link neqsim.thermo.system.SystemInterface} object
+   * @return the completely converted system
+   * @throws IllegalArgumentException if the model is unsupported or any conversion step fails; the cause is preserved
    */
   public SystemInterface setModel(String model);
 
@@ -2324,8 +2682,9 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public void setMultiphaseWaxCheck(boolean multiphaseWaxCheck);
 
   /**
-   * Sets the wax thermodynamic model to use. Must be called before {@link #addSolidComplexPhase(String)} to take
-   * effect.
+   * Sets the wax thermodynamic model to use. Select the model before {@link #addSolidComplexPhase(String)}. Changing a
+   * populated wax phase to another model throws {@link IllegalStateException}; selecting its current model is allowed.
+   * Unknown model names throw {@link IllegalArgumentException}.
    *
    * <p>
    * Available models:
@@ -2583,16 +2942,25 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public void setPressure(double newPressure, String unit);
 
   /**
-   * Setter for property solidPhaseCheck.
+   * Enable or disable solid checking for all components in every allocated phase, including cached phases.
    *
-   * @param test a boolean
+   * <p>
+   * Disabling is safe and idempotent even when no solid phase has been allocated. It preserves the phase count,
+   * composition and component inventories without reallocating phases or recalculating equilibrium.
+   * </p>
+   * <p>
+   * Enabling allocates solid storage but does not change {@link #doMultiPhaseCheck()}. Enable fluid multiphase checking
+   * separately when additional liquid phases are required.
+   * </p>
+   *
+   * @param test true to enable solid checking, false to disable it
    */
   public void setSolidPhaseCheck(boolean test);
 
   /**
-   * setSolidPhaseCheck.
+   * Enable solid checking for a selected component without changing {@link #doMultiPhaseCheck()}.
    *
-   * @param solidComponent a {@link java.lang.String} object
+   * @param solidComponent name of the component to check for solid precipitation
    */
   public void setSolidPhaseCheck(String solidComponent);
 
@@ -2644,7 +3012,8 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public void setTotalFlowRate(double flowRate, String flowunit);
 
   /**
-   * Setter for property <code>totalNumberOfMoles</code>.
+   * Setter for property <code>totalNumberOfMoles</code>. The per-component mole numbers are rescaled by the same factor
+   * so the composition is preserved and the sum of the component moles stays equal to the total.
    *
    * @param totalNumberOfMoles Total molar flow rate of fluid in unit mol/sec
    */
@@ -2741,24 +3110,45 @@ public interface SystemInterface extends Cloneable, java.io.Serializable {
   public void setMolarCompositionOfNamedComponents(String nameDef, double[] molarComposition);
 
   /**
-   * Adds a TBP fraction to the system.
+   * Adds a TBP fraction to the system, defined by specific gravity and normal boiling point.
+   *
+   * <p>
+   * The molar mass is found by inverting the selected TBP model's own <code>calcTB</code> against molar mass, which is
+   * a well-conditioned inversion. Throws if the requested boiling point is not attainable with the selected model at
+   * the given specific gravity.
+   * </p>
    *
    * @param componentName the name of the component
    * @param numberOfMoles number of moles
-   * @param density density of the component
-   * @param boilingPoint boiling point
+   * @param density specific gravity (relative density), i.e. density in g/cm3
+   * @param boilingPoint normal boiling point in K
+   * @deprecated use {@link #addTBPfraction_Sg_Tb(String, double, double, double)}, whose name states which two
+   * properties are supplied. Note that the replacement defaults to the more accurate
+   * {@link neqsim.thermo.characterization.TbpClosure#RIAZI_DAUBERT_1987} closure; pass
+   * {@link neqsim.thermo.characterization.TbpClosure#TBP_MODEL} to keep the behaviour of this method.
    */
+  @Deprecated
   public void addTBPfraction3(String componentName, double numberOfMoles, double density, double boilingPoint);
 
   /**
-   * Adds a TBP fraction to the system.
+   * Adds a TBP fraction to the system, with molar mass, specific gravity and normal boiling point all supplied.
+   *
+   * <p>
+   * The boiling point is applied to the selected TBP model for the duration of the call only. It reaches the critical
+   * properties only for boiling-point-based models (Lee-Kesler, Twu, Cavett); for the Pedersen models Tc and Pc are
+   * functions of molar mass and specific gravity alone, and the boiling point then affects only the stored normal
+   * boiling point and the ideal gas heat capacity.
+   * </p>
    *
    * @param componentName the name of the component
    * @param numberOfMoles number of moles
-   * @param molarMass molar mass
-   * @param density density of the component
-   * @param boilingPoint boiling point
+   * @param molarMass molar mass in kg/mol
+   * @param density specific gravity (relative density), i.e. density in g/cm3
+   * @param boilingPoint normal boiling point in K
+   * @deprecated use {@link #addTBPfraction_Mw_Sg_Tb(String, double, double, double, double)}, whose name states which
+   * properties are supplied.
    */
+  @Deprecated
   public void addTBPfraction4(String componentName, double numberOfMoles, double molarMass, double density,
       double boilingPoint);
 

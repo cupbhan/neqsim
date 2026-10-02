@@ -15,6 +15,7 @@ import neqsim.thermodynamicoperations.ThermodynamicOperations;
  * @author ESOL
  * @version 1.0
  */
+@Tag("slow")
 public class HydrateComprehensiveTest extends neqsim.NeqSimTest {
   private static final Logger logger = LogManager.getLogger(HydrateComprehensiveTest.class);
 
@@ -384,14 +385,7 @@ public class HydrateComprehensiveTest extends neqsim.NeqSimTest {
       logger.info("  Methane: " + methaneInAq);
       logger.info("  n-Butane: " + nButaneInAq);
 
-      // TODO: Known limitation - methane solubility in brine with ions is currently
-      // computed as very small values (near 1E-50). This is a known issue with the
-      // electrolyte model when ions are present with hydrocarbons. The solubility
-      // should ideally be in the range 1E-4 to 1E-3 for these conditions.
-      // For now, just log the value without asserting.
-      if (methaneInAq < 1E-10) {
-        logger.info("  NOTE: Methane solubility is very low - known limitation with electrolyte+HC");
-      }
+      assertTrue(methaneInAq > 1E-10, "Methane should have finite solubility in the electrolyte aqueous phase");
     }
   }
 
@@ -403,7 +397,7 @@ public class HydrateComprehensiveTest extends neqsim.NeqSimTest {
   public void testHydratePressureDependency() throws Exception {
     logger.info("\n=== Test: Hydrate Temperature vs Pressure ===");
 
-    double[] pressures = { 50.0, 100.0, 150.0, 200.0 };
+    double[] pressures = {50.0, 100.0, 150.0, 200.0};
     double[] hydrateTemps = new double[pressures.length];
 
     for (int i = 0; i < pressures.length; i++) {
@@ -598,7 +592,7 @@ public class HydrateComprehensiveTest extends neqsim.NeqSimTest {
   public void testHydrateCurveDryGas() throws Exception {
     logger.info("\n=== Test: Hydrate Curve for Dry Gas ===");
 
-    double[] pressures = { 30.0, 50.0, 80.0, 100.0, 150.0 };
+    double[] pressures = {30.0, 50.0, 80.0, 100.0, 150.0};
     double[] hydrateTemps = new double[pressures.length];
 
     for (int i = 0; i < pressures.length; i++) {

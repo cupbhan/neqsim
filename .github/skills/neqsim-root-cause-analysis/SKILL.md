@@ -1,8 +1,8 @@
 ---
 name: neqsim-root-cause-analysis
-version: "1.2.0"
-description: "Root cause analysis (RCA) framework for process equipment — Bayesian-inspired diagnosis integrating multi-source reliability data (IOGP/SINTEF, CCPS, IEEE 493, Lees, OREDA) as prior, plant historian evidence (likelihood), and NeqSim simulation verification. USE WHEN: diagnosing compressor trips, high vibration, efficiency loss, separator carryover, heat exchanger fouling, or any operational anomaly. Anchors on neqsim.process.diagnostics classes."
-last_verified: "2026-07-19"
+version: "1.3.0"
+description: "Root cause analysis for process equipment - Bayesian-style diagnosis combining reliability priors (IOGP/SINTEF, CCPS, IEEE 493, Lees, OREDA), historian evidence and NeqSim verification, including the control-loop correlation trap (difference both series, resolve direction from the lag sign). USE WHEN: diagnosing compressor trips, vibration, efficiency loss, separator carryover, exchanger fouling or any operational anomaly. Anchors on neqsim.process.diagnostics."
+last_verified: "2026-09-17"
 requires:
   java_packages: [neqsim.process.diagnostics, neqsim.process.equipment.failure, neqsim.process.automation]
 ---
@@ -21,6 +21,38 @@ multi-source reliability data, plant historian time-series, and STID design cond
 - Heat exchanger fouling assessment
 - Valve erosion or malfunction
 - Any operational anomaly requiring structured root cause identification
+
+## Rapid Triage Mode (live disturbance)
+
+A full RCA is a study. When the plant is **still down** and a response team needs a
+direction within minutes, run the same framework in a reduced, explicitly labelled
+mode rather than a different method:
+
+| | Full RCA | Rapid triage |
+|---|---|---|
+| Prior | Multi-source reliability data | Reliability prior only, no source reconciliation |
+| Likelihood | Full historian window, quality-screened | Last stable period to now, unscreened |
+| Verification | NeqSim simulation of each hypothesis | Skipped; verification is deferred |
+| Output | Ranked hypotheses with confidence | Top 3 candidates, confidence capped at `MODERATE` |
+| Cause claim | Established when evidence supports it | `NOT_DETERMINED` unless a single candidate dominates |
+
+Rules that make the reduced mode safe to act on:
+
+1. **Label the mode in the output.** A triage result must never be presented, or
+   later quoted, as a completed RCA.
+2. **Cap the confidence.** Without simulation verification the confidence ceiling is
+   `MODERATE`, regardless of how strongly the historian agrees.
+3. **Time-box it.** State the box up front. When it expires, report the ranking as it
+   stands plus what is still unknown — restoration decisions do not wait for cause.
+4. **Report single-source dependence.** If every piece of evidence for the leading
+   candidate comes from one instrument or one system, say so; that is the most common
+   way a triage conclusion turns out wrong.
+5. **Promote, do not restart.** When the plant is stable, re-run the same hypotheses
+   in full mode with simulation verification; the triage ranking becomes the prior.
+
+Rapid triage is the diagnose step of a live-disturbance response loop. The incident
+coordination, phase gating, and restoration-option evaluation around it live in the
+operations agents that call this skill.
 
 ## Architecture Overview
 
@@ -202,6 +234,68 @@ Pearson correlation between all parameter pairs. Reports correlations with |r| >
 - **STRONG**: |r| > 0.9
 - **MODERATE**: 0.7 < |r| < 0.9
 
+### Correlation when a controller closes the loop
+
+The most common way a historian correlation misleads is that **a control loop
+already connects the two signals being correlated**. The loop guarantees a
+correlation with exactly the sign the wrong hypothesis predicts, so the raw
+number looks like confirmation of a mechanism that is not there.
+
+**1. Ask what the controller does before reading the correlation.**
+Write the loop down first: *does the plant move B in response to A?* If it does,
+a correlation between A and B is expected under the null hypothesis and proves
+nothing. Do not run the correlation at all until this question is answered.
+
+**2. Difference both series.**
+First differences remove a shared trend — seasonal, production ramp, or
+instrument drift — which is the other manufacturer of spurious correlation.
+What survives is genuine short-term coupling.
+
+**3. Use the sign of the lag to resolve direction.**
+This is the part that discriminates. Scan lags in **both** directions and ask
+which signal leads:
+
+| Pattern | Interpretation |
+|---------|----------------|
+| Driver leads by the physical transport time | The causal mechanism under test |
+| Response leads the driver | The controller acting — the loop read backwards |
+| Peak at zero lag only | Shared common cause, or sampling too coarse to separate |
+| Flat across all lags | No coupling at the resolution available |
+
+State the expected lag **before** looking. A transport short-circuit has a
+transit time of minutes; a controller responds in seconds; a seasonal common
+cause has no lag structure at all. If the observed peak does not sit where the
+hypothesis requires, the hypothesis fails regardless of the correlation
+magnitude.
+
+**Worked example.** An investigation suspected that a warm discharge stream was
+short-circuiting back to a cold intake, and correlated intake temperature
+against discharge flow:
+
+```
+raw correlation, intake temperature vs discharge flow:   r = +0.37
+```
+
+Positive, moderate, right sign — it reads as confirmation. It is not. A
+temperature controller opened the discharge valve when the intake ran warm, so
+warm intake *caused* high flow rather than the reverse, and both series carried
+the same seasonal ramp. Two mechanisms manufactured the correlation, neither of
+them the hypothesis under test:
+
+```
+after differencing both series, every lag from -3 h to +3 h:   |r| < 0.10
+                                                     peak:     r = +0.04
+```
+
+The hypothesis fails. The raw figure is dangerous precisely because it is
+plausible rather than absurd.
+
+A saturated controller is the mirror image of this failure: the loop that
+*acts* fools the correlation, while a loop that has *stopped acting* lets
+unchanged disturbances through and makes the process look like it has a new
+external problem. Screen for it with `neqsim-control-authority-screening`
+before accepting an external cause for "the controlled variable got worse".
+
 ### STID Cross-Reference
 Compares current (latest) values to STID design values.
 - **STRONG**: > 20% deviation from design
@@ -245,6 +339,8 @@ emitted in `RootCauseReport.toJson()` and MCP JSON.
 |-------|------------|
 | `neqsim-autonomous-investigation` | **Upstream** — when the symptom/driver is NOT given, run the observe→hypothesize→test loop and discover lead-lag relationships (`RelationshipGraph`) first, then feed the discovered candidate causes into RCA instead of a fixed symptom |
 | `neqsim-plant-data` | Read historian data via tagreader API |
+| `neqsim-control-authority-screening` | Rule out a saturated control valve before accepting an external cause for "the controlled variable got worse" |
+| `neqsim-heat-exchanger-fouling-assessment` | Quantify exchanger degradation behind a cooling or duty shortfall hypothesis |
 | `neqsim-stid-retriever` | Retrieve STID design documents |
 | `neqsim-technical-document-reading` | Extract design values from datasheets |
 | `neqsim-troubleshooting` | Recovery strategies after diagnosis |

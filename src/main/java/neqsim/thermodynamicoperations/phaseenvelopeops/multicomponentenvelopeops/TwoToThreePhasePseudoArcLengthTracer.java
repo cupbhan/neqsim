@@ -216,7 +216,7 @@ public final class TwoToThreePhasePseudoArcLengthTracer {
     int attemptCount = 0;
     double probeStep = Math.min(maximumArcStep, Math.max(arcStep, initialArcStep));
     while (true) {
-      for (int orientation : new int[] { 1, -1 }) {
+      for (int orientation : new int[] {1, -1}) {
         attemptCount++;
         TwoToThreePhaseArcLengthCorrector.Result candidate = corrector.correctFromLocalTangent(current, probeStep,
             orientation);

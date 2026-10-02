@@ -40,7 +40,7 @@ public class PhaseSrkCPA extends PhaseSrkEos implements PhaseCPAInterface {
   double dFCPAdVdV = 0.0;
   double dFCPAdVdVdV = 0.0;
   double gcpav = 0.0;
-  protected double[] dFdNtemp = { 0, 0 };
+  protected double[] dFdNtemp = {0, 0};
   int cpaon = 1;
   int oldTotalNumberOfAccociationSites = 0;
   int totalNumberOfAccociationSites = 0;
@@ -122,7 +122,7 @@ public class PhaseSrkCPA extends PhaseSrkEos implements PhaseCPAInterface {
     if (initType == 0) {
       activeAccosComp = new int[numberOfComponents];
       for (int i = 0; i < numberOfComponents; i++) {
-        if (componentArray[i].getNumberOfmoles() < 1e-50) {
+        if (PhaseCPAInterface.hasNegligibleAssociation(componentArray[i], totalNumberOfMoles)) {
           componentArray[i].setNumberOfAssociationSites(0);
           if (activeAccosComp[i] == 1) {
             activeAccosComp[i] = 0;
@@ -141,7 +141,7 @@ public class PhaseSrkCPA extends PhaseSrkEos implements PhaseCPAInterface {
         selfAccociationScheme = new int[numberOfComponents][0][0];
         crossAccociationScheme = new int[numberOfComponents][numberOfComponents][0][0];
         for (int i = 0; i < numberOfComponents; i++) {
-          if (componentArray[i].getNumberOfmoles() < 1e-50) {
+          if (PhaseCPAInterface.hasNegligibleAssociation(componentArray[i], totalNumberOfMoles)) {
             componentArray[i].setNumberOfAssociationSites(0);
           } else {
             componentArray[i].setNumberOfAssociationSites(componentArray[i].getOrginalNumberOfAssociationSites());
@@ -668,7 +668,7 @@ public class PhaseSrkCPA extends PhaseSrkEos implements PhaseCPAInterface {
       tot1 += 1.0 / 2.0 * tot2 * getComponent(k).getNumberOfMolesInPhase();
       tot4 += 0.5 * getComponent(k).getNumberOfMolesInPhase() * tot3;
     }
-    return new double[] { -tot1, -tot4 };
+    return new double[] {-tot1, -tot4};
   }
 
   /**
@@ -1431,7 +1431,7 @@ public class PhaseSrkCPA extends PhaseSrkEos implements PhaseCPAInterface {
       selfAccociationScheme = new int[numberOfComponents][0][0];
       crossAccociationScheme = new int[numberOfComponents][numberOfComponents][0][0];
       for (int i = 0; i < numberOfComponents; i++) {
-        if (componentArray[i].getNumberOfmoles() < 1e-50) {
+        if (PhaseCPAInterface.hasNegligibleAssociation(componentArray[i], totalNumberOfMoles)) {
           componentArray[i].setNumberOfAssociationSites(0);
         } else {
           componentArray[i].setNumberOfAssociationSites(componentArray[i].getOrginalNumberOfAssociationSites());

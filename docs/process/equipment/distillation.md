@@ -129,23 +129,44 @@ column.setReboilerBoilupRatio(2.5);
 ```
 
 Product-quality and recovery targets use `ColumnSpecification`. Purity and recovery targets are
-dimensionless fractions from `0` to `1`; product-flow-rate specifications are evaluated internally
-in `mol/hr`.
+dimensionless fractions from `0` to `1`. Product-flow-rate targets and their absolute residuals use
+the unit supplied to `setTopProductFlowRate` or `setBottomProductFlowRate`; common molar and mass
+units such as `mol/hr` and `kg/hr` are supported by the product stream. Constructors that do not
+supply a unit remain backward compatible and default product flow to `mol/hr`.
 
 ```java
 column.setTopProductPurity("ethane", 0.95);
 column.setBottomProductPurity("propane", 0.98);
 column.setTopComponentRecovery("ethane", 0.99);
 column.setBottomComponentRecovery("propane", 0.99);
-column.setBottomProductFlowRate(1000.0, "mol/hr");
+column.setBottomProductFlowRate(1000.0, "kg/hr");
 
 ColumnSpecification topFlow = new ColumnSpecification(
     ColumnSpecification.SpecificationType.PRODUCT_FLOW_RATE,
-    ColumnSpecification.ProductLocation.TOP, 500.0);
-topFlow.setTolerance(1.0e-3);
+    ColumnSpecification.ProductLocation.TOP, 500.0, null, "kg/hr");
+topFlow.setTolerance(1.0e-3); // kg/hr, matching the target
 topFlow.setMaxIterations(30);
 column.setTopSpecification(topFlow);
 ```
+
+The selected unit is retained through specification homotopy, diagnostics, warm-state identity,
+copying, and serialization. Feasibility screening compares each flow target with external feed flow
+in the same unit. When both terminal flow targets use the same unit, their sum is screened as well.
+Mixed-unit terminal targets on a column with an external side draw are evaluated during the solve
+because their product compositions may differ. `getLastTopSpecificationResidual()` and
+`getLastBottomSpecificationResidual()` report flow residuals in the corresponding target unit.
+
+Without an external side draw, top and bottom product-flow targets are not two independent
+specifications: steady-state total material balance fixes one terminal flow after the feed and the
+other terminal flow are known. The run preflight and `validateSpecifications()` therefore reject
+the pair even when its targets sum exactly to feed. Use one product-flow target and an independent
+purity, component-recovery, duty, or reflux specification. For the same reason, top and bottom
+recovery targets for the same component are dependent without an external side draw and are
+rejected before iteration. Different-component recovery targets remain independent. When an
+external side draw is active, paired terminal controls can be structurally independent; paired
+recoveries for one component are still screened so their sum cannot exceed the feed-component
+inventory. These checks intentionally prevent rank-deficient outer solves and leave any previously
+accepted tray and product state untouched.
 
 For iterative specifications, NeqSim wraps the selected inner solver in an outer adjustment loop and
 uses condenser or reboiler temperature as the manipulated variable where possible. Product purity,
@@ -159,21 +180,49 @@ stages by default unless the user has configured another stage count.
 
 ```java
 column.setCondenserMode(DistillationColumn.CondenserMode.PARTIAL);
+
 column.setCondenserMode(DistillationColumn.CondenserMode.TOTAL);
+column.setCondenserRefluxRatio(1.5); // required split equation for total condensation
+
 column.setCondenserLiquidReflux(500.0, "kg/hr");
 DistillationColumn.CondenserMode condenserMode = column.getCondenserMode();
+column.clearCondenserRefluxRatio();
 
 column.setReboilerMode(DistillationColumn.ReboilerMode.EQUILIBRIUM);
 column.setReboilerVaporBoilupRatio(1.8);
 DistillationColumn.ReboilerMode reboilerMode = column.getReboilerMode();
 ```
 
+A total condenser requires an explicit reflux ratio so that the fully condensed liquid is divided
+between reflux and distillate. Mode selection preserves an already configured ratio, so the ratio
+and total-mode calls can be made in either order. An incomplete total-condenser declaration is an
+error in `validateSpecifications()` and fails the run preflight before feed assignment or accepted
+tray/product state can change. A failed total-condenser bubble-point calculation is also reported as
+an exception instead of continuing with a stale thermodynamic state.
+
+Ratio control and an adjustable endpoint product specification cannot be active at the same column
+end. The ratio flash does not use the endpoint temperature that the purity, recovery, or product-flow
+outer loop manipulates, so accepting both would create an ineffective control equation. Call
+`clearCondenserRefluxRatio()` before using an adjustable top specification, or select
+`ReboilerMode.EQUILIBRIUM` before using an adjustable bottom specification. Clearing a ratio
+preserves unrelated product specifications. Specifications on a column end without the matching
+condenser or reboiler are validation errors and fail during preflight.
+
+`getConvergenceDiagnostics()` reports the configured condenser and reboiler modes plus whether
+condenser ratio control is active. This makes retained/restarted models auditable before nearby-point
+warm solves.
+
 `setReboilerVaporBoilupRatio(ratio)` configures the direct reboiler mode.
 `setReboilerBoilupRatio(ratio)` also records the target as the bottom `REFLUX_RATIO`
-specification. After either route, `setReboilerMode(DistillationColumn.ReboilerMode.EQUILIBRIUM)`
-clears the active reboiler ratio and any stored bottom reflux-ratio specification, so a later run
-cannot silently restore the old ratio. Bottom purity, recovery, product-flow, and duty
-specifications are preserved.
+specification. Terminal ratios supplied through either the column API or the condenser/reboiler
+objects must be finite and non-negative. Invalid values fail before the active ratio, stored
+specification, initialization flag, or accepted warm products are changed; invalid ratio state
+retained by an older serialized model also fails before a terminal flash. A valid legacy boilup
+setter call marks the column for reinitialization so the next nearby-point solve cannot reuse an
+incompatible terminal state. After either route,
+`setReboilerMode(DistillationColumn.ReboilerMode.EQUILIBRIUM)` clears the active reboiler ratio and
+any stored bottom reflux-ratio specification, so a later run cannot silently restore the old
+ratio. Bottom purity, recovery, product-flow, and duty specifications are preserved.
 
 `setCondenserLiquidReflux(value, unit)` configures the `LIQUID_REFLUX_SPLIT` mode. Use it instead
 of calling `setCondenserMode(LIQUID_REFLUX_SPLIT)` directly because the fixed reflux flow is
@@ -213,6 +262,24 @@ top reflux-ratio specification.
 | `MESH_RESIDUAL` | Inside-out initialization plus full residual auditing. | Material, equilibrium, summation, energy, product-draw, and spec residual checks. |
 | `AUTO` | Runs a feasibility pre-screen and copy-based candidate probes. Fixed-specification reboiler-only strippers try native `SUM_RATES` first; other configurations retain the relaxed damped base and guarded fallback ladder. | Agent workflows and uncertain cases where robust automatic selection and diagnostics are useful. |
 
+The `NEWTON` backtracking search evaluates bounded step lengths down to 0.125. It retains the
+trial with the lowest finite temperature residual, even if no trial is a descent step, and then
+keeps the applied state, step diagnostic, and residual diagnostic aligned. Use
+`getLastNewtonLineSearchStepLength()`, `getLastNewtonLineSearchResidual()`, and
+`getLastNewtonLineSearchTrialCount()` to audit that decision. A `NEWTON` result still requires the
+ordinary column material, energy, specification, physical-state, and optional MESH gates; these
+line-search diagnostics are evidence about globalization, not an independent convergence claim.
+
+The `NEWTON` finite-difference sweeps and final `WEGSTEIN` synchronization always use unit
+relaxation. They therefore install one owned clone of each already-flashed internal outlet directly
+as the target tray inlet, without previous-stream arrays or a second cache clone. The owned
+snapshot still follows the established relaxation and reflash path, preserving downstream
+tear-state thermodynamic semantics. Audit the work with
+`getLastAcceleratedFullTraySweepCount()` and
+`getLastAcceleratedInternalStreamTransferCount()`. The counters describe attempted accelerator
+work, survive accepted `AUTO` candidate adoption, and can remain nonzero if a coordinated fallback
+later completes the route; they are performance diagnostics rather than convergence gates.
+
 ```java
 column.setSolverType(DistillationColumn.SolverType.AUTO);
 column.run();
@@ -239,10 +306,31 @@ Side draws withdraw a fraction of tray vapor or liquid traffic. They are true ex
 streams: `getOutletStreams()` includes them, and `getMassBalance(unit)` subtracts them from the
 feed-product balance. The sequential tray solvers and `NAPHTALI_SANDHOLM` both remove the withdrawn
 phase from inter-tray material and energy traffic; the Naphtali-Sandholm solver also fingerprints the
-configured split so a changed draw cannot reuse an incompatible warm state. An exact liquid
+configured split so a changed draw cannot reuse an incompatible warm state. The inside-out stage used
+by `MESH_RESIDUAL` similarly retains an accepted tray and product state for exact unchanged-input
+reuse when no outer column tear variables are active; changed feed, configuration, tray, or product
+state invalidates that fingerprint. Pumparounds, hydraulic pressure coupling, and adjustable side-draw
+flow specifications keep their coordinated outer initialization path. An exact liquid
 side-draw fraction of `1.0` leaves zero internal downflow across that stage, so NeqSim routes an
 explicit or reused `NAPHTALI_SANDHOLM` selection to `MESH_RESIDUAL`. Fractions below `1.0`
 retain positive internal traffic and remain eligible for the simultaneous solver.
+
+Multiple external feeds may use different component subsets or component ordering, provided their
+thermodynamic models can be mixed by NeqSim. Column product reconciliation accumulates feed and
+side-draw inventories by component name on the combined column basis; it does not assume that every
+feed shares the first feed's component-array indices. This keeps total-condenser material closure
+deterministic for, for example, a main C3-C5 feed plus a C3-C4 side feed on another tray. Repeated
+and nearby-point solves retain the same named component basis.
+
+The named basis also applies when a partial condenser, vapor-boilup control, external side draw, and
+pumparound are active together. The side draw remains an external product, while the pumparound
+draw and return remain one internal circulation with the configured utility duty. Pumparounds use
+the coordinated outer tear around the residual-monitored `MESH_RESIDUAL` inner solver; direct
+substitution is not a robust choice for this fully coupled configuration. The methods
+`isLastColumnTearConverged()` and
+`getLastColumnTearResidual()` report that convergence, and exact sequential-state reuse stays
+disabled while the nonlocal return is active. A changed external feed therefore re-solves both the
+terminal products and pumparound state on the same component basis.
 
 ```java
 column.setGasSideDrawFraction(6, 0.05);
@@ -306,6 +394,7 @@ column.setPumparoundTolerance(1.0e-4);
 column.run();
 
 StreamInterface returnStream = pumparound.getReturnStream();
+double dutyKw = pumparound.getDuty("kW");
 double latestChange = column.getLastPumparoundRelativeChange();
 ```
 
@@ -322,6 +411,13 @@ a thermodynamic snapshot while seeding tray profiles, so initialization cannot c
 return temperature. After a converged solve, the draw-to-return temperature difference therefore
 equals the configured drop; the return flow and composition remain coupled through the outer tear
 iteration.
+
+`ColumnPumparound.getDuty()` reports return-stream enthalpy minus draw-stream enthalpy in watts;
+`getDuty(String)` converts that value to another supported power unit. Cooling therefore has negative duty
+and heating positive duty. Before the first return update the duty is `Double.NaN`. The public column energy
+diagnostic includes the liquid draw as a tray outlet while the return remains a tray inlet, so their
+enthalpy difference is retained as pumparound utility duty without treating the internal circulation
+as an external feed or product.
 
 ## Hydraulics and Pressure-Drop Coupling
 
@@ -448,7 +544,7 @@ fraction diagnostics, film/heat-transfer model choices, and equation-oriented re
 | `getLastTemperatureResidual()` | Average tray-temperature residual in Kelvin. |
 | `getLastMassResidual()` | Relative mass-balance residual. |
 | `getLastEnergyResidual()` | Relative enthalpy-balance residual. |
-| `getEnergyBalanceError()` | Maximum tray/column enthalpy imbalance, including external side draws and excluding zero-flow phase templates. |
+| `getEnergyBalanceError()` | Maximum tray/column enthalpy imbalance, including external side draws, pumparound draw/return duty, and excluding zero-flow phase templates. |
 | `getLastTopSpecificationResidual()`, `getLastBottomSpecificationResidual()` | Endpoint spec errors. |
 | `getLastSpecificationResidual()` | Maximum absolute endpoint spec error. |
 | `getSpecificationHomotopySteps()` | Configured number of staged continuation targets for adjustable product specifications. |
@@ -457,6 +553,7 @@ fraction diagnostics, film/heat-transfer model choices, and equation-oriented re
 | `getLastColumnTearResidual()` | Maximum outer tear residual. |
 | `isLastColumnTearConverged()` | Whether active side-draw, pumparound, and hydraulic tear variables met tolerance. |
 | `getLastColumnTearCandidateHistory()` | Accepted/rejected single-side-draw attempts, including a guarded continuation retry when a cold solve fails after an accepted state exists. |
+| `ColumnPumparound.getDuty()`, `getDuty(String)` | Latest pumparound cooler/heater duty, negative for cooling and positive for heating. |
 | `getLastPumparoundRelativeChange()` | Maximum latest pumparound return-flow change. |
 | `getLastHydraulicPressureDropPa()` | Latest coupled hydraulic pressure drop in Pa. |
 | `getLastHydraulicPressureDropResidual()` | Relative pressure-profile change from hydraulic coupling. |

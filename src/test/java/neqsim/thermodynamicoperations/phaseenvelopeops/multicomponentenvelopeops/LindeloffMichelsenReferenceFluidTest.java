@@ -36,7 +36,7 @@ class LindeloffMichelsenReferenceFluidTest extends NeqSimTest {
 
   @Test
   void fluidTwoCanRunThreePhaseTpFlashWithBothFrozenEosFamilies() {
-    for (boolean pengRobinson : new boolean[] { false, true }) {
+    for (boolean pengRobinson : new boolean[] {false, true}) {
       SystemInterface point = fluidTwo(pengRobinson);
       point.setTemperature(273.15 + 25.0);
       point.setPressure(10.0);
@@ -51,7 +51,7 @@ class LindeloffMichelsenReferenceFluidTest extends NeqSimTest {
   @Test
   @Tag("slow")
   void fluidOneProducesAContinuousConventionalBoundaryBeforeThreePhaseExtension() {
-    for (boolean pengRobinson : new boolean[] { false, true }) {
+    for (boolean pengRobinson : new boolean[] {false, true}) {
       TwoHydrocarbonPhaseEnvelopeSolver.Result result = new TwoHydrocarbonPhaseEnvelopeSolver(fluidOne(pengRobinson))
           .setPressureRange(0.1, 1000.0).setMaximumSteps(5.0, 5.0).setMaximumContinuationIterations(1200)
           .setTopologyFallbackEnabled(false).setStabilityAnalysisEnabled(true).setThreePhaseRefinement(16, 0.02, 0.02)
