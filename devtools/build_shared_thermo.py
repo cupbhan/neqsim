@@ -57,12 +57,25 @@ def test_summary(directory):
 
 
 def verify_jar_version(path, artifact, expected):
+    """Check Maven metadata, or Quarkus' own runner manifest for its application version."""
     entry = f"META-INF/maven/com.equinor.neqsim/{artifact}/pom.properties"
     with zipfile.ZipFile(path) as jar:
-        properties = dict(line.split("=", 1) for line in jar.read(entry).decode().splitlines()
-                          if "=" in line and not line.startswith("#"))
-    if properties.get("version") != expected:
-        raise RuntimeError(f"{artifact} version mismatch: {properties.get('version')} != {expected}")
+        if entry in jar.namelist():
+            properties = dict(line.split("=", 1) for line in jar.read(entry).decode().splitlines()
+                              if "=" in line and not line.startswith("#"))
+            actual = properties.get("version")
+        elif artifact == "neqsim-mcp-server" and "META-INF/MANIFEST.MF" in jar.namelist():
+            # Quarkus removes the application's Maven descriptor from its uber-JAR.
+            manifest = re.sub(r"\r?\n ", "", jar.read("META-INF/MANIFEST.MF").decode())
+            attributes = dict((line.split(":", 1)[0], line.split(":", 1)[1].strip())
+                              for line in manifest.splitlines() if ":" in line)
+            if attributes.get("Main-Class") != "io.quarkus.runner.GeneratedMain":
+                raise RuntimeError("Missing Quarkus runner identity in " + str(path))
+            actual = attributes.get("Implementation-Version")
+        else:
+            raise RuntimeError("Missing embedded version metadata for " + artifact)
+    if actual != expected:
+        raise RuntimeError(f"{artifact} version mismatch: {actual} != {expected}")
 
 
 def build(version):

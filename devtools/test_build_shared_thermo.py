@@ -36,6 +36,35 @@ class DistributionGateTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 test_summary(temporary)
 
+    def test_quarkus_runner_uses_unfolded_manifest_version(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            jar = Path(temporary) / "runner.jar"
+            with zipfile.ZipFile(jar, "w") as archive:
+                archive.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\r\n"
+                                 "Main-Class: io.quarkus.runner.GeneratedMain\r\n"
+                                 "Implementation-Version: 3.17.0-cupbhan.\r\n 1-rc.1\r\n")
+            verify_jar_version(jar, "neqsim-mcp-server", "3.17.0-cupbhan.1-rc.1")
+            with self.assertRaisesRegex(RuntimeError, "version mismatch"):
+                verify_jar_version(jar, "neqsim-mcp-server", "3.17.0-cupbhan.2")
+
+    def test_runner_manifest_cannot_substitute_for_core_dependency_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            jar = Path(temporary) / "runner.jar"
+            with zipfile.ZipFile(jar, "w") as archive:
+                archive.writestr("META-INF/MANIFEST.MF", "Main-Class: io.quarkus.runner.GeneratedMain\n"
+                                 "Implementation-Version: 3.17.0-cupbhan.1-rc.1\n")
+            with self.assertRaisesRegex(RuntimeError, "Missing embedded version"):
+                verify_jar_version(jar, "neqsim", "3.17.0-cupbhan.1-rc.1")
+
+    def test_rejects_manifest_from_an_unrelated_application(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            jar = Path(temporary) / "other.jar"
+            with zipfile.ZipFile(jar, "w") as archive:
+                archive.writestr("META-INF/MANIFEST.MF", "Main-Class: example.OtherApp\n"
+                                 "Implementation-Version: 3.17.0-cupbhan.1-rc.1\n")
+            with self.assertRaisesRegex(RuntimeError, "Missing Quarkus runner identity"):
+                verify_jar_version(jar, "neqsim-mcp-server", "3.17.0-cupbhan.1-rc.1")
+
     def test_failed_or_skipped_reports_cannot_pass(self):
         with tempfile.TemporaryDirectory() as temporary:
             report = Path(temporary) / "TEST-regression.xml"

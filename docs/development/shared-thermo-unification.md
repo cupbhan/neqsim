@@ -43,7 +43,11 @@
 
 统一构建入口为 `devtools/build_shared_thermo.py`。它要求干净提交，使用个人版本分别构建 core library 和 MCP runner，检查内嵌版本，执行核心回归、MCP 契约测试和实际 STDIO 调用，最后生成来源、验证报告与校验清单。初始候选版本为 `3.17.0-cupbhan.1-rc.1`。脚本只生成本地候选目录；CI 工作流只保存构建附件，不发布或替换产品运行时。
 
-发行流程的 7 项自动检查已通过，覆盖脏工作树、错误或旧的内嵌版本、缺失测试报告和失败或跳过的测试。首次全新候选构建中，核心通过，MCP 的独立 Spotless 检查发现 NeqSimTools 与 McpIdentityResolver 原有格式差异；已按该模块格式化并通过检查。相关 Java 兼容性技能也已纠正核心和 MCP 的版本边界，明确两个模块分别运行格式检查。
+发行流程的自动检查覆盖脏工作树、错误或旧的内嵌版本、缺失测试报告和失败或跳过的测试。首次全新候选构建中，核心通过，MCP 的独立 Spotless 检查发现 NeqSimTools 与 McpIdentityResolver 原有格式差异；已按该模块格式化并通过检查，排除注释和空白后的 Java token 序列未变化。相关 Java 兼容性技能也已纠正核心和 MCP 的版本边界，明确两个模块分别运行格式检查。
+
+实际构建核对发现，Quarkus runner 不保留自身的 Maven pom.properties，其服务版本应从 JAR 清单的 Implementation-Version 读取，并通过 MCP initialize 再核对。内嵌核心仍要求 Maven 版本元数据，不能用服务版本代替。此差异已加入发行检查与测试。
+
+在最终候选目录生成前，已经用构建的真实 runner 完成 6 项 STDIO 检查，并用热井筒原客户端验证闪蒸、缓存、批量闪蒸、相包络拒绝不合格结果、黏度实验和 9 点 CPA 查表。产品正式运行配置尚未切换。最终候选来源和完整验证记录以发行目录中的 SOURCE.json 和 validation.json 为准。
 
 核对接口时发现：Java 内核已经包含 HeavyOilMultimediaFluid，但 MCP 尚未提供产品客户端预留的 `runHeavyOilMultimediaFlash` 和 `runHeavyOilMultimediaBatch`。候选包必须披露这一缺口；不能把 Java 工厂测试通过当作这些专用接口可用。现有 `runFieldFluid` 与 `runFluidFlash` 的能力按其实际契约保留。
 

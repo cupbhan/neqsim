@@ -27,6 +27,7 @@ env:
 
 jobs:
   build_and_push:
+    if: github.repository == 'equinor/neqsim'
     name: Build & push self-contained NeqSim image
     runs-on: ubuntu-latest
 
