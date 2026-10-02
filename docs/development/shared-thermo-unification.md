@@ -47,7 +47,30 @@
 
 实际构建核对发现，Quarkus runner 不保留自身的 Maven pom.properties，其服务版本应从 JAR 清单的 Implementation-Version 读取，并通过 MCP initialize 再核对。内嵌核心仍要求 Maven 版本元数据，不能用服务版本代替。此差异已加入发行检查与测试。
 
-在最终候选目录生成前，已经用构建的真实 runner 完成 6 项 STDIO 检查，并用热井筒原客户端验证闪蒸、缓存、批量闪蒸、相包络拒绝不合格结果、黏度实验和 9 点 CPA 查表。产品正式运行配置尚未切换。最终候选来源和完整验证记录以发行目录中的 SOURCE.json 和 validation.json 为准。
+候选目录已经生成，实际 runner 完成 6 项 STDIO 检查，并用热井筒原客户端再次验证闪蒸、缓存、批量闪蒸、相包络拒绝不合格结果、黏度实验和 9 点 CPA 查表。产品正式运行配置尚未切换。候选来源和完整验证记录以发行目录中的 SOURCE.json 和 validation.json 为准。
+
+## 首个候选版本
+
+版本为 `3.17.0-cupbhan.1-rc.1`，源码提交为 `bddee13a60be83aa72d157ede0b8cea23caae4b4`，候选标签为 `cupbhan-v3.17.0.1-rc.1`。本地发行目录为 `build/shared-thermo/releases/3.17.0-cupbhan.1-rc.1/`。测试结果及产物摘要另存为 [候选记录](../../distribution/cupbhan/candidates/3.17.0-cupbhan.1-rc.1.json)，便于在不提交大型 JAR 的情况下审查。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| 核心指定回归 | 75 项通过，失败和跳过均为 0 |
+| MCP 契约 | 4 项通过，失败和跳过均为 0 |
+| 发行流程检查 | 10 项通过 |
+| 实际 STDIO | 6 项通过，发现 74 个工具 |
+| 热井筒原客户端 | 闪蒸、缓存、批量、质量拒绝、黏度实验及 9 点 CPA 查表通过 |
+| 发行目录摘要 | 全部文件与 SHA256SUMS 一致 |
+
+MCP runner 的 SHA256 为 `a1f58d255325294fe8c3513d4d7c431017ed4dd75312c888b45c759b1992ebfe`。这是候选版的局部回归结论；没有运行全仓测试、完整 PVTsim 重算或全部产品界面用例，也没有新增现场适用性声明。
+
+重建需要 Python 3.11 或以上、Java 21、Git 和仓库自带的 Maven wrapper。在该标签的干净检出目录执行：
+
+```text
+python devtools/build_shared_thermo.py --version 3.17.0-cupbhan.1-rc.1
+```
+
+该命令已完整执行通过。脚本会拒绝覆盖已有同名发行目录；复现同一候选时使用新的干净检出目录。发行目录包含核心 JAR、依赖 POM、源码 JAR、MCP runner、LICENSE、源码基线、验证报告、SOURCE.json 和 SHA256SUMS。候选二进制目前保存在本机，没有发布到公共 Maven 或 GitHub Release。
 
 核对接口时发现：Java 内核已经包含 HeavyOilMultimediaFluid，但 MCP 尚未提供产品客户端预留的 `runHeavyOilMultimediaFlash` 和 `runHeavyOilMultimediaBatch`。候选包必须披露这一缺口；不能把 Java 工厂测试通过当作这些专用接口可用。现有 `runFieldFluid` 与 `runFluidFlash` 的能力按其实际契约保留。
 

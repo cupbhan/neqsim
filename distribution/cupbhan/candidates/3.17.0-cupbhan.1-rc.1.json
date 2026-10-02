@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 1,
+  "version": "3.17.0-cupbhan.1-rc.1",
+  "status": "tested-candidate",
+  "tag": "cupbhan-v3.17.0.1-rc.1",
+  "sourceCommit": "bddee13a60be83aa72d157ede0b8cea23caae4b4",
+  "upstreamCommit": "66a866f1e2e82c2fbbd29a7af936e098cd29e849",
+  "sourceManifestSha256": "425d3efc36223f8f0397bbab3e2e350bfe8776d79fb491c6ed299ec4e04f7a3f",
+  "validatedAt": "2026-10-02T07:44:00.993091+00:00",
+  "artifacts": [
+    {
+      "file": "LICENSE",
+      "sizeBytes": 11336,
+      "sha256": "2d251893c6018883b05a33078ad6e7a55433a75f482353feb716cfc2352b89c1"
+    },
+    {
+      "file": "neqsim-3.17.0-cupbhan.1-rc.1-sources.jar",
+      "sizeBytes": 22448156,
+      "sha256": "b372ad5178f5b4f339a8c6ae50e0f1b8fe8c193c1ca6ae7777a48a58cb69283f"
+    },
+    {
+      "file": "neqsim-3.17.0-cupbhan.1-rc.1.jar",
+      "sizeBytes": 27718271,
+      "sha256": "72e77f7f6baa1489f8cd2eaebcea5ca5f229ae8b0fb20d371a4a116542973ea9"
+    },
+    {
+      "file": "neqsim-3.17.0-cupbhan.1-rc.1.pom",
+      "sizeBytes": 4340,
+      "sha256": "ea460558919c2193c6ac90f81f01c7c1320e3ef8e53187fc68d63cfe560b7312"
+    },
+    {
+      "file": "neqsim-mcp-server-3.17.0-cupbhan.1-rc.1-runner.jar",
+      "sizeBytes": 86977914,
+      "sha256": "a1f58d255325294fe8c3513d4d7c431017ed4dd75312c888b45c759b1992ebfe"
+    },
+    {
+      "file": "source-baseline.json",
+      "sizeBytes": 9666,
+      "sha256": "f973efbf89a7166fd7a20ebd02be4635912a6d838962d5f752fc9f00f00a880c"
+    },
+    {
+      "file": "validation.json",
+      "sizeBytes": 6323,
+      "sha256": "9bf78e3b181fa849015720ce9c13126538a851597c78c0421b95d2d27a16c75d"
+    }
+  ],
+  "validation": {
+    "core": {
+      "suites": [
+        "neqsim.mcp.runners.ComponentQueryTest",
+        "neqsim.mcp.runners.FieldFluidRunnerTest",
+        "neqsim.mcp.runners.HydrocarbonWaterBoundaryRegressionRunnerTest",
+        "neqsim.mcp.runners.HydrocarbonWaterModelIdentityTest",
+        "neqsim.mcp.runners.HydrocarbonWaterTopologyBenchmarkRunnerTest",
+        "neqsim.mcp.runners.WaterIF97RunnerTest",
+        "neqsim.thermo.system.HeavyOilMultimediaFluidTest",
+        "neqsim.thermodynamicoperations.flashops.TPmultiflashSolveStatusTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryRegressionTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterClosedBoundaryLoopAssemblerTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterContinuationChainAssemblerTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterIsolatedBoundaryRootClassifierTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterOpenBoundaryVerifierTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterPhaseTopologyTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterRegularPressureBoundaryTracerTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterStableRegionTransitionScannerTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhasePointFinderTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhaseTopologyFinderTest",
+        "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterTopologyBenchmarkTest"
+      ],
+      "tests": 75,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "mcp": {
+      "suites": [
+        "neqsim.mcp.server.NeqSimToolsContractTest"
+      ],
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "distributionSafeguards": {
+      "tests": 10,
+      "failures": 0,
+      "command": "python devtools/test_build_shared_thermo.py"
+    },
+    "runtime": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "runtime-version",
+          "passed": true,
+          "version": "3.17.0-cupbhan.1-rc.1"
+        },
+        {
+          "name": "tool-discovery",
+          "passed": true,
+          "count": 74
+        },
+        {
+          "name": "pr-flash",
+          "passed": true
+        },
+        {
+          "name": "nonreactive-cpa-ammonia",
+          "passed": true
+        },
+        {
+          "name": "water-rich-three-phase-recovery",
+          "passed": true
+        },
+        {
+          "name": "water-if97",
+          "passed": true
+        }
+      ],
+      "tools": [
+        "bridgeTaskWorkflow",
+        "calculateStandard",
+        "checkToolAccess",
+        "compareProcesses",
+        "compareSimulationStates",
+        "composeMultiServerWorkflow",
+        "composeWorkflow",
+        "crossValidateModels",
+        "designUtilities",
+        "diagnoseAutomation",
+        "generateReport",
+        "generateVisualization",
+        "getAdjustableParameters",
+        "getAutomationLearningReport",
+        "getBenchmarkTrust",
+        "getCapabilities",
+        "getExample",
+        "getPhaseEnvelope",
+        "getProgress",
+        "getPropertyTable",
+        "getSchema",
+        "getSimulationVariable",
+        "listSimulationUnits",
+        "listUnitVariables",
+        "manageIndustrialProfile",
+        "manageModel",
+        "manageSecurity",
+        "manageSession",
+        "manageState",
+        "manageValidationProfile",
+        "queryDataCatalog",
+        "runAgenticEngineering",
+        "runBarrierRegister",
+        "runBatch",
+        "runBioprocess",
+        "runChemistry",
+        "runDynamic",
+        "runFieldEconomics",
+        "runFieldFluid",
+        "runFlareNetwork",
+        "runFlash",
+        "runFlowAssurance",
+        "runFluidFlash",
+        "runHAZOP",
+        "runHazopScenario",
+        "runHydrocarbonWaterBoundaryRegression",
+        "runHydrocarbonWaterTopologyBenchmark",
+        "runLOPA",
+        "runMaterialsReview",
+        "runNorsokS001Clause10Review",
+        "runOpenDrainReview",
+        "runOperationalStudy",
+        "runPVT",
+        "runParametricStudy",
+        "runPipeline",
+        "runPlugin",
+        "runProcess",
+        "runProcessLoop",
+        "runRelief",
+        "runReservoir",
+        "runRiskMatrix",
+        "runRootCauseAnalysis",
+        "runSIL",
+        "runSafetySystemPerformance",
+        "runWaterHammer",
+        "runWaterIF97",
+        "saveSimulationState",
+        "searchComponents",
+        "setSimulationVariable",
+        "sizeEquipment",
+        "solveTask",
+        "streamSimulation",
+        "validateInput",
+        "validateResults"
+      ],
+      "notCovered": [
+        "HTTP transport",
+        "full PVTsim rerun",
+        "product UI",
+        "heavy-oil multimedia dedicated MCP endpoints"
+      ]
+    },
+    "consumer": {
+      "repository": "https://github.com/cupbhan/sdwfs.git",
+      "commit": "59317803d977a354be69cbd7e375fc281729fd78",
+      "command": "node scripts/pvt-runtime-smoke.cjs with explicit candidate JAR override",
+      "result": {
+        "success": true,
+        "runtimeSource": "local-source:C:\\mycodex\\neqsim",
+        "flashKeys": [
+          "flash",
+          "fluid"
+        ],
+        "batchKeys": [
+          "summary",
+          "results"
+        ],
+        "cached": true,
+        "phaseEnvelopeQualityGate": "rejected-unphysical-result",
+        "pvtExperiment": "viscosity",
+        "lookupCandidatePoints": 9
+      }
+    }
+  },
+  "runtimeSwitchApplied": false,
+  "pvtsimRerun": false,
+  "fullRepositoryTestSuiteRun": false,
+  "artifactDirectory": "build/shared-thermo/releases/3.17.0-cupbhan.1-rc.1",
+  "limitations": [
+    "See source-baseline.json for model qualification limits",
+    "Dedicated heavy-oil multimedia MCP endpoints are not yet exposed",
+    "Full PVTsim and consumer integration gates remain separate"
+  ]
+}
