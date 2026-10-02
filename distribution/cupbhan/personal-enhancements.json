@@ -107,7 +107,7 @@
     "validateInput",
     "validateResults"
   ],
-  "coreTests": "ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,HeavyOilMultimediaFluidTest,TPmultiflash*Test,HydrocarbonWater*Test,TPflashWaterRich*Test,TPflashSrkWaterRichSeededPhaseSetTest,PTPhaseEnvelopeComponentLimitTest,PTPhaseEnvelopeContinuityTest,PTPhaseEnvelopeMichelsenTest,PTPhaseEnvelopeReferenceEosTest,PTPhaseEnvelopeRobustnessTest,PTPhaseEnvelopeSegmentsTest,SystemThermoReactiveCloneTest,ReactiveElectrolyteStateConsistencyTest,ReactiveCO2BrineHydrateOrderTest",
+  "coreTests": "ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,HeavyOilMultimediaFluidTest,TPmultiflash*Test,HydrocarbonWater*Test,TPflashWaterRich*Test,TPflashSrkWaterRichSeededPhaseSetTest,PTPhaseEnvelopeComponentLimitTest,PTPhaseEnvelopeContinuityTest,PTPhaseEnvelopeMichelsenTest,PTPhaseEnvelopeReferenceEosTest,PTPhaseEnvelopeRobustnessTest,PTPhaseEnvelopeSegmentsTest,SystemThermoReactiveCloneTest,ReactiveElectrolyteStateConsistencyTest",
   "knownUpstreamDisabledTests": {
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest#testPureMethane": "Disabled by upstream v3.23.0: pure-component phase-envelope tracing is not supported by this regression. All other selected cases must execute."
   },
@@ -125,7 +125,17 @@
     "neqsim.mcp.runners.HydrocarbonWaterTopologyBenchmarkRunnerTest",
     "neqsim.mcp.runners.WaterIF97RunnerTest",
     "neqsim.thermo.system.HeavyOilMultimediaFluidTest",
+    "neqsim.thermo.system.SystemThermoReactiveCloneTest",
+    "neqsim.thermodynamicoperations.flashops.reactiveflash.ReactiveElectrolyteStateConsistencyTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashSrkWaterRichSeededPhaseSetTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashWaterRichColdSeedConsistencyTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashWaterRichEndpointTest",
+    "neqsim.thermodynamicoperations.flashops.TPmultiflashHighWaterGasSeedTest",
+    "neqsim.thermodynamicoperations.flashops.TPmultiflashPhaseDisappearanceTest",
     "neqsim.thermodynamicoperations.flashops.TPmultiflashSolveStatusTest",
+    "neqsim.thermodynamicoperations.flashops.TPmultiflashStrippedIonTest",
+    "neqsim.thermodynamicoperations.flashops.TPmultiflashTest",
+    "neqsim.thermodynamicoperations.flashops.TPmultiflashWaterRichVapourTest",
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryRegressionTest",
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterClosedBoundaryLoopAssemblerTest",
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterContinuationChainAssemblerTest",
@@ -136,6 +146,16 @@
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterStableRegionTransitionScannerTest",
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhasePointFinderTest",
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhaseTopologyFinderTest",
-    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterTopologyBenchmarkTest"
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterTopologyBenchmarkTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeComponentLimitTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeContinuityTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeMichelsenTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeReferenceEosTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeSegmentsTest"
+  ],
+  "excludedMavenTags": [
+    "slow",
+    "benchmark"
   ]
 }

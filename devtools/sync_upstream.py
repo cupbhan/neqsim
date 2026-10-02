@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -39,8 +41,18 @@ def official_release(tag=None):
         headers["Authorization"] = "Bearer " + token
     request = urllib.request.Request(f"https://api.github.com/repos/equinor/neqsim/releases/{suffix}",
                                      headers=headers)
-    with urllib.request.urlopen(request, timeout=60) as response:
-        release = json.load(response)
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                release = json.load(response)
+            break
+        except urllib.error.HTTPError as error:
+            if attempt == 2 or error.code not in (429, 500, 502, 503, 504):
+                raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            if attempt == 2:
+                raise
+        time.sleep(0.5 * (2 ** attempt))
     if release.get("draft") or release.get("prerelease") or not TAG_PATTERN.fullmatch(release["tag_name"]):
         raise ValueError("Only published stable releases are accepted")
     return {key: release[key] for key in ("tag_name", "published_at", "html_url")}
@@ -113,6 +125,18 @@ def apply(root, report):
 def write_report(root, report):
     folder = root / "build/upstream-sync" / report["tag"]
     folder.mkdir(parents=True, exist_ok=True)
+    if report.get("conflicts"):
+        # CI runners disappear after the job; retain the exact index stages for local resolution.
+        (folder / "conflicts.diff").write_text(value(root, "diff", "--cc"), encoding="utf-8")
+        for index, filename in enumerate(report["conflicts"]):
+            item = folder / "conflicts" / str(index)
+            item.mkdir(parents=True, exist_ok=True)
+            (item / "path.txt").write_text(filename + "\n", encoding="utf-8")
+            for stage, name in ((1, "base"), (2, "personal"), (3, "official")):
+                result = subprocess.run(["git", "show", f":{stage}:{filename}"], cwd=root,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if result.returncode == 0:
+                    (item / (name + ".bin")).write_bytes(result.stdout)
     (folder / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     lines = [f"# Official NeqSim {report['tag']} synchronization", "",
              f"Status: {report.get('status', 'inspection-only')}", "",

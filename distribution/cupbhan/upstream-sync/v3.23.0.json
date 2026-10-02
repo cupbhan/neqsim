@@ -28,10 +28,56 @@
     "officialArtifactSha256": "2afff2377963e47565b8c473f3f9bbd69fae6fd383b7c0f53399ab2956e3974a",
     "focusedTestsAfterFixes": 31,
     "focusedFailures": 0,
-    "fullCandidateValidation": "pending clean committed build",
+    "fullCandidateValidation": "passed; see v3.23.0-validation.json",
     "additionalIntegrationScan": "Initial broad run interrupted in PTPhaseEnvelopeTest UMR-PRU coarse-grid scan; not a passing result. Routine gate uses the explicit suites in personal-enhancements.json."
   },
-  "runtimeSelection": "unchanged pending candidate and consumer validation",
+  "runtimeSelection": "3.23.0-cupbhan.1-rc.1 selected after candidate and consumer checks; previous 3.17.0-cupbhan.1-rc.1 retained",
   "pvtsimRerun": false,
-  "localDiagnostics": "build/upstream-sync/20261002-v3.23.0"
+  "localDiagnostics": "build/upstream-sync/20261002-v3.23.0",
+  "candidate": {
+    "schemaVersion": 1,
+    "version": "3.23.0-cupbhan.1-rc.1",
+    "status": "tested-candidate",
+    "commit": "751003f12d03ba2082b62410211b66b86c166388",
+    "jar": "runtime/releases/3.23.0-cupbhan.1-rc.1/neqsim-mcp-server-3.23.0-cupbhan.1-rc.1-runner.jar",
+    "sha256": "c13a3a737156e283636287b84dfdc317ad6e0e33925b96774c030c9a27fff341",
+    "source": "runtime/releases/3.23.0-cupbhan.1-rc.1/SOURCE.json"
+  },
+  "maintenanceTests": {
+    "upstreamSynchronization": 10,
+    "distribution": 11,
+    "runtimeSelection": 6,
+    "enhancementProtection": 5,
+    "workflowLint": "actionlint 1.7.12 passed"
+  },
+  "consumers": {
+    "pythonInterface": {
+      "tests": 8,
+      "passed": true,
+      "javaSourceVerified": true
+    },
+    "thermalWellbore": {
+      "passed": true,
+      "flash": true,
+      "batch": true,
+      "cache": true,
+      "phaseEnvelopePoints": 41,
+      "invalidEnvelopeRejected": true,
+      "viscosity": true,
+      "pvtTablePoints": 9,
+      "runtimeProvenanceVerified": true
+    },
+    "t2well": {
+      "eos": "PR",
+      "states": 8,
+      "disagreements": 0,
+      "passed": true,
+      "scope": "small consumer integration smoke, not a full Fortran regression"
+    }
+  },
+  "excludedMavenTags": [
+    "slow",
+    "benchmark"
+  ],
+  "sourceStatus": "official history integrated and candidate validation completed"
 }

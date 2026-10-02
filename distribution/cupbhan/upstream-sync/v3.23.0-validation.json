@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "version": "3.23.0-cupbhan.1-rc.1",
+  "sourceCommit": "751003f12d03ba2082b62410211b66b86c166388",
+  "scope": "Selected shared-engine regressions and real STDIO runtime; not the full repository suite",
+  "core": {
+    "suites": [
+      "neqsim.mcp.runners.ComponentQueryTest",
+      "neqsim.mcp.runners.FieldFluidRunnerTest",
+      "neqsim.mcp.runners.HydrocarbonWaterBoundaryRegressionRunnerTest",
+      "neqsim.mcp.runners.HydrocarbonWaterModelIdentityTest",
+      "neqsim.mcp.runners.HydrocarbonWaterTopologyBenchmarkRunnerTest",
+      "neqsim.mcp.runners.WaterIF97RunnerTest",
+      "neqsim.thermo.system.HeavyOilMultimediaFluidTest",
+      "neqsim.thermo.system.SystemThermoReactiveCloneTest",
+      "neqsim.thermodynamicoperations.flashops.reactiveflash.ReactiveElectrolyteStateConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSrkWaterRichSeededPhaseSetTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterRichColdSeedConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterRichEndpointTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashHighWaterGasSeedTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashPhaseDisappearanceTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashSolveStatusTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashStrippedIonTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashWaterRichVapourTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryRegressionTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterClosedBoundaryLoopAssemblerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterContinuationChainAssemblerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterIsolatedBoundaryRootClassifierTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterOpenBoundaryVerifierTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterPhaseTopologyTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterRegularPressureBoundaryTracerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterStableRegionTransitionScannerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhasePointFinderTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhaseTopologyFinderTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterTopologyBenchmarkTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeComponentLimitTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeContinuityTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeMichelsenTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeReferenceEosTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeSegmentsTest"
+    ],
+    "tests": 180,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "skippedCases": [
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest#testPureMethane"
+    ]
+  },
+  "mcp": {
+    "suites": [
+      "neqsim.mcp.server.NeqSimToolsContractTest"
+    ],
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "skippedCases": []
+  },
+  "runtime": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "runtime-version",
+        "passed": true,
+        "version": "3.23.0-cupbhan.1-rc.1"
+      },
+      {
+        "name": "tool-discovery",
+        "passed": true,
+        "count": 76
+      },
+      {
+        "name": "pr-flash",
+        "passed": true
+      },
+      {
+        "name": "nonreactive-cpa-ammonia",
+        "passed": true
+      },
+      {
+        "name": "water-rich-three-phase-recovery",
+        "passed": true
+      },
+      {
+        "name": "water-if97",
+        "passed": true
+      }
+    ],
+    "tools": [
+      "bridgeTaskWorkflow",
+      "calculateStandard",
+      "checkToolAccess",
+      "compareProcesses",
+      "compareSimulationStates",
+      "composeMultiServerWorkflow",
+      "composeWorkflow",
+      "crossValidateModels",
+      "designUtilities",
+      "diagnoseAutomation",
+      "generateReport",
+      "generateVisualization",
+      "getAdjustableParameters",
+      "getAutomationLearningReport",
+      "getBenchmarkTrust",
+      "getCapabilities",
+      "getExample",
+      "getPhaseEnvelope",
+      "getProgress",
+      "getPropertyTable",
+      "getSchema",
+      "getSimulationVariable",
+      "inspectApi",
+      "listSimulationUnits",
+      "listUnitVariables",
+      "manageIndustrialProfile",
+      "manageModel",
+      "manageSecurity",
+      "manageSession",
+      "manageState",
+      "manageValidationProfile",
+      "queryDataCatalog",
+      "runAgenticEngineering",
+      "runBarrierRegister",
+      "runBatch",
+      "runBioprocess",
+      "runCapability",
+      "runChemistry",
+      "runDynamic",
+      "runFieldEconomics",
+      "runFieldFluid",
+      "runFlareNetwork",
+      "runFlash",
+      "runFlowAssurance",
+      "runFluidFlash",
+      "runHAZOP",
+      "runHazopScenario",
+      "runHydrocarbonWaterBoundaryRegression",
+      "runHydrocarbonWaterTopologyBenchmark",
+      "runLOPA",
+      "runMaterialsReview",
+      "runNorsokS001Clause10Review",
+      "runOpenDrainReview",
+      "runOperationalStudy",
+      "runPVT",
+      "runParametricStudy",
+      "runPipeline",
+      "runPlugin",
+      "runProcess",
+      "runProcessLoop",
+      "runRelief",
+      "runReservoir",
+      "runRiskMatrix",
+      "runRootCauseAnalysis",
+      "runSIL",
+      "runSafetySystemPerformance",
+      "runWaterHammer",
+      "runWaterIF97",
+      "saveSimulationState",
+      "searchComponents",
+      "setSimulationVariable",
+      "sizeEquipment",
+      "solveTask",
+      "streamSimulation",
+      "validateInput",
+      "validateResults"
+    ],
+    "notCovered": [
+      "HTTP transport",
+      "full PVTsim rerun",
+      "product UI",
+      "heavy-oil multimedia dedicated MCP endpoints"
+    ]
+  },
+  "commands": [
+    {
+      "step": "core",
+      "command": [
+        "C:\\mycodex\\neqsim\\mvnw.cmd",
+        "-B",
+        "-ntp",
+        "-Drevision=3.23.0-cupbhan.1-rc.1",
+        "-Dmcp.revision=3.23.0-cupbhan.1-rc.1",
+        "-Dmaven.javadoc.skip=true",
+        "-Djacoco.skip=true",
+        "clean",
+        "spotless:check",
+        "install",
+        "-Dneqsim.shade.skip=true",
+        "-Dtest=ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,HeavyOilMultimediaFluidTest,TPmultiflash*Test,HydrocarbonWater*Test,TPflashWaterRich*Test,TPflashSrkWaterRichSeededPhaseSetTest,PTPhaseEnvelopeComponentLimitTest,PTPhaseEnvelopeContinuityTest,PTPhaseEnvelopeMichelsenTest,PTPhaseEnvelopeReferenceEosTest,PTPhaseEnvelopeRobustnessTest,PTPhaseEnvelopeSegmentsTest,SystemThermoReactiveCloneTest,ReactiveElectrolyteStateConsistencyTest,ReactiveCO2BrineHydrateOrderTest"
+      ],
+      "exitCode": 0
+    },
+    {
+      "step": "mcp",
+      "command": [
+        "C:\\mycodex\\neqsim\\mvnw.cmd",
+        "-B",
+        "-ntp",
+        "-Drevision=3.23.0-cupbhan.1-rc.1",
+        "-Dmcp.revision=3.23.0-cupbhan.1-rc.1",
+        "-Dmaven.javadoc.skip=true",
+        "-Djacoco.skip=true",
+        "-f",
+        "neqsim-mcp-server/pom.xml",
+        "clean",
+        "spotless:check",
+        "package"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "pvtsimRerun": false,
+  "productRuntimeSwitched": false
+}

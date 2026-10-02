@@ -1,3 +1,8 @@
+---
+title: "本机 NeqSim 目录统一"
+description: "四个历史目录的比较、归档和唯一共享运行入口"
+---
+
 # 本机 NeqSim 目录统一（2026-10-02）
 
 唯一日常维护入口是 `C:\mycodex\neqsim`，分支为 `master`。此前的
@@ -13,7 +18,7 @@
 | `neqsim-python` | Python/JPype 包装层，无独立 Git；原先附带旧 3.16.0 JAR | `bindings/python/` |
 | `neqsim-snapshot-backup-20260809` | 无 Git 的研究快照，含源码、编译类、PVTsim 对比及研究产物 | `.local-archive/20261002/neqsim-snapshot-backup-20260809/` |
 
-按文本统一换行后，SAGD 的 3,108 个生产 Java 文件中，2,978 个与当前主线相同，
+按文本统一换行后，SAGD 的 3,108 个生产 Java 文件中，2,978 个与当时的 3.17 主线相同，
 130 个不同，没有主线缺失的生产 Java 文件。它的 1,631 个测试文件中 1,567 个相同、
 64 个不同。差异结合提交历史判定，不能把较旧的不同文件覆盖到较新主线。
 此前已迁入 SAGD 独有改进，具体见 `migration-inventory.json`。
@@ -34,9 +39,11 @@ neqsim/
   .local-archive/20261002/      历史目录和旧二进制（忽略 Git）
 ```
 
-运行入口由 `distribution/cupbhan/runtime.json` 指定，当前为
-`3.17.0-cupbhan.1-rc.1`。该包确实构建自 `bddee13a60be83aa72d157ede0b8cea23caae4b4`；
-之后的目录、文档及包装层提交不会伪装成这个 JAR 的构建来源。
+运行入口由 `distribution/cupbhan/runtime.json` 指定。目录统一时选择的
+`3.17.0-cupbhan.1-rc.1` 构建自 `bddee13a60be83aa72d157ede0b8cea23caae4b4`，现保留作回退。
+随后已完成[官方 3.23.0 合并与验证](shared-thermo-upstream-sync.md)，当前选择
+`3.23.0-cupbhan.1-rc.1`，实际构建提交为 `751003f12d03ba2082b62410211b66b86c166388`。
+之后的文档及版本锁提交不会伪装成这个 JAR 的构建来源。
 Python 包自身保留原接口版本 3.16.0，与所加载的增强内核版本分别管理。
 
 安装 Python 接口（Java 21，Python 3.10+）：

@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
+import urllib.error
 
-from sync_upstream import apply, git, inspect, value
+from sync_upstream import apply, git, inspect, official_release, value, write_report
 
 
 class UpstreamSyncTest(unittest.TestCase):
@@ -93,6 +95,29 @@ class UpstreamSyncTest(unittest.TestCase):
         self.assertIn("<<<<<<<", (self.root / "shared.txt").read_text())
         self.assertEqual(report["before"], value(self.root, "rev-parse", "HEAD"))
         self.assertEqual(report["before"], value(self.root, "rev-parse", report["backupBranch"]))
+        with mock.patch("builtins.print"), mock.patch.dict("os.environ", {"GITHUB_OUTPUT": "", "GITHUB_STEP_SUMMARY": ""}):
+            write_report(self.root, report)
+        evidence = self.root / "build/upstream-sync/v3.23.0/conflicts/0"
+        self.assertEqual(b"baseline\n", (evidence / "base.bin").read_bytes())
+        self.assertEqual(b"personal implementation\n", (evidence / "personal.bin").read_bytes())
+        self.assertEqual(b"official implementation\n", (evidence / "official.bin").read_bytes())
+        self.assertEqual("shared.txt\n", (evidence / "path.txt").read_text())
+
+    def test_transient_release_api_failure_is_retried_without_changing_release(self):
+        payload = {"tag_name": "v3.23.0", "draft": False, "prerelease": False,
+                   "published_at": "2026-09-27", "html_url": "https://github.com/equinor/neqsim/releases/tag/v3.23.0"}
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+        with mock.patch("sync_upstream.urllib.request.urlopen", side_effect=[urllib.error.URLError("connection reset"), response]) as request, mock.patch("sync_upstream.time.sleep"):
+            self.assertEqual("v3.23.0", official_release()["tag_name"])
+            self.assertEqual(2, request.call_count)
+
+    def test_release_api_permission_error_is_not_retried(self):
+        error = urllib.error.HTTPError("https://api.github.com", 403, "Forbidden", {}, None)
+        with mock.patch("sync_upstream.urllib.request.urlopen", side_effect=error) as request, mock.patch("sync_upstream.time.sleep"):
+            with self.assertRaises(urllib.error.HTTPError):
+                official_release()
+            self.assertEqual(1, request.call_count)
 
     def test_repeated_sync_is_noop_after_integration(self):
         apply(self.root, self.plan())
