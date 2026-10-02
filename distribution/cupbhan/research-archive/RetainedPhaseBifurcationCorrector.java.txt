@@ -1,0 +1,731 @@
+package neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops;
+
+import Jama.Matrix;
+import neqsim.thermo.phase.PhaseInterface;
+import neqsim.thermo.phase.PhaseType;
+import neqsim.thermo.system.SystemInterface;
+import neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.IncipientPhaseStabilityAnalyzer.CandidatePhase;
+
+/**
+ * Bordered Newton corrector that grows a finite phase from a retained-phase spinodal.
+ *
+ * <p>
+ * A prescribed phase fraction does not remove the coincident-phase solution manifold. This corrector instead fixes the
+ * signed separation of the retained and bifurcating compositions along the spinodal eigenvector, while solving the new
+ * phase fraction as an additional unknown. At fixed pressure, temperature, all compositions, both retained fractions,
+ * and the new phase fraction are corrected simultaneously.
+ * </p>
+ */
+public final class RetainedPhaseBifurcationCorrector {
+  private static final double MINIMUM_COMPOSITION = 1.0e-100;
+  private static final double MINIMUM_BETA = 1.0e-10;
+
+  private final SystemInterface template;
+  private final CandidatePhase retainedPhaseZero;
+  private final CandidatePhase retainedPhaseOne;
+  private final CandidatePhase bifurcatingPhase;
+  private int maximumIterations = 120;
+  private double residualTolerance = 1.0e-9;
+  private double finiteDifferenceStep = 2.0e-5;
+
+  /** Creates a bordered corrector; the bifurcating family must match one retained phase. */
+  public RetainedPhaseBifurcationCorrector(SystemInterface template, CandidatePhase retainedPhaseZero,
+      CandidatePhase retainedPhaseOne, CandidatePhase bifurcatingPhase) {
+    if (template == null || retainedPhaseZero == null || retainedPhaseOne == null || bifurcatingPhase == null) {
+      throw new IllegalArgumentException("template and all phase identities are required");
+    }
+    if (retainedPhaseZero == retainedPhaseOne
+        || bifurcatingPhase != retainedPhaseZero && bifurcatingPhase != retainedPhaseOne) {
+      throw new IllegalArgumentException("bifurcating phase must match exactly one retained phase family");
+    }
+    this.template = template.clone();
+    this.retainedPhaseZero = retainedPhaseZero;
+    this.retainedPhaseOne = retainedPhaseOne;
+    this.bifurcatingPhase = bifurcatingPhase;
+  }
+
+  /** Sets damped-Newton and numerical-Jacobian controls. */
+  public RetainedPhaseBifurcationCorrector setNumericalControls(int maximumIterations, double residualTolerance,
+      double finiteDifferenceStep) {
+    if (maximumIterations < 1 || !positive(residualTolerance) || !positive(finiteDifferenceStep)) {
+      throw new IllegalArgumentException("invalid retained-phase bifurcation controls");
+    }
+    this.maximumIterations = maximumIterations;
+    this.residualTolerance = residualTolerance;
+    this.finiteDifferenceStep = finiteDifferenceStep;
+    return this;
+  }
+
+  /**
+   * Corrects a finite separation from one retained two-phase state at fixed pressure.
+   *
+   * @param retainedState converged retained two-phase state with a bifurcating composition seed in its third slot
+   * @param mode spinodal stationarity-Jacobian mode
+   * @param pressureBara fixed pressure
+   * @param targetSeparation signed log-composition separation along the mode
+   * @param bifurcatingFractionSeed strictly positive seed for the new phase fraction
+   */
+  public Result correct(TwoToThreePhaseArcLengthCorrector.State retainedState,
+      IncipientPhaseStationarityJacobianAnalyzer.Result mode, double pressureBara, double targetSeparation,
+      double bifurcatingFractionSeed) {
+    validateInputs(retainedState, mode, pressureBara, targetSeparation, bifurcatingFractionSeed);
+    double[] variables = variables(retainedState, bifurcatingFractionSeed);
+    variables[2 * componentCount() + 2] = Math.log(pressureBara);
+    clampVariables(variables);
+    Evaluation evaluation;
+    try {
+      evaluation = evaluate(variables, mode, pressureBara, targetSeparation);
+    } catch (RuntimeException error) {
+      return Result.failure(retainedPhaseZero, retainedPhaseOne, bifurcatingPhase, retainedState.getTemperatureK(),
+          pressureBara, componentCount(), error.getMessage());
+    }
+    double initialResidual = evaluation.maximumResidual;
+    double conditionNumber = Double.NaN;
+    int iterations = 0;
+    String failureMessage = null;
+    while (iterations < maximumIterations && evaluation.maximumResidual > residualTolerance) {
+      iterations++;
+      Matrix jacobian;
+      try {
+        jacobian = numericalJacobian(variables, evaluation.residual, mode, pressureBara, targetSeparation);
+        conditionNumber = jacobian.cond();
+      } catch (RuntimeException error) {
+        failureMessage = "Jacobian evaluation failed: " + error.getMessage();
+        break;
+      }
+      Matrix correction;
+      try {
+        correction = solveCorrection(jacobian, evaluation.residual, conditionNumber);
+      } catch (RuntimeException error) {
+        failureMessage = "Jacobian solve failed: " + error.getMessage();
+        break;
+      }
+      limitCorrection(correction);
+      boolean accepted = false;
+      double damping = 1.0;
+      for (int lineSearch = 0; lineSearch < 24; lineSearch++) {
+        double[] trialVariables = variables.clone();
+        for (int variableIndex = 0; variableIndex < variables.length; variableIndex++) {
+          trialVariables[variableIndex] -= damping * correction.get(variableIndex, 0);
+        }
+        clampVariables(trialVariables);
+        try {
+          Evaluation trial = evaluate(trialVariables, mode, pressureBara, targetSeparation);
+          if (trial.maximumResidual < evaluation.maximumResidual) {
+            variables = trialVariables;
+            evaluation = trial;
+            accepted = true;
+            break;
+          }
+        } catch (RuntimeException error) {
+          // Try a shorter step.
+        }
+        damping *= 0.5;
+      }
+      if (!accepted) {
+        failureMessage = "line search could not reduce the bordered bifurcation residual";
+        break;
+      }
+    }
+    boolean residualConverged = evaluation.maximumResidual <= residualTolerance;
+    if (failureMessage == null && !residualConverged) {
+      failureMessage = "maximum bordered bifurcation iteration count reached";
+    }
+    boolean distinct = compositionDistance(evaluation.duplicatedRetainedComposition,
+        evaluation.bifurcatingComposition) > 1.0e-5;
+    if (failureMessage == null && !distinct) {
+      failureMessage = "bordered bifurcation correction returned coincident phase compositions";
+    }
+    boolean positiveFraction = evaluation.bifurcatingFraction > 1.0e-12
+        && evaluation.bifurcatingFraction < 1.0 - 1.0e-12;
+    if (failureMessage == null && !positiveFraction) {
+      failureMessage = "bordered bifurcation correction returned a vanishing phase fraction";
+    }
+    return new Result(retainedPhaseZero, retainedPhaseOne, bifurcatingPhase, evaluation.temperatureK,
+        evaluation.pressureBara, evaluation.retainedBeta, evaluation.bifurcatingFraction,
+        evaluation.phaseZeroComposition, evaluation.phaseOneComposition, evaluation.bifurcatingComposition,
+        initialResidual, evaluation.maximumResidual, evaluation.equilibriumMaximumResidual, evaluation.pressureResidual,
+        evaluation.separationResidual, evaluation.materialBalanceResidual, iterations, conditionNumber,
+        residualConverged, distinct, positiveFraction, failureMessage);
+  }
+
+  private Matrix numericalJacobian(double[] variables, double[] baseResidual,
+      IncipientPhaseStationarityJacobianAnalyzer.Result mode, double pressureBara, double targetSeparation) {
+    Matrix jacobian = new Matrix(variables.length, variables.length);
+    for (int column = 0; column < variables.length; column++) {
+      double step = finiteDifferenceStep * Math.max(1.0, Math.abs(variables[column]));
+      double[] plus = variables.clone();
+      double[] minus = variables.clone();
+      plus[column] += step;
+      minus[column] -= step;
+      clampVariables(plus);
+      clampVariables(minus);
+      double[] plusResidual = null;
+      double[] minusResidual = null;
+      try {
+        plusResidual = evaluate(plus, mode, pressureBara, targetSeparation).residual;
+      } catch (RuntimeException error) {
+        // One-sided difference remains available.
+      }
+      try {
+        minusResidual = evaluate(minus, mode, pressureBara, targetSeparation).residual;
+      } catch (RuntimeException error) {
+        // One-sided difference remains available.
+      }
+      if (plusResidual == null && minusResidual == null) {
+        throw new IllegalStateException("both finite-difference evaluations failed");
+      }
+      double denominator;
+      if (plusResidual == null) {
+        plusResidual = baseResidual;
+        denominator = variables[column] - minus[column];
+      } else if (minusResidual == null) {
+        minusResidual = baseResidual;
+        denominator = plus[column] - variables[column];
+      } else {
+        denominator = plus[column] - minus[column];
+      }
+      for (int row = 0; row < variables.length; row++) {
+        jacobian.set(row, column, (plusResidual[row] - minusResidual[row]) / denominator);
+      }
+    }
+    return jacobian;
+  }
+
+  private Evaluation evaluate(double[] variables, IncipientPhaseStationarityJacobianAnalyzer.Result mode,
+      double specifiedPressureBara, double targetSeparation) {
+    int componentCount = componentCount();
+    int betaIndex = componentCount;
+    int logWStart = componentCount + 1;
+    int temperatureIndex = 2 * componentCount + 1;
+    int pressureIndex = 2 * componentCount + 2;
+    int fractionIndex = 2 * componentCount + 3;
+    double retainedBeta = variables[betaIndex];
+    double temperatureK = Math.exp(variables[temperatureIndex]);
+    double pressureBara = Math.exp(variables[pressureIndex]);
+    double bifurcatingFraction = logistic(variables[fractionIndex]);
+    if (!(retainedBeta > 0.0 && retainedBeta < 1.0) || !positive(temperatureK) || temperatureK < 50.0
+        || temperatureK > 2500.0 || !positive(pressureBara) || pressureBara > 1.0e6
+        || !(bifurcatingFraction > 0.0 && bifurcatingFraction < 1.0)) {
+      throw new IllegalStateException("bordered bifurcation variables left the physical domain");
+    }
+    double logSumW = logSumExp(variables, logWStart, logWStart + componentCount);
+    double[] third = normalizedExponentials(variables, logWStart, logWStart + componentCount, logSumW);
+    double[] overall = overallComposition();
+    // Evaluated in log space so the composition floor never enters the material balance. A heavy pseudo-component
+    // against water reaches K ~ 1e99 and a true retained-liquid fraction near 1e-102, below the floor; flooring it
+    // propagates into first[] = K * second[] as a large spurious inventory and makes the converged point a root of
+    // a perturbed system. The floor belongs only where the EOS needs a strictly positive mole fraction.
+    double[] first = new double[componentCount];
+    double[] second = new double[componentCount];
+    double[] logFirst = new double[componentCount];
+    double[] logSecond = new double[componentCount];
+    for (int componentIndex = 0; componentIndex < componentCount; componentIndex++) {
+      double retainedOverall = (overall[componentIndex] - bifurcatingFraction * third[componentIndex])
+          / (1.0 - bifurcatingFraction);
+      if (!(retainedOverall > 0.0) || !Double.isFinite(retainedOverall)) {
+        throw new IllegalStateException("bifurcating phase exceeds an overall component inventory");
+      }
+      double logK = Math.max(-700.0, Math.min(100.0, variables[componentIndex]));
+      double logDenominator = retainedPhaseLogDenominator(retainedBeta, logK);
+      if (!Double.isFinite(logDenominator)) {
+        throw new IllegalStateException("invalid retained-phase material-balance denominator");
+      }
+      logSecond[componentIndex] = Math.log(retainedOverall) - logDenominator;
+      logFirst[componentIndex] = logK + logSecond[componentIndex];
+      second[componentIndex] = Math.exp(logSecond[componentIndex]);
+      first[componentIndex] = Math.exp(logFirst[componentIndex]);
+    }
+    double sumFirst = Math.exp(logSumExp(logFirst, 0, componentCount));
+    double sumSecond = Math.exp(logSumExp(logSecond, 0, componentCount));
+    if (!Double.isFinite(sumFirst) || !Double.isFinite(sumSecond) || !(sumFirst > 0.0) || !(sumSecond > 0.0)) {
+      throw new IllegalStateException("retained-phase inventory left the physical domain");
+    }
+    SystemInterface working = createWorkingSystem(temperatureK, pressureBara, retainedBeta, bifurcatingFraction, first,
+        second, third);
+    double[] residual = new double[2 * componentCount + 4];
+    double equilibriumMaximumResidual = 0.0;
+    for (int componentIndex = 0; componentIndex < componentCount; componentIndex++) {
+      residual[componentIndex] = variables[componentIndex]
+          + working.getPhase(0).getComponent(componentIndex).getLogFugacityCoefficient()
+          - working.getPhase(1).getComponent(componentIndex).getLogFugacityCoefficient();
+      equilibriumMaximumResidual = Math.max(equilibriumMaximumResidual, Math.abs(residual[componentIndex]));
+    }
+    residual[componentCount] = sumFirst - sumSecond;
+    equilibriumMaximumResidual = Math.max(equilibriumMaximumResidual, Math.abs(residual[componentCount]));
+    for (int componentIndex = 0; componentIndex < componentCount; componentIndex++) {
+      double reference = Math
+          .log(Math.max(working.getPhase(0).getComponent(componentIndex).getx(), MINIMUM_COMPOSITION))
+          + working.getPhase(0).getComponent(componentIndex).getLogFugacityCoefficient();
+      residual[componentCount + 1 + componentIndex] = variables[logWStart + componentIndex]
+          + working.getPhase(2).getComponent(componentIndex).getLogFugacityCoefficient() - reference;
+      equilibriumMaximumResidual = Math.max(equilibriumMaximumResidual,
+          Math.abs(residual[componentCount + 1 + componentIndex]));
+    }
+    residual[2 * componentCount + 1] = logSumW;
+    equilibriumMaximumResidual = Math.max(equilibriumMaximumResidual, Math.abs(logSumW));
+    double pressureResidual = Math.log(pressureBara / specifiedPressureBara);
+    residual[2 * componentCount + 2] = pressureResidual;
+    double[] normalizedFirst = normalized(first);
+    double[] normalizedSecond = normalized(second);
+    double[] duplicatedRetained = bifurcatingPhase == retainedPhaseZero ? normalizedFirst : normalizedSecond;
+    double separation = modeSeparation(duplicatedRetained, third, mode);
+    double separationResidual = separation - targetSeparation;
+    residual[2 * componentCount + 3] = separationResidual;
+    double maximumResidual = Math.max(equilibriumMaximumResidual,
+        Math.max(Math.abs(pressureResidual), Math.abs(separationResidual)));
+    if (!Double.isFinite(maximumResidual)) {
+      throw new IllegalStateException("bordered bifurcation residual is non-finite");
+    }
+    return new Evaluation(residual, maximumResidual, equilibriumMaximumResidual, pressureResidual, separationResidual,
+        temperatureK, pressureBara, retainedBeta, bifurcatingFraction, normalizedFirst, normalizedSecond, third,
+        duplicatedRetained,
+        materialBalanceResidual(retainedBeta, bifurcatingFraction, normalizedFirst, normalizedSecond, third));
+  }
+
+  private SystemInterface createWorkingSystem(double temperatureK, double pressureBara, double retainedBeta,
+      double bifurcatingFraction, double[] first, double[] second, double[] third) {
+    SystemInterface working = template.clone();
+    working.setMultiPhaseCheck(false);
+    working.setMaxNumberOfPhases(3);
+    working.setNumberOfPhases(3);
+    PhaseInterface phaseTemplate = template.getPhase(0);
+    for (int phaseIndex = 0; phaseIndex < 3; phaseIndex++) {
+      working.setPhase(phaseTemplate.clone(), phaseIndex);
+    }
+    working.setTemperature(temperatureK);
+    working.setPressure(pressureBara);
+    working.setBeta(0, retainedBeta * (1.0 - bifurcatingFraction));
+    working.setBeta(1, (1.0 - retainedBeta) * (1.0 - bifurcatingFraction));
+    working.setBeta(2, bifurcatingFraction);
+    setPhase(working, 0, retainedPhaseZero, first);
+    setPhase(working, 1, retainedPhaseOne, second);
+    setPhase(working, 2, bifurcatingPhase, third);
+    for (int phaseIndex = 0; phaseIndex < 3; phaseIndex++) {
+      working.init(1, phaseIndex);
+    }
+    return working;
+  }
+
+  private static Matrix solveCorrection(Matrix jacobian, double[] residual, double conditionNumber) {
+    Matrix rightHandSide = new Matrix(residual, residual.length);
+    if (Double.isFinite(conditionNumber) && conditionNumber < 1.0e8) {
+      try {
+        return jacobian.solve(rightHandSide);
+      } catch (RuntimeException error) {
+        // Fall through to regularized least squares.
+      }
+    }
+    Matrix transpose = jacobian.transpose();
+    Matrix normal = transpose.times(jacobian);
+    Matrix normalRightHandSide = transpose.times(rightHandSide);
+    double lambda = 1.0e-10;
+    RuntimeException lastFailure = null;
+    for (int attempt = 0; attempt < 8; attempt++) {
+      try {
+        return normal.plus(Matrix.identity(normal.getRowDimension(), normal.getColumnDimension()).times(lambda))
+            .solve(normalRightHandSide);
+      } catch (RuntimeException error) {
+        lastFailure = error;
+        lambda *= 100.0;
+      }
+    }
+    throw lastFailure == null ? new IllegalStateException("regularized Jacobian solve failed") : lastFailure;
+  }
+
+  private void limitCorrection(Matrix correction) {
+    int componentCount = componentCount();
+    double scale = 1.0;
+    for (int variableIndex = 0; variableIndex < correction.getRowDimension(); variableIndex++) {
+      double maximumStep;
+      if (variableIndex == componentCount) {
+        maximumStep = 0.05;
+      } else if (variableIndex == 2 * componentCount + 1 || variableIndex == 2 * componentCount + 2) {
+        maximumStep = 0.04;
+      } else if (variableIndex == 2 * componentCount + 3) {
+        maximumStep = 1.0;
+      } else {
+        maximumStep = 1.0;
+      }
+      double magnitude = Math.abs(correction.get(variableIndex, 0));
+      if (magnitude > maximumStep) {
+        scale = Math.min(scale, maximumStep / magnitude);
+      }
+    }
+    if (scale < 1.0) {
+      correction.timesEquals(scale);
+    }
+  }
+
+  private double[] variables(TwoToThreePhaseArcLengthCorrector.State state, double bifurcatingFraction) {
+    int componentCount = componentCount();
+    double[] variables = new double[2 * componentCount + 4];
+    for (int componentIndex = 0; componentIndex < componentCount; componentIndex++) {
+      variables[componentIndex] = Math
+          .log(Math.max(state.getPhaseZeroComposition()[componentIndex], MINIMUM_COMPOSITION)
+              / Math.max(state.getPhaseOneComposition()[componentIndex], MINIMUM_COMPOSITION));
+      variables[componentCount + 1 + componentIndex] = Math
+          .log(Math.max(state.getIncipientComposition()[componentIndex], MINIMUM_COMPOSITION));
+    }
+    variables[componentCount] = state.getBeta();
+    variables[2 * componentCount + 1] = Math.log(state.getTemperatureK());
+    variables[2 * componentCount + 2] = Math.log(state.getPressureBara());
+    variables[2 * componentCount + 3] = Math.log(bifurcatingFraction / (1.0 - bifurcatingFraction));
+    return variables;
+  }
+
+  private void clampVariables(double[] variables) {
+    int componentCount = componentCount();
+    for (int componentIndex = 0; componentIndex < componentCount; componentIndex++) {
+      variables[componentIndex] = clamp(variables[componentIndex], -700.0, 100.0);
+      variables[componentCount + 1 + componentIndex] = clamp(variables[componentCount + 1 + componentIndex], -700.0,
+          100.0);
+    }
+    variables[componentCount] = clamp(variables[componentCount], MINIMUM_BETA, 1.0 - MINIMUM_BETA);
+    variables[2 * componentCount + 1] = clamp(variables[2 * componentCount + 1], Math.log(50.0), Math.log(2500.0));
+    variables[2 * componentCount + 2] = clamp(variables[2 * componentCount + 2], Math.log(1.0e-6), Math.log(1.0e6));
+    variables[2 * componentCount + 3] = clamp(variables[2 * componentCount + 3], -32.0, 20.0);
+  }
+
+  private void validateInputs(TwoToThreePhaseArcLengthCorrector.State state,
+      IncipientPhaseStationarityJacobianAnalyzer.Result mode, double pressureBara, double targetSeparation,
+      double bifurcatingFractionSeed) {
+    int componentCount = componentCount();
+    if (state == null || state.getRetainedPhaseZero() != retainedPhaseZero
+        || state.getRetainedPhaseOne() != retainedPhaseOne || state.getIncipientPhase() != bifurcatingPhase
+        || state.getPhaseZeroComposition().length != componentCount
+        || state.getPhaseOneComposition().length != componentCount
+        || state.getIncipientComposition().length != componentCount || mode == null
+        || mode.getBifurcationEigenvector().length != componentCount - 1 || !positive(pressureBara)
+        || !Double.isFinite(targetSeparation) || Math.abs(targetSeparation) < 1.0e-8
+        || !positive(bifurcatingFractionSeed) || bifurcatingFractionSeed >= 1.0) {
+      throw new IllegalArgumentException("invalid bordered retained-phase bifurcation input");
+    }
+  }
+
+  private double materialBalanceResidual(double retainedBeta, double bifurcatingFraction, double[] first,
+      double[] second, double[] third) {
+    double[] overall = overallComposition();
+    double maximum = 0.0;
+    for (int componentIndex = 0; componentIndex < overall.length; componentIndex++) {
+      double reconstructed = (1.0 - bifurcatingFraction)
+          * (retainedBeta * first[componentIndex] + (1.0 - retainedBeta) * second[componentIndex])
+          + bifurcatingFraction * third[componentIndex];
+      maximum = Math.max(maximum, Math.abs(reconstructed - overall[componentIndex]));
+    }
+    return maximum;
+  }
+
+  private double[] overallComposition() {
+    int componentCount = componentCount();
+    double[] overall = new double[componentCount];
+    for (int componentIndex = 0; componentIndex < componentCount; componentIndex++) {
+      overall[componentIndex] = Math.max(template.getPhase(0).getComponent(componentIndex).getz(), MINIMUM_COMPOSITION);
+    }
+    return normalized(overall);
+  }
+
+  private int componentCount() {
+    return template.getPhase(0).getNumberOfComponents();
+  }
+
+  private static double modeSeparation(double[] retained, double[] bifurcating,
+      IncipientPhaseStationarityJacobianAnalyzer.Result mode) {
+    int referenceIndex = mode.getReferenceComponentIndex();
+    double retainedReference = Math.max(retained[referenceIndex], MINIMUM_COMPOSITION);
+    double bifurcatingReference = Math.max(bifurcating[referenceIndex], MINIMUM_COMPOSITION);
+    double[] eigenvector = mode.getBifurcationEigenvector();
+    double separation = 0.0;
+    int coordinateIndex = 0;
+    for (int componentIndex = 0; componentIndex < retained.length; componentIndex++) {
+      if (componentIndex == referenceIndex) {
+        continue;
+      }
+      double difference = Math.log(Math.max(bifurcating[componentIndex], MINIMUM_COMPOSITION) / bifurcatingReference)
+          - Math.log(Math.max(retained[componentIndex], MINIMUM_COMPOSITION) / retainedReference);
+      separation += eigenvector[coordinateIndex++] * difference;
+    }
+    return separation;
+  }
+
+  private static void setPhase(SystemInterface system, int phaseIndex, CandidatePhase phase, double[] composition) {
+    system.setPhaseType(phaseIndex, toPhaseType(phase));
+    for (int componentIndex = 0; componentIndex < composition.length; componentIndex++) {
+      // The EOS requires a strictly positive mole fraction; this is the only place the floor belongs.
+      system.getPhase(phaseIndex).getComponent(componentIndex)
+          .setx(Math.max(composition[componentIndex], MINIMUM_COMPOSITION));
+    }
+    system.getPhase(phaseIndex).normalize();
+    system.setPhaseType(phaseIndex, toPhaseType(phase));
+  }
+
+  /** Evaluates {@code log(1 - beta + beta * exp(logK))} without forming {@code exp(logK)} when it would overflow. */
+  private static double retainedPhaseLogDenominator(double beta, double logK) {
+    double retainedFraction = 1.0 - beta;
+    if (logK > 0.0) {
+      return logK + Math.log(beta + retainedFraction * Math.exp(-logK));
+    }
+    return Math.log(retainedFraction + beta * Math.exp(logK));
+  }
+
+  private static double logSumExp(double[] values, int start, int end) {
+    double maximum = Double.NEGATIVE_INFINITY;
+    for (int index = start; index < end; index++) {
+      maximum = Math.max(maximum, values[index]);
+    }
+    double total = 0.0;
+    for (int index = start; index < end; index++) {
+      total += Math.exp(values[index] - maximum);
+    }
+    return maximum + Math.log(total);
+  }
+
+  private static double[] normalizedExponentials(double[] values, int start, int end, double logSum) {
+    double[] composition = new double[end - start];
+    for (int index = start; index < end; index++) {
+      composition[index - start] = Math.exp(values[index] - logSum);
+    }
+    return composition;
+  }
+
+  private static double[] normalized(double[] values) {
+    double[] result = values.clone();
+    double total = 0.0;
+    for (double value : result) {
+      total += value;
+    }
+    if (!(total > 0.0) || !Double.isFinite(total)) {
+      throw new IllegalStateException("composition cannot be normalized");
+    }
+    for (int index = 0; index < result.length; index++) {
+      result[index] /= total;
+    }
+    return result;
+  }
+
+  private static double logistic(double value) {
+    if (value >= 0.0) {
+      double exponential = Math.exp(-value);
+      return 1.0 / (1.0 + exponential);
+    }
+    double exponential = Math.exp(value);
+    return exponential / (1.0 + exponential);
+  }
+
+  private static double compositionDistance(double[] first, double[] second) {
+    double distance = 0.0;
+    for (int componentIndex = 0; componentIndex < first.length; componentIndex++) {
+      distance += Math.abs(first[componentIndex] - second[componentIndex]);
+    }
+    return distance;
+  }
+
+  private static double clamp(double value, double lower, double upper) {
+    return Math.max(lower, Math.min(upper, value));
+  }
+
+  private static boolean positive(double value) {
+    return Double.isFinite(value) && value > 0.0;
+  }
+
+  private static PhaseType toPhaseType(CandidatePhase phase) {
+    switch (phase) {
+    case GAS:
+      return PhaseType.GAS;
+    case OIL:
+      return PhaseType.OIL;
+    case AQUEOUS:
+      return PhaseType.AQUEOUS;
+    default:
+      throw new IllegalArgumentException("unsupported phase family " + phase);
+    }
+  }
+
+  private static final class Evaluation {
+    private final double[] residual;
+    private final double maximumResidual;
+    private final double equilibriumMaximumResidual;
+    private final double pressureResidual;
+    private final double separationResidual;
+    private final double temperatureK;
+    private final double pressureBara;
+    private final double retainedBeta;
+    private final double bifurcatingFraction;
+    private final double[] phaseZeroComposition;
+    private final double[] phaseOneComposition;
+    private final double[] bifurcatingComposition;
+    private final double[] duplicatedRetainedComposition;
+    private final double materialBalanceResidual;
+
+    private Evaluation(double[] residual, double maximumResidual, double equilibriumMaximumResidual,
+        double pressureResidual, double separationResidual, double temperatureK, double pressureBara,
+        double retainedBeta, double bifurcatingFraction, double[] phaseZeroComposition, double[] phaseOneComposition,
+        double[] bifurcatingComposition, double[] duplicatedRetainedComposition, double materialBalanceResidual) {
+      this.residual = residual;
+      this.maximumResidual = maximumResidual;
+      this.equilibriumMaximumResidual = equilibriumMaximumResidual;
+      this.pressureResidual = pressureResidual;
+      this.separationResidual = separationResidual;
+      this.temperatureK = temperatureK;
+      this.pressureBara = pressureBara;
+      this.retainedBeta = retainedBeta;
+      this.bifurcatingFraction = bifurcatingFraction;
+      this.phaseZeroComposition = phaseZeroComposition;
+      this.phaseOneComposition = phaseOneComposition;
+      this.bifurcatingComposition = bifurcatingComposition;
+      this.duplicatedRetainedComposition = duplicatedRetainedComposition;
+      this.materialBalanceResidual = materialBalanceResidual;
+    }
+  }
+
+  /** Immutable bordered bifurcation correction and physical diagnostics. */
+  public static final class Result {
+    private final CandidatePhase retainedPhaseZero;
+    private final CandidatePhase retainedPhaseOne;
+    private final CandidatePhase bifurcatingPhase;
+    private final double temperatureK;
+    private final double pressureBara;
+    private final double retainedBeta;
+    private final double bifurcatingFraction;
+    private final double[] phaseZeroComposition;
+    private final double[] phaseOneComposition;
+    private final double[] bifurcatingComposition;
+    private final double initialMaximumResidual;
+    private final double maximumResidual;
+    private final double equilibriumMaximumResidual;
+    private final double pressureResidual;
+    private final double separationResidual;
+    private final double materialBalanceResidual;
+    private final int iterations;
+    private final double jacobianConditionNumber;
+    private final boolean residualConverged;
+    private final boolean distinct;
+    private final boolean positiveFraction;
+    private final String failureMessage;
+
+    private Result(CandidatePhase retainedPhaseZero, CandidatePhase retainedPhaseOne, CandidatePhase bifurcatingPhase,
+        double temperatureK, double pressureBara, double retainedBeta, double bifurcatingFraction,
+        double[] phaseZeroComposition, double[] phaseOneComposition, double[] bifurcatingComposition,
+        double initialMaximumResidual, double maximumResidual, double equilibriumMaximumResidual,
+        double pressureResidual, double separationResidual, double materialBalanceResidual, int iterations,
+        double jacobianConditionNumber, boolean residualConverged, boolean distinct, boolean positiveFraction,
+        String failureMessage) {
+      this.retainedPhaseZero = retainedPhaseZero;
+      this.retainedPhaseOne = retainedPhaseOne;
+      this.bifurcatingPhase = bifurcatingPhase;
+      this.temperatureK = temperatureK;
+      this.pressureBara = pressureBara;
+      this.retainedBeta = retainedBeta;
+      this.bifurcatingFraction = bifurcatingFraction;
+      this.phaseZeroComposition = phaseZeroComposition.clone();
+      this.phaseOneComposition = phaseOneComposition.clone();
+      this.bifurcatingComposition = bifurcatingComposition.clone();
+      this.initialMaximumResidual = initialMaximumResidual;
+      this.maximumResidual = maximumResidual;
+      this.equilibriumMaximumResidual = equilibriumMaximumResidual;
+      this.pressureResidual = pressureResidual;
+      this.separationResidual = separationResidual;
+      this.materialBalanceResidual = materialBalanceResidual;
+      this.iterations = iterations;
+      this.jacobianConditionNumber = jacobianConditionNumber;
+      this.residualConverged = residualConverged;
+      this.distinct = distinct;
+      this.positiveFraction = positiveFraction;
+      this.failureMessage = failureMessage;
+    }
+
+    private static Result failure(CandidatePhase retainedPhaseZero, CandidatePhase retainedPhaseOne,
+        CandidatePhase bifurcatingPhase, double temperatureK, double pressureBara, int componentCount,
+        String failureMessage) {
+      return new Result(retainedPhaseZero, retainedPhaseOne, bifurcatingPhase, temperatureK, pressureBara, Double.NaN,
+          Double.NaN, new double[componentCount], new double[componentCount], new double[componentCount], Double.NaN,
+          Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 0, Double.NaN, false, false, false,
+          failureMessage);
+    }
+
+    public boolean isConverged() {
+      return residualConverged && distinct && positiveFraction && failureMessage == null;
+    }
+
+    public CandidatePhase getRetainedPhaseZero() {
+      return retainedPhaseZero;
+    }
+
+    public CandidatePhase getRetainedPhaseOne() {
+      return retainedPhaseOne;
+    }
+
+    public CandidatePhase getBifurcatingPhase() {
+      return bifurcatingPhase;
+    }
+
+    public double getTemperatureK() {
+      return temperatureK;
+    }
+
+    public double getPressureBara() {
+      return pressureBara;
+    }
+
+    public double getRetainedBeta() {
+      return retainedBeta;
+    }
+
+    public double getBifurcatingFraction() {
+      return bifurcatingFraction;
+    }
+
+    public double[] getPhaseZeroComposition() {
+      return phaseZeroComposition.clone();
+    }
+
+    public double[] getPhaseOneComposition() {
+      return phaseOneComposition.clone();
+    }
+
+    public double[] getBifurcatingComposition() {
+      return bifurcatingComposition.clone();
+    }
+
+    public double getInitialMaximumResidual() {
+      return initialMaximumResidual;
+    }
+
+    public double getMaximumResidual() {
+      return maximumResidual;
+    }
+
+    public double getEquilibriumMaximumResidual() {
+      return equilibriumMaximumResidual;
+    }
+
+    public double getPressureResidual() {
+      return pressureResidual;
+    }
+
+    public double getSeparationResidual() {
+      return separationResidual;
+    }
+
+    public double getMaterialBalanceResidual() {
+      return materialBalanceResidual;
+    }
+
+    public int getIterations() {
+      return iterations;
+    }
+
+    public double getJacobianConditionNumber() {
+      return jacobianConditionNumber;
+    }
+
+    public double getBifurcatingPhaseDistance() {
+      double[] duplicated = bifurcatingPhase == retainedPhaseZero ? phaseZeroComposition : phaseOneComposition;
+      return compositionDistance(duplicated, bifurcatingComposition);
+    }
+
+    public String getFailureMessage() {
+      return failureMessage;
+    }
+  }
+}

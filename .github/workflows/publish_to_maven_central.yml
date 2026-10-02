@@ -7,6 +7,7 @@ on:
     types: [published]
 jobs:
   publish:
+    if: github.repository == 'equinor/neqsim'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -59,4 +60,3 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_SIGNING_KEY_PASSWORD }}
-

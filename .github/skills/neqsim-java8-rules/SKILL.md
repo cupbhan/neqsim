@@ -1,12 +1,14 @@
 ---
 name: neqsim-java8-rules
-description: "Java 8 compatibility rules for NeqSim. USE WHEN: writing or reviewing any Java code for NeqSim, including tests. Covers forbidden Java 9+ features, replacement patterns, API verification, and JavaDoc requirements. All NeqSim Java code MUST compile with Java 8."
-last_verified: "2026-07-04"
+description: "Java compatibility boundaries for NeqSim. USE WHEN: writing or reviewing Java code or tests. Core src/ keeps Java 8 source compatibility; the independent MCP module uses Java 21. Covers forbidden core APIs, replacement patterns, API verification, and JavaDoc requirements."
+last_verified: "2026-10-02"
 ---
 
 # Java 8 Compatibility Rules for NeqSim
 
-All NeqSim Java code — including test classes in `src/test/java/` — **MUST** compile with Java 8. The CI build will FAIL if you use Java 9+ features.
+Core Java code under `src/` — including test classes in `src/test/java/` — **MUST** remain Java 8 source-compatible. The default core artifact targets Java 17; `pomJava8.xml` defines the separate Java 8 artifact. The independent `neqsim-mcp-server/` module requires Java 21 and uses its own POM and Spotless configuration. Do not apply the core API ban to that module.
+
+Run formatting checks separately for the core and MCP module when both are involved. A root Spotless pass does not validate the MCP sources. See the authoritative boundaries in [AGENTS.md](../../../AGENTS.md#critical-constraint-java-compatibility-boundaries). The personal distribution workflow is documented in [shared thermodynamics repository management](../../../docs/development/shared-thermo-repository.md).
 
 ## Forbidden Java 9+ Features
 

@@ -20,7 +20,7 @@
 | 重油多介质模型与版本化资源 | `2d9b14dc4c` | 主线已有，纳入回归 |
 | 高含水多相停滞恢复 | `a84fcf14c6` | 主线已有，纳入回归 |
 | 普通 CPA 与电解质 CPA 区分、氨组分 | `760d0cb193` | 已通过保留原始提交来源的 cherry-pick 整合为 `570443c4d9` |
-| 快照独有实验类 | 三个相边界实验类 | 先登记来源与用途，不作为稳定能力交付 |
+| 快照独有实验类 | 三个相边界实验类 | 已按原字节归档到 Git，保留摘要，尚未进入编译和公共接口 |
 | 历史 PVTsim 对标资料 | 2026 年 8 月研究记录 | 建立带摘要的来源索引；本轮不把历史数值当作重新计算结果 |
 
 ## 需要保留的模型限制
@@ -35,9 +35,15 @@
 
 已创建整合分支，并从本机 SAGD 仓库读取原始提交到 `archive/sagd-integration` 跟踪引用。原主线与 SAGD 提交分别保存在 `archive/pre-unification-main-20261001` 和 `archive/pre-unification-sagd-20261001` 本地分支。核对最初 SAGD 迁移涉及的 94 个源码、测试及 MCP 文件，主仓库均有对应文件；这项检查表示迁移文件存在，不等于逐行或数值完全相同。
 
+其中 87 个文件在忽略换行差异后内容一致。余下 7 个文件涉及后续闪蒸改进、氨组分别名、CPA 修复、MCP 工具与构建。原有 73 个 MCP public String 方法全部保留，新增 manageModel。细节见 [迁移清单](../../distribution/cupbhan/migration-inventory.json)。SAGD 工作副本的远端名已统一为 `origin` 指向个人 fork、`upstream` 指向官方；其源码提交和运行包未因此改变。
+
+三份实验源码和六份关键历史结果原件已保存到 [研究归档](../../distribution/cupbhan/research-archive/README.md)，逐文件核对 SHA256，避免这些成果只存在于无 Git 的本机备份中。归档不代表实验算法已获工程验证。
+
 2026 年 10 月 2 日首次运行核心 Spotless 和选定回归，75 项测试全部通过，无跳过。测试集合为 ComponentQueryTest、FieldFluidRunnerTest、WaterIF97RunnerTest、HeavyOilMultimediaFluidTest、TPmultiflashSolveStatusTest 和 HydrocarbonWater 系列测试。该结果不是全仓测试结论。
 
 统一构建入口为 `devtools/build_shared_thermo.py`。它要求干净提交，使用个人版本分别构建 core library 和 MCP runner，检查内嵌版本，执行核心回归、MCP 契约测试和实际 STDIO 调用，最后生成来源、验证报告与校验清单。初始候选版本为 `3.17.0-cupbhan.1-rc.1`。脚本只生成本地候选目录；CI 工作流只保存构建附件，不发布或替换产品运行时。
+
+发行流程的 7 项自动检查已通过，覆盖脏工作树、错误或旧的内嵌版本、缺失测试报告和失败或跳过的测试。首次全新候选构建中，核心通过，MCP 的独立 Spotless 检查发现 NeqSimTools 与 McpIdentityResolver 原有格式差异；已按该模块格式化并通过检查。相关 Java 兼容性技能也已纠正核心和 MCP 的版本边界，明确两个模块分别运行格式检查。
 
 核对接口时发现：Java 内核已经包含 HeavyOilMultimediaFluid，但 MCP 尚未提供产品客户端预留的 `runHeavyOilMultimediaFlash` 和 `runHeavyOilMultimediaBatch`。候选包必须披露这一缺口；不能把 Java 工厂测试通过当作这些专用接口可用。现有 `runFieldFluid` 与 `runFluidFlash` 的能力按其实际契约保留。
 

@@ -18,6 +18,7 @@ on:
 
 jobs:
   build_mcp_server:
+    if: github.repository == 'equinor/neqsim'
     name: Build MCP Server uber-jar
     runs-on: ubuntu-latest
 

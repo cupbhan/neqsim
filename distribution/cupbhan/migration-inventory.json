@@ -484,7 +484,8 @@
       "sha256": "53d24705b62a30014539a9ceddd1c8cfc1dc5ca22dd57736527886e58a607b13",
       "sizeBytes": 5676,
       "status": "research-only; not merged",
-      "reason": "No maintained integration tests or product contract identified in current canonical source; requires separate algorithm review."
+      "reason": "Preserved as an archival original outside compilation; separate algorithm, dependency and regression review required before exposing a public contract.",
+      "preservedPath": "distribution/cupbhan/research-archive/HydrocarbonWaterBoundaryModelProfile.java.txt"
     },
     {
       "name": "RetainedPhaseBifurcationCorrector",
@@ -492,7 +493,8 @@
       "sha256": "a79b127757d501d2277eb9ba8c803393c45450dd116a7793a864feb16688d525",
       "sizeBytes": 34753,
       "status": "research-only; not merged",
-      "reason": "No maintained integration tests or product contract identified in current canonical source; requires separate algorithm review."
+      "reason": "Preserved as an archival original outside compilation; separate algorithm, dependency and regression review required before exposing a public contract.",
+      "preservedPath": "distribution/cupbhan/research-archive/RetainedPhaseBifurcationCorrector.java.txt"
     },
     {
       "name": "SpecifiedMultiphaseFlashSolver",
@@ -500,7 +502,17 @@
       "sha256": "62643261a9cb0d9745972a65c8d4fa93940f5d9ff3bfbfa9f598a4fe492a8522",
       "sizeBytes": 25786,
       "status": "research-only; not merged",
-      "reason": "No maintained integration tests or product contract identified in current canonical source; requires separate algorithm review."
+      "reason": "Preserved as an archival original outside compilation; separate algorithm, dependency and regression review required before exposing a public contract.",
+      "preservedPath": "distribution/cupbhan/research-archive/SpecifiedMultiphaseFlashSolver.java.txt"
     }
-  ]
+  ],
+  "reviewNotes": {
+    "originalMcpPublicMethodCount": 73,
+    "currentMcpPublicMethodCount": 74,
+    "removedMcpPublicMethods": [],
+    "addedMcpPublicMethods": [
+      "manageModel"
+    ],
+    "changedFiles": "CPA patch, NH3 JSON alias, later upstream flash improvements and custom multiphase recovery; no wholesale replacement of flash solver files."
+  }
 }

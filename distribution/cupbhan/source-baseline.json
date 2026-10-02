@@ -24,12 +24,14 @@
       "two_and_three_phase_history": {
         "path": "task_solve/2026-08-02_重做高含水重油2_hc相包络求解器/RESULT.md",
         "sha256": "b60ed81541cfcfddab8dad15e141e617f212072607fc8ddbb1125fe6cc10efd6",
-        "sizeBytes": 33281
+        "sizeBytes": 33281,
+        "preservedPath": "distribution/cupbhan/research-archive/historical-two-and-three-phase-history.txt"
       },
       "same_definition_benchmark": {
         "path": "task_solve/2026-08-08_pvtsim同定义三相边界对标/results.json",
         "sha256": "770f45a662f493c2f983142da79eaabee165cc2b574ea85cee807c46fd8d09a3",
-        "sizeBytes": 190127
+        "sizeBytes": 190127,
+        "preservedPath": "distribution/cupbhan/research-archive/historical-same-definition-benchmark.json"
       },
       "same_definition_report": {
         "path": "task_solve/2026-08-08_pvtsim同定义三相边界对标/step3_report/Report.html",
@@ -39,7 +41,8 @@
       "high_pressure_recovery": {
         "path": "task_solve/2026-08-08_高含水重油_260_300_bara_多相求解与拓扑/results.json",
         "sha256": "84f298c89cdb424a89bed80fb881b9301346ee46c27fdd3e454f54e23e18ada6",
-        "sizeBytes": 9949
+        "sizeBytes": 9949,
+        "preservedPath": "distribution/cupbhan/research-archive/historical-high-pressure-recovery.json"
       },
       "high_pressure_summary": {
         "path": "task_solve/2026-08-08_高含水重油_260_300_bara_多相求解与拓扑/step3_report/Summary.md",
@@ -49,17 +52,20 @@
       "topology_closure": {
         "path": "task_solve/2026-08-08_高含水重油_200_300_bara_包络拓扑闭合/results.json",
         "sha256": "77e8ccc7fc0990f5026bfc78f3706c7b64421f256c37b76b8831c9e6af1f97e6",
-        "sizeBytes": 13422
+        "sizeBytes": 13422,
+        "preservedPath": "distribution/cupbhan/research-archive/historical-topology-closure.json"
       },
       "multimedia_freeze": {
         "path": "task_solve/2026-08-09_srk稠油多介质逐级pvtsim对标/l5_delivery_freeze.json",
         "sha256": "b0805a6747dad1a6b47c7d58764a1abd0ae191f6f85becaf87b2baae4c3ee835",
-        "sizeBytes": 1992
+        "sizeBytes": 1992,
+        "preservedPath": "distribution/cupbhan/research-archive/historical-multimedia-freeze.json"
       },
       "multimedia_envelope": {
         "path": "task_solve/2026-08-09_srk稠油多介质逐级pvtsim对标/l5_nh35_complete_envelope.json",
         "sha256": "93e4295f05331285b4872125f254068b6ad47309007d2105fef6c89cf14ab595",
-        "sizeBytes": 28194
+        "sizeBytes": 28194,
+        "preservedPath": "distribution/cupbhan/research-archive/historical-multimedia-envelope.json"
       },
       "multimedia_figure": {
         "path": "task_solve/2026-08-09_srk稠油多介质逐级pvtsim对标/figures/l5_nh35_complete_envelope.png",

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1.0",
+  "status": "RELEASED_WITH_KNOWN_LIMITATIONS",
+  "contractId": "HeavyOil-DEV-H2O65-CO27-N23-NH3-SRK-v1",
+  "softwareArtifacts": [
+    {
+      "path": "src/main/java/neqsim/thermo/system/HeavyOilMultimediaFluid.java",
+      "sha256": "427e345390864fad704a90a53f3f3e68f604044ffb7e6b293d84d252903477d2"
+    },
+    {
+      "path": "src/main/java/neqsim/thermo/system/FluidBuilder.java",
+      "sha256": "a615ab2efefece2dfaff6cc96ff0168ab1c4dc990dd668ba785b8400ed86a92a"
+    },
+    {
+      "path": "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-0p1-v1.json",
+      "sha256": "d370c5ee1d0f847dc12980fb1062a4bd2ff98e6f9a29dad88395f02022cbd41e"
+    },
+    {
+      "path": "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-1-v1.json",
+      "sha256": "7683c5b549f3bbfd2b42d5a995154eb3618be236d65f710dddcf74e4e3fad8ef"
+    },
+    {
+      "path": "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-5-v1.json",
+      "sha256": "7d4b2a297799262f1ff587d6fd9033d5617f45a54823f563fd4d4f06de865509"
+    }
+  ],
+  "publicApi": "FluidBuilder.heavyOilMultimedia(double temperatureK, double pressureBara, double nh3MolPercent)",
+  "supportedNh3MolPercent": [0.1, 1.0, 5.0],
+  "verification": {
+    "stagedRegressionAccepted": "11/11",
+    "javaTestsPassed": "5/5",
+    "spotlessCheckPassed": true,
+    "deliveryEnvelopePassed": true,
+    "strictResearchEnvelopePassed": false
+  },
+  "deliveryEnvelope": {
+    "temperatureC": [20.0, 250.0],
+    "pressureBara": [1.0, 100.0],
+    "topologyAgreementPct": 98.36601307189542,
+    "meanBoundaryDeviationBara": 1.14375,
+    "maximumBoundaryDeviationBara": 4.25
+  },
+  "limitations": [
+    "Development heavy-oil composition derived from a PVTsim demonstration heavy-end distribution; not field-qualified.",
+    "NH3 is modeled as nonreactive SRK; no pH, ion speciation, or reaction heat is claimed.",
+    "The 70-110 C gas-disappearance boundary remains a post-delivery optimization item."
+  ]
+}

@@ -1,0 +1,310 @@
+{
+  "key_results": {
+    "cold_start_grid_accepted": 882,
+    "cold_start_grid_total": 882,
+    "main_branch_endpoint_pressure_bara": 229.9321709182054,
+    "main_branch_endpoint_temperature_C": 313.4988282267665,
+    "secondary_branch_verified_min_pressure_bara": 284,
+    "secondary_branch_verified_max_pressure_bara": 300,
+    "secondary_continuation_min_pressure_bara": 274.2476334998515,
+    "secondary_continuation_max_pressure_bara": 325.49823999247116,
+    "product_engineering_eligible": false,
+    "product_trust_status": "VERIFIED_BRANCHES_INCOMPLETE_NETWORK"
+  },
+  "validation": {
+    "acceptance_criteria_met": false,
+    "state_solver_mainline_passed": true,
+    "branch_level_quality_passed": true,
+    "complete_network_topology_closed": false,
+    "reason_not_fully_accepted": "The degree-2 three-phase junction has only one attached compatible branch; 260–274 bara also remains unresolved.",
+    "maximum_mass_balance_residual": 8.743006318923108e-13,
+    "maximum_fugacity_residual": 5.536092118063607e-8,
+    "repository_default_suite_status": "TIMEOUT_WITH_FAILURES_OBSERVED",
+    "repository_default_tests_completed": 2627,
+    "repository_default_failures_observed": 3,
+    "repository_default_errors_observed": 0,
+    "repository_default_skipped": 34,
+    "repository_default_suite_note": "The 20-minute run did not finish. Two reproducible FieldFluidRunner contract mismatches and one independent CompressorTest numerical mismatch were observed; none of these source or test files was edited by this six-item topology task."
+  },
+  "approach": "Kept the exact SRK/Peneloux/classic model frozen; reran 882 independent cold-start TP flashes; built strict zero-TPD fixed-pressure anchor ledgers; applied global-stability gates and bidirectional pseudo-arclength continuation; solved the GO→GOW junction with coupled simultaneous-incidence equations; and replayed the product audit after removing overlapping restart assembly.",
+  "conclusions": "The TPflash mainline remains fully operational on the 882-state sampled grid. The GO→GOW main branch is verified through its physical three-phase point at 229.9322 bara, and a distinct OW→GOW branch is verified from 284 to 300 bara. The complete 200–300 bara network is not closed because the compatible branch at the degree-2 three-phase junction is absent and the 260–274 bara candidate root cluster remains unresolved. The product correctly reports VERIFIED_BRANCHES_INCOMPLETE_NETWORK rather than promoting a partial envelope.",
+  "agent_workflow_plan": {
+    "agents_used": [
+      {
+        "name": "primary Codex agent",
+        "repo": "neqsim",
+        "role": "solver audit, continuation, product repair, regression and delivery"
+      }
+    ],
+    "workflow_type": "single-mainline-evidence-chain",
+    "workflow": "freeze state solver -> strict anchors -> physical endpoint -> independent crosscheck -> second branch -> product contract -> regression",
+    "rationale": "The user required strict mainline preservation and no diversion into local symptoms; all evidence was kept on one reproducible model and task folder."
+  },
+  "figure_captions": {
+    "go_gow_main_branch_crosscheck.png": "GO→GOW fixed-pressure roots compared with two independent continuation runs and the coupled three-phase endpoint.",
+    "ow_gow_secondary_branch.png": "OW→GOW fixed-pressure verified segment, continuation-supported extension, and rejected/unlinked low-pressure candidates.",
+    "high_pressure_envelope_comparison.png": "Combined 200–300 bara view contrasting old TPflash surface phase switches with strict physical boundary evidence and the unresolved topology interval."
+  },
+  "figure_discussion": [
+    {
+      "figure": "go_gow_main_branch_crosscheck.png",
+      "title": "Main branch and endpoint",
+      "observation": "Nine fixed-pressure roots agree with continuation within 0.0825 K; the coupled endpoint is 229.9322 bara and 313.4988 °C.",
+      "mechanism": "As beta tends to one, oil and aqueous phases are simultaneously incipient from the gas mother phase; a minimum arc step occurs just before the physical junction.",
+      "implication": "The numerical continuation stop is not the endpoint, but the corrected main branch is physically closed at the coupled three-phase point.",
+      "recommendation": "Use the coupled endpoint in the product network and retain the degree-2 attachment requirement.",
+      "linked_results": [
+        "main_branch_endpoint_pressure_bara"
+      ],
+      "insight_question_ref": "Q3"
+    },
+    {
+      "figure": "ow_gow_secondary_branch.png",
+      "title": "Second branch with segmented trust",
+      "observation": "Eight fixed-pressure roots verify 284–300 bara and agree with continuation within 0.0846 K.",
+      "mechanism": "This branch represents gas appearing from an oil-water mother state; below about 274 bara the retained oil stability mode rejects the continued root.",
+      "implication": "A second physical boundary exists, but isolated 260/262 roots cannot be joined across the rejected interval.",
+      "recommendation": "Use 284–300 bara as verified boundary evidence; keep 260–274 bara limited/unresolved.",
+      "linked_results": [
+        "secondary_branch_verified_min_pressure_bara"
+      ],
+      "insight_question_ref": "Q5"
+    },
+    {
+      "figure": "high_pressure_envelope_comparison.png",
+      "title": "Old phase switches versus strict envelope",
+      "observation": "The old TPflash switch inventory contains multiple high-pressure transitions at one pressure, while the strict audit retains two verified branch segments and one continuation-only extension.",
+      "mechanism": "Surface phase-count changes can be displaced or contaminated by duplicate phase families; zero-TPD correction and global stability distinguish physical boundaries from map artifacts.",
+      "implication": "A converged TPflash grid proves state-solving robustness but does not by itself prove a closed phase-envelope topology.",
+      "recommendation": "Expose product trustStatus and branch-level quality; do not promote the complete 200–300 bara envelope until the missing compatible branch is attached.",
+      "linked_results": [
+        "product_trust_status"
+      ],
+      "insight_question_ref": "Q1"
+    }
+  ],
+  "equations": [
+    {
+      "label": "Boundary zero-TPD condition",
+      "latex": "\\operatorname{TPD}(T,P,\\mathbf{w}) = 0"
+    },
+    {
+      "label": "Continuation comparison",
+      "latex": "\\Delta T = |T_{fixed\\ pressure}-T_{continuation}|"
+    }
+  ],
+  "tables": [
+    {
+      "title": "High-pressure branch classification",
+      "headers": [
+        "Family",
+        "Pressure range (bara)",
+        "Evidence",
+        "Classification"
+      ],
+      "rows": [
+        [
+          "GO→GOW:AQUEOUS",
+          "200–229.9322",
+          "9 fixed roots + two continuations + coupled endpoint",
+          "VERIFIED"
+        ],
+        [
+          "OW→GOW:GAS",
+          "284–300",
+          "8 fixed roots + continuation",
+          "VERIFIED"
+        ],
+        [
+          "OW→GOW:GAS",
+          "274.2476–284",
+          "Continuation only",
+          "SUPPORTED/LIMITED"
+        ],
+        [
+          "Candidate topology",
+          "260–274",
+          "Metastable/coalesced/unlinked roots",
+          "UNRESOLVED"
+        ]
+      ]
+    },
+    {
+      "title": "Regression gates",
+      "headers": [
+        "Gate",
+        "Result",
+        "Status"
+      ],
+      "rows": [
+        [
+          "Cold-start TPflash grid",
+          "882/882",
+          "PASS"
+        ],
+        [
+          "TPmultiflash solve status",
+          "7/7",
+          "PASS"
+        ],
+        [
+          "Targeted product states",
+          "2/2",
+          "PASS"
+        ],
+        [
+          "Boundary/endpoint fast tests",
+          "9/9",
+          "PASS"
+        ],
+        [
+          "Product branch quality",
+          "accepted",
+          "PASS"
+        ],
+        [
+          "Repository default suite",
+          "2627 completed before 20 min timeout; 3 reproducible failures observed",
+          "UNDETERMINED"
+        ],
+        [
+          "Slow branch assembler suite",
+          "Exceeded 5 min interactive limit; no final report",
+          "UNDETERMINED"
+        ],
+        [
+          "Complete network",
+          "ENDPOINT_DEGREE_MISMATCH:GO->GOW:AQUEOUS#0-end-three-phase:1/2",
+          "LIMITED"
+        ]
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "R1",
+      "text": "NeqSim workspace source: HydrocarbonWaterBoundaryAuditRunner, boundary correctors, global-stability gate and ThreePhasePointSolver."
+    },
+    {
+      "id": "R2",
+      "text": "Task evidence: independent cold-start grid, strict fixed-pressure anchor ledgers, bidirectional continuation traces and product replay JSON."
+    }
+  ],
+  "standards_applied": [
+    {
+      "code": "MICHELSEN_TPD",
+      "scope": "Zero-TPD incipient-phase correction and global stability gating",
+      "status": "PASS",
+      "name": "Michelsen tangent-plane-distance stability criterion",
+      "application": "Zero-TPD incipient-phase boundary correction and independent stability gating."
+    },
+    {
+      "code": "PSEUDO_ARCLENGTH_CONTINUATION",
+      "scope": "Two-to-three-phase boundary branch tracing",
+      "status": "PASS",
+      "name": "Pseudo-arclength continuation",
+      "application": "Branch tracing through pressure-parameter limitations without treating a minimum step as a physical endpoint."
+    },
+    {
+      "code": "ISO_31000_5X5",
+      "scope": "Qualitative technical, HSE and schedule risk framing",
+      "status": "INFO",
+      "name": "ISO 31000 5x5 risk framing",
+      "application": "Qualitative technical/HSE/schedule risk register only; no pressure-equipment design code is in scope."
+    }
+  ],
+  "benchmark_validation": {
+    "what": "Fixed-pressure boundary roots and coupled endpoint versus continuation and product replay",
+    "reference": "Independent fixed-pressure ledgers and coupled ThreePhasePointSolver replay",
+    "status": "PASS",
+    "main_branch_fixed_pressure": {
+      "description": "Nine independent fixed-pressure roots versus original pseudo-arclength continuation",
+      "status": "PASS",
+      "data_points": 9,
+      "maximum_absolute_delta_K": 0.08249662282207737,
+      "acceptance_limit_K": 1
+    },
+    "restarted_main_branch": {
+      "description": "Nine fixed-pressure roots versus pressure-restarted continuation",
+      "status": "PASS",
+      "data_points": 9,
+      "maximum_absolute_delta_K": 0.008471711108768432,
+      "acceptance_limit_K": 1
+    },
+    "secondary_branch_fixed_pressure": {
+      "description": "Seven independently comparable OW→GOW fixed-pressure roots versus continuation",
+      "status": "PASS",
+      "data_points": 7,
+      "maximum_absolute_delta_K": 0.0846232714112034,
+      "acceptance_limit_K": 1
+    },
+    "three_phase_endpoint_replay": {
+      "description": "Product automatic endpoint versus independent coupled endpoint solve",
+      "status": "PASS",
+      "pressure_delta_bara": 9.553728261835204e-7,
+      "temperature_delta_K": 2.0868583305855282e-7,
+      "pressure_limit_bara": 0.001,
+      "temperature_limit_K": 0.001
+    }
+  },
+  "risk_evaluation": {
+    "overall_risk_level": "Medium",
+    "risk_matrix_used": "5x5 (ISO 31000)",
+    "risks": [
+      {
+        "id": "R1",
+        "description": "Missing compatible branch at degree-2 three-phase junction",
+        "category": "Technical",
+        "likelihood": "Likely",
+        "consequence": "Major",
+        "risk_level": "High",
+        "mitigation": "Targeted GW→GOW seed discovery and continuation from the coupled endpoint."
+      },
+      {
+        "id": "R2",
+        "description": "260–274 bara isolated/metastable roots mistaken for a continuous branch",
+        "category": "Technical",
+        "likelihood": "Possible",
+        "consequence": "Major",
+        "risk_level": "High",
+        "mitigation": "Keep LIMITED status and require global-stability-connected anchors."
+      },
+      {
+        "id": "R3",
+        "description": "TPflash surface switches used as envelope data",
+        "category": "Technical",
+        "likelihood": "Possible",
+        "consequence": "Moderate",
+        "risk_level": "Medium",
+        "mitigation": "Use strict zero-TPD and topology audit outputs only."
+      },
+      {
+        "id": "R4",
+        "description": "Slow full network regressions exceed interactive timeout",
+        "category": "Schedule",
+        "likelihood": "Likely",
+        "consequence": "Minor",
+        "risk_level": "Medium",
+        "mitigation": "Run slow-tag suite in CI with a longer timeout and preserve direct replay artifacts."
+      },
+      {
+        "id": "R5",
+        "description": "Different EOS or mixing rule reused with this trusted range",
+        "category": "Regulatory",
+        "likelihood": "Unlikely",
+        "consequence": "Major",
+        "risk_level": "Medium",
+        "mitigation": "Bind trusted_range.json to model identity and exact composition."
+      },
+      {
+        "id": "R6",
+        "description": "Unverified envelope used for operating decisions",
+        "category": "HSE",
+        "likelihood": "Unlikely",
+        "consequence": "Severe",
+        "risk_level": "High",
+        "mitigation": "Gate full-envelope use on ENGINEERING_ELIGIBLE only."
+      }
+    ]
+  }
+}

@@ -10,17 +10,16 @@ import neqsim.mcp.runners.McpRequestContext;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 /**
- * Resolves the caller identity for one MCP tool invocation and binds it to
- * {@link McpRequestContext}.
+ * Resolves the caller identity for one MCP tool invocation and binds it to {@link McpRequestContext}.
  *
  * <p>
  * Identity is never accepted as a tool argument. It is resolved from, in order:
  * </p>
  * <ol>
- * <li>the Quarkus {@link SecurityIdentity} established by the OIDC bearer-token filter on the HTTP
- * transport — the enterprise path used by Microsoft Copilot Studio and other remote clients;</li>
- * <li>the {@code NEQSIM_MCP_API_KEY} environment variable — the service-to-service and CI path for
- * the stdio transport, where no HTTP request context exists;</li>
+ * <li>the Quarkus {@link SecurityIdentity} established by the OIDC bearer-token filter on the HTTP transport — the
+ * enterprise path used by Microsoft Copilot Studio and other remote clients;</li>
+ * <li>the {@code NEQSIM_MCP_API_KEY} environment variable — the service-to-service and CI path for the stdio transport,
+ * where no HTTP request context exists;</li>
  * <li>anonymous, which is correct for local desktop use with security enforcement disabled.</li>
  * </ol>
  *
@@ -44,8 +43,8 @@ public class McpIdentityResolver {
    * Binds the resolved principal to the current thread for the duration of one tool invocation.
    *
    * <p>
-   * Never throws: identity resolution must not be able to fail a calculation. Any failure degrades
-   * to the anonymous principal, which the security layer then rejects when enforcement is on.
+   * Never throws: identity resolution must not be able to fail a calculation. Any failure degrades to the anonymous
+   * principal, which the security layer then rejects when enforcement is on.
    * </p>
    */
   public void bindCurrentPrincipal() {

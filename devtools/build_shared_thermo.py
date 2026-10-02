@@ -80,6 +80,8 @@ def build(version):
     java = str(Path(java_home) / "bin" / ("java.exe" if os.name == "nt" else "java")) if java_home else "java"
     common = [wrapper, "-B", "-ntp", f"-Drevision={version}", f"-Dmcp.revision={version}",
               "-Dmaven.javadoc.skip=true", "-Djacoco.skip=true"]
+    maven_version = subprocess.check_output([wrapper, "-version"], cwd=ROOT, stderr=subprocess.STDOUT,
+                                            text=True, encoding="utf-8", errors="replace").strip()
     commands = []
 
     def run(label, command):
@@ -112,9 +114,11 @@ def build(version):
               "pvtsimRerun": False, "productRuntimeSwitched": False}
     (logs / "validation.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     destination.mkdir(parents=True)
-    for source in (core, runner, ROOT / "LICENSE", ROOT / "distribution/cupbhan/source-baseline.json",
+    for source in (core, runner, ROOT / "target" / f"neqsim-{version}-sources.jar",
+                   ROOT / "LICENSE", ROOT / "distribution/cupbhan/source-baseline.json",
                    logs / "validation.json"):
         shutil.copy2(source, destination / source.name)
+    shutil.copy2(ROOT / ".flattened-pom.xml", destination / f"neqsim-{version}.pom")
     artifacts = [{"file": p.name, "sizeBytes": p.stat().st_size, "sha256": digest(p)}
                  for p in sorted(destination.iterdir()) if p.is_file()]
     manifest = {"schemaVersion": 1, "version": version, "status": "tested-candidate",
@@ -123,6 +127,7 @@ def build(version):
                 "upstreamCommit": baseline["upstreamBaseline"],
                 "builtAt": datetime.now(timezone.utc).isoformat(), "artifacts": artifacts,
                 "java": subprocess.check_output([java, "-version"], stderr=subprocess.STDOUT, text=True).strip(),
+                "maven": maven_version,
                 "validation": "validation.json", "publicMavenPublished": False,
                 "knownLimitations": ["See source-baseline.json for model qualification limits",
                                      "Dedicated heavy-oil multimedia MCP endpoints are not yet exposed",

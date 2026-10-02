@@ -1,0 +1,5209 @@
+{
+  "key_results": {
+    "pvtsim_refined_success_pct": 100.0,
+    "main_boundary_point_count": 15,
+    "main_boundary_mae_C": 0.8783333333333397,
+    "main_boundary_mean_bias_C": -0.8783333333333397,
+    "secondary_boundary_point_count": 7,
+    "secondary_boundary_mae_C": 8.819492460580696,
+    "secondary_boundary_mean_bias_C": -8.819492460580696,
+    "neqsim_endpoint_pressure_bara": 229.9321709182054,
+    "pvtsim_direct_topology_termination_low_bara": 228.5,
+    "pvtsim_direct_topology_termination_high_bara": 228.6,
+    "diagnostic_water_kij_multiplier": 0.932,
+    "diagnostic_secondary_boundary_mae_C": 0.2922040197647919,
+    "diagnostic_secondary_boundary_max_abs_C": 0.5275412446795258,
+    "full_main_recalculation_max_delta_C": 2.2737367544323206e-13,
+    "full_secondary_recalculation_max_delta_C": 3.1693324444859172e-06,
+    "near_critical_endpoint_pressure_bara": 286.0,
+    "near_critical_endpoint_temperature_C": 249.375,
+    "alternate_stable_root_count": 8,
+    "rejected_near_critical_root_count": 12,
+    "supplemental_pvtsim_flash_point_count": 26102,
+    "supplemental_pvtsim_solver_failure_count": 0,
+    "supplemental_pvtsim_phase_identified_point_count": 21533,
+    "supplemental_pvtsim_unresolved_phase_identity_point_count": 4569,
+    "supplemental_secondary_boundary_mae_C": 8.831992460580702,
+    "supplemental_secondary_boundary_max_abs_C": 9.541543479587233,
+    "supplemental_pvtsim_direct_topology_termination_low_bara": 228.55,
+    "supplemental_pvtsim_direct_topology_termination_high_bara": 228.56,
+    "supplemental_endpoint_pressure_difference_low_bara": 1.3721709182053985,
+    "supplemental_endpoint_pressure_difference_high_bara": 1.3821709182053894,
+    "compatibility_main_water_kij_multiplier": 0.98325,
+    "compatibility_secondary_water_kij_multiplier": 0.932,
+    "compatibility_main_boundary_mae_C": 0.7345415153883418,
+    "compatibility_main_boundary_max_abs_C": 1.6694190187026834,
+    "compatibility_secondary_boundary_mae_C": 0.2985027590261374,
+    "compatibility_secondary_boundary_max_abs_C": 0.5900412322151283,
+    "compatibility_endpoint_pressure_bara": 228.5508849218492,
+    "compatibility_endpoint_temperature_C": 312.8722699770806,
+    "compatibility_mode_passed": true,
+    "compatibility_production_promotion_allowed": false
+  },
+  "validation": {
+    "same_definition_input_verified": true,
+    "licensed_refined_flash_410_of_410": true,
+    "main_boundary_acceptance_met": true,
+    "secondary_boundary_acceptance_met": false,
+    "endpoint_direct_topology_confirmed": false,
+    "acceptance_criteria_met": false,
+    "overall_verdict": "PARTIAL_ALIGNMENT_NOT_INTERCHANGEABLE",
+    "frozen_production_baseline_preserved": true,
+    "parameter_audit_completed": true,
+    "pvtsim_direct_topology_termination_bracket_confirmed": true,
+    "constant_kij_calibration_accepted": false,
+    "constant_kij_calibration_rejected_due_mainline_regression": true,
+    "mainline_regression_gate_passed": true,
+    "full_15_main_roots_recalculated": true,
+    "full_7_secondary_roots_recalculated": true,
+    "workflow_only_candidate_validation_passed": true,
+    "java_root_network_regression_test_passed": true,
+    "spotless_check_passed": true,
+    "physical_model_change_accepted": false,
+    "supplemental_pvtsim_campaign_completed": true,
+    "supplemental_pvtsim_26102_of_26102_solver_success": true,
+    "supplemental_exact_input_fingerprint_verified": true,
+    "supplemental_exact_parameter_fingerprint_verified": true,
+    "supplemental_polar_components_model_none_verified": true,
+    "supplemental_phase_identity_complete": false,
+    "supplemental_unresolved_phase_identity_retained_without_guessing": true,
+    "supplemental_direct_topology_termination_bracket_confirmed": true,
+    "supplemental_samples_treated_as_experimental_truth": false,
+    "software_compatibility_candidate_accepted": true,
+    "software_compatibility_verdict": "PASS_OPT_IN_SOFTWARE_COMPATIBILITY",
+    "compatibility_frozen_payload_unchanged": true,
+    "compatibility_main_15_of_15_roots": true,
+    "compatibility_main_acceptance_met": true,
+    "compatibility_secondary_7_of_7_roots": true,
+    "compatibility_secondary_acceptance_met": true,
+    "compatibility_endpoint_acceptance_met": true,
+    "compatibility_stability_and_residual_gates_passed": true,
+    "software_compatibility_acceptance_criteria_met": true,
+    "branch_aware_profile_java_unit_test_passed": true,
+    "branch_aware_profile_slow_integration_test_passed": true,
+    "branch_aware_profile_spotless_check_passed": true,
+    "branch_aware_profile_default_mainline_regression_passed": true,
+    "compatibility_candidate_is_experimental_calibration": false,
+    "compatibility_candidate_production_promotion_allowed": false
+  },
+  "approach": "Exact 23-component SRK+Peneloux classic-mixing parity; component-specific water Kij copied from the NeqSim runtime to PVTsim; licensed topology-bracketed PT flashes refined for both boundary families. The frozen baseline was retained, then an explicit clone-only branch-aware compatibility profile was screened jointly against the GO->GOW branch, OW->GOW branch, and their coupled endpoint.",
+  "conclusions": "The frozen/default NeqSim model remains only partially aligned with PVTsim and is not declared interchangeable: its secondary boundary differs by about 8.8 degC. A new explicit opt-in software-compatibility profile passes the joint gates without changing the frozen payload. With water-Kij multipliers 0.98325 for GO->GOW and 0.932 for OW->GOW, the main boundary has MAE 0.735 degC (15/15 roots within 2 degC), the secondary boundary has MAE 0.299 degC (7/7 roots), and the endpoint is 228.550885 bara inside the PVTsim 228.55-228.56 bara direct-topology bracket. This is a PVTsim software compatibility mode, not an experimental fluid calibration; production/default promotion remains disallowed until exact-fluid laboratory data support it.",
+  "agent_workflow_plan": {
+    "agents_used": [],
+    "workflow_type": "single-agent deterministic tool composition",
+    "workflow": "NeqSim audit -> PVTsim exact source -> licensed PT scans -> topology reduction -> report",
+    "rationale": "Skill and agent searches returned no applicable NeqSim specialist; one thermodynamic validation chain required no domain hand-off."
+  },
+  "figure_captions": {
+    "same_definition_envelope_overlay.png": "Same-definition NeqSim and PVTsim main GOW-GO and secondary GOW-OW phase-boundary overlay.",
+    "boundary_temperature_deviation.png": "PVTsim minus NeqSim boundary-temperature deviation with flash-bracket localization uncertainty.",
+    "endpoint_topology_229_5_bara.png": "PVTsim phase-region sequence at 229.5 bara around the NeqSim endpoint root.",
+    "benchmark_parity.png": "Licensed PVTsim benchmark parity and deviation for 22 direct same-topology boundary points.",
+    "uncertainty_deviation_distributions.png": "Monte Carlo propagation of the licensed flash-bracket widths into main and secondary MAE.",
+    "uncertainty_tornado.png": "Ranking of model-form and numerical-localization contributions to boundary uncertainty.",
+    "secondary_boundary_calibration_tradeoff.png": "Controlled water-Kij diagnostic showing improved secondary-boundary agreement at the cost of losing the verified high-pressure mainline topology.",
+    "endpoint_pressure_refinement.png": "Licensed PVTsim pressure refinement showing direct GOW-to-GO topology at 228.5 bara and the onset of an intervening error wedge from 228.6 bara.",
+    "secondary_root_thermodynamic_diagnostics.png": "Strict secondary-root residuals, incipient-gas composition groups, phase distinctness, and alternate/rejected near-critical roots.",
+    "workflow_candidate_full_validation.png": "Fresh 15-point main and seven-point secondary boundary validation with explicit secondary root-network sensitivity.",
+    "supplemental_envelope_comparison.png": "Licensed supplemental same-definition envelope comparison: the main GOW-GO boundary remains closely aligned while the high-pressure secondary GOW-OW branch is systematically separated.",
+    "supplemental_secondary_deviation.png": "PVTsim-minus-NeqSim temperature deviations for the seven refined secondary GOW-OW transitions, including localization whiskers.",
+    "supplemental_endpoint_topology_map.png": "PVTsim endpoint-region topology map showing GOW, GW, GO and numeric outputs with unresolved phase identity, together with the frozen NeqSim endpoint.",
+    "candidate_envelope_comparison.png": "PVTsim, frozen NeqSim, and the opt-in branch-aware compatibility model for both three-phase boundary families and the coupled endpoint.",
+    "candidate_deviation_improvement.png": "Temperature deviation from PVTsim before and after the opt-in branch-aware compatibility profile, shown separately for the main and secondary boundaries."
+  },
+  "figure_discussion": [
+    {
+      "figure": "same_definition_envelope_overlay.png",
+      "title": "Same-definition boundary overlay",
+      "observation": "Main curves nearly overlap over 10-228 bara, whereas secondary curves are visibly separated by about 8-9.5 C.",
+      "mechanism": "The secondary disappearing-gas boundary is more sensitive to component partitioning and phase-stability implementation.",
+      "implication": "Agreement on the main branch cannot be generalized to the full aqueous boundary network.",
+      "recommendation": "Use branch-specific validation and do not substitute one package for the other on the secondary branch.",
+      "linked_results": [
+        "main_boundary_mae_C",
+        "secondary_boundary_mae_C"
+      ],
+      "insight_question_ref": "Q1-Q3"
+    },
+    {
+      "figure": "boundary_temperature_deviation.png",
+      "title": "Boundary-temperature deviation",
+      "observation": "Main bias grows monotonically from -0.025 to -2.025 C; secondary bias is -8.10 to -9.48 C.",
+      "mechanism": "Systematic pressure dependence is much larger than the 0.025/0.125 C localization half-widths.",
+      "implication": "Additional temperature-grid refinement cannot remove the secondary discrepancy.",
+      "recommendation": "Compare pseudo-component parameters and stability thresholds before any Kij calibration.",
+      "linked_results": [
+        "main_boundary_mean_bias_C",
+        "secondary_boundary_mean_bias_C"
+      ],
+      "insight_question_ref": "Q2-Q3"
+    },
+    {
+      "figure": "endpoint_topology_229_5_bara.png",
+      "title": "Endpoint topology audit",
+      "observation": "PVTsim gives GOW, then GW, then no phase-property rows around 313.415 C, then GO.",
+      "mechanism": "Vanishing-phase stability and critical-endpoint handling dominate near boundary termination.",
+      "implication": "The NeqSim endpoint is not independently closed by PVTsim.",
+      "recommendation": "Keep the endpoint unresolved until a dedicated PVTsim endpoint calculation succeeds.",
+      "linked_results": [
+        "endpoint_direct_topology_confirmed"
+      ],
+      "insight_question_ref": "Q4"
+    },
+    {
+      "figure": "benchmark_parity.png",
+      "title": "Licensed benchmark parity",
+      "observation": "All 15 main points remain near parity; all seven secondary points fall systematically below it.",
+      "mechanism": "The branch-specific offset indicates model-form rather than random flash-grid error.",
+      "implication": "Only the main boundary has engineering-level cross-package validation.",
+      "recommendation": "Apply separate confidence labels to each branch.",
+      "linked_results": [
+        "benchmark_validation"
+      ],
+      "insight_question_ref": "Q1-Q5"
+    },
+    {
+      "figure": "uncertainty_deviation_distributions.png",
+      "title": "Boundary metrology uncertainty",
+      "observation": "Monte Carlo MAE distributions are narrow around 0.878 C and 8.819 C.",
+      "mechanism": "Licensed bracket widths are far smaller than the software-to-software difference.",
+      "implication": "Numerical localization does not explain the secondary mismatch.",
+      "recommendation": "Stop refining the temperature grid and focus on model-form diagnostics.",
+      "linked_results": [
+        "uncertainty"
+      ],
+      "insight_question_ref": "Q6"
+    },
+    {
+      "figure": "uncertainty_tornado.png",
+      "title": "Uncertainty driver ranking",
+      "observation": "Secondary model gap dominates numerical half-step effects by two orders of magnitude.",
+      "mechanism": "Both packages are converged; their stability and property implementations differ.",
+      "implication": "Further grid densification has low decision value.",
+      "recommendation": "Prioritize parameter/stability audits and experimental calibration.",
+      "linked_results": [
+        "risk_evaluation"
+      ],
+      "insight_question_ref": "Q6"
+    },
+    {
+      "figure": "secondary_boundary_calibration_tradeoff.png",
+      "title": "Secondary fit versus mainline preservation",
+      "observation": "Multiplying all water Kij values by 0.932 reduces the seven-point secondary MAE from 8.819 C to 0.292 C, but the ordinary main branch is absent by 226 bara.",
+      "mechanism": "Water-hydrocarbon binary interactions influence both disappearing-gas and disappearing-water stability conditions, so a constant correction moves more than the target branch.",
+      "implication": "Cross-package equality on the secondary branch cannot be treated as a valid calibration when it changes the already verified mainline topology.",
+      "recommendation": "Keep the frozen baseline; use laboratory three-phase data and a targeted stability-model investigation before considering physical calibration.",
+      "linked_results": [
+        "secondary_boundary_mae_C",
+        "diagnostic_secondary_boundary_mae_C",
+        "constant_kij_calibration_accepted"
+      ],
+      "insight_question_ref": "Q3-Q5"
+    },
+    {
+      "figure": "endpoint_pressure_refinement.png",
+      "title": "Endpoint pressure refinement",
+      "observation": "PVTsim retains a direct GOW-to-GO transition at 228.5 bara, while 228.6 bara already contains an unresolved flash interval; higher pressures develop GW and a wider error wedge.",
+      "mechanism": "Vanishing-phase stability and near-critical root handling change the observed phase path at the branch termination.",
+      "implication": "Direct-topology termination is bracketed to 228.5-228.6 bara, but this ordinary PT scan does not establish a PVTsim critical endpoint.",
+      "recommendation": "Use 228 bara as the cross-package operational limit and keep the endpoint package-dependent until a dedicated critical calculation or laboratory data closes it.",
+      "linked_results": [
+        "pvtsim_direct_topology_termination_low_bara",
+        "pvtsim_direct_topology_termination_high_bara",
+        "neqsim_endpoint_pressure_bara"
+      ],
+      "insight_question_ref": "Q4"
+    },
+    {
+      "figure": "secondary_root_thermodynamic_diagnostics.png",
+      "title": "Secondary-root thermodynamic diagnostics",
+      "observation": "All seven formal roots pass the 1e-7 residual gate; at 284-286 bara a lower root cluster has gas-oil L1 distances from 9.5e-5 to 3.2e-3 and includes a 286 bara / 249.375 C critical endpoint.",
+      "mechanism": "The fixed-pressure zero-TPD equations contain both a distinct disappearing-gas branch and a separate near-coalescent oil-gas network.",
+      "implication": "A converged root can belong to the wrong physical network; package-to-package temperature proximity is not a valid branch selector.",
+      "recommendation": "Preserve root identity, global-stability evidence, phase distance and pressure continuity in every boundary result.",
+      "linked_results": [
+        "near_critical_endpoint_pressure_bara",
+        "near_critical_endpoint_temperature_C",
+        "alternate_stable_root_count"
+      ],
+      "insight_question_ref": "Q3-Q5"
+    },
+    {
+      "figure": "workflow_candidate_full_validation.png",
+      "title": "Full workflow-candidate validation",
+      "observation": "Fresh recalculation reproduces 15/15 main roots within 2.3e-13 C, 7/7 secondary roots within 3.2e-6 C, and the endpoint within 4e-11 bara.",
+      "mechanism": "The accepted candidate changes only root-network reporting; the frozen SRK/classic physical model is byte-for-byte unchanged.",
+      "implication": "The mainline remains fully operational while the 8.819 C secondary package gap persists as model-form uncertainty.",
+      "recommendation": "Deploy the reporting/test improvement but do not promote a Kij or pure-component calibration without exact-fluid laboratory data.",
+      "linked_results": [
+        "full_main_recalculation_max_delta_C",
+        "full_secondary_recalculation_max_delta_C",
+        "secondary_boundary_mae_C"
+      ],
+      "insight_question_ref": "Q1-Q6"
+    },
+    {
+      "figure": "supplemental_envelope_comparison.png",
+      "title": "Supplemental same-definition envelope comparison",
+      "observation": "The 15-point main boundary stays closely overlaid, whereas all seven refined secondary points place PVTsim 8.133-9.542 C below NeqSim.",
+      "mechanism": "The separation is confined to the water-rich disappearing-gas branch and is therefore consistent with package-dependent aqueous-phase equilibrium and branch-tracking behavior, not grid localization.",
+      "implication": "Main-boundary use remains supported, but high-pressure secondary boundary temperatures cannot be transferred between the packages.",
+      "recommendation": "Keep the frozen mainline and label the secondary branch as package-dependent until same-fluid experimental data are obtained.",
+      "linked_results": [
+        "main_boundary_mae_C",
+        "supplemental_secondary_boundary_mae_C"
+      ],
+      "insight_question_ref": "Q4"
+    },
+    {
+      "figure": "supplemental_secondary_deviation.png",
+      "title": "Refined secondary-boundary deviation",
+      "observation": "The deviation is monotonic from -8.133 C at 284 bara to -9.542 C at 300 bara; no point enters the +/-2 C comparison band.",
+      "mechanism": "The smooth pressure trend and 0.025-0.125 C transition brackets show that the difference is systematic model form or branch selection, rather than flash-grid resolution.",
+      "implication": "Reducing grid spacing cannot close the secondary-boundary gap.",
+      "recommendation": "Use the refined values as regression benchmarks only; do not calibrate Kij or pure-component parameters without experimental evidence.",
+      "linked_results": [
+        "supplemental_secondary_boundary_mae_C",
+        "supplemental_secondary_boundary_max_abs_C"
+      ],
+      "insight_question_ref": "Q5"
+    },
+    {
+      "figure": "supplemental_endpoint_topology_map.png",
+      "title": "Endpoint topology and unresolved-output band",
+      "observation": "Direct PVTsim GOW-to-GO topology persists through 228.55 bara and is no longer direct at 228.56 bara. Across the complete campaign, 4,569 solver-successful numeric outputs omit phase identity.",
+      "mechanism": "Above the termination bracket an intervening GW region and an output band without phase labels interrupt direct branch continuation.",
+      "implication": "The scan can localize topology termination but cannot claim a solved PVTsim critical endpoint or safely infer the missing phase labels.",
+      "recommendation": "Retain unresolved rows verbatim, preserve the NeqSim endpoint as a package-specific result, and seek explicit phase/stability output or same-fluid experiments before endpoint calibration.",
+      "linked_results": [
+        "supplemental_pvtsim_unresolved_phase_identity_point_count",
+        "supplemental_pvtsim_direct_topology_termination_low_bara",
+        "supplemental_pvtsim_direct_topology_termination_high_bara"
+      ],
+      "insight_question_ref": "Q6"
+    },
+    {
+      "figure": "candidate_envelope_comparison.png",
+      "title": "Branch-aware compatibility envelope",
+      "observation": "The opt-in profile preserves all 15 main roots and all seven secondary roots. Its coupled endpoint is 228.550885 bara, inside the direct PVTsim topology bracket of 228.55-228.56 bara.",
+      "mechanism": "Each physical boundary family receives its own water-interaction scaling on a cloned working fluid. This avoids the topology loss caused by applying the secondary-branch correction globally to the main branch.",
+      "implication": "PVTsim-compatible boundary calculations can now be requested explicitly without modifying the verified default NeqSim payload or silently mixing boundary definitions.",
+      "recommendation": "Keep the profile opt-in and require the caller to select GO_TO_GOW or OW_TO_GOW explicitly; retain the frozen model as the operational default.",
+      "linked_results": [
+        "compatibility_endpoint_pressure_bara",
+        "compatibility_main_boundary_mae_C",
+        "compatibility_secondary_boundary_mae_C"
+      ],
+      "insight_question_ref": "Q7"
+    },
+    {
+      "figure": "candidate_deviation_improvement.png",
+      "title": "Deviation reduction without default-model regression",
+      "observation": "Main-boundary MAE is 0.735 degC with a 1.669 degC maximum, while secondary-boundary MAE falls from about 8.8 degC in the frozen model to 0.299 degC with a 0.590 degC maximum.",
+      "mechanism": "The two fitted multipliers address different sensitivity regimes of the main hydrocarbon-rich boundary and the high-pressure water-rich boundary instead of forcing one global parameter to serve both.",
+      "implication": "The software comparison target is achieved across the declared pressure ranges, but the fitted factors remain package-compatibility settings rather than evidence of improved physical truth.",
+      "recommendation": "Use the profile for controlled PVTsim reproduction and regression testing; do not promote it to the default physical model until exact-fluid phase boundary measurements are available.",
+      "linked_results": [
+        "compatibility_main_boundary_max_abs_C",
+        "compatibility_secondary_boundary_max_abs_C"
+      ],
+      "insight_question_ref": "Q8"
+    }
+  ],
+  "equations": [
+    {
+      "label": "Multiphase equilibrium",
+      "latex": "f_i^{(g)} = f_i^{(o)} = f_i^{(w)}"
+    },
+    {
+      "label": "Boundary deviation",
+      "latex": "\\Delta T = T_{PVTsim} - T_{NeqSim}"
+    }
+  ],
+  "tables": [
+    {
+      "title": "Boundary comparison summary",
+      "headers": [
+        "Branch",
+        "Points",
+        "Mean bias (C)",
+        "MAE (C)",
+        "RMSE (C)",
+        "Max abs (C)",
+        "Decision"
+      ],
+      "rows": [
+        [
+          "Main GOW-GO",
+          15,
+          -0.8783333333333397,
+          0.8783333333333397,
+          1.1367900715024977,
+          2.0249999999999773,
+          "PASS"
+        ],
+        [
+          "Secondary GOW-OW",
+          7,
+          -8.819492460580696,
+          8.819492460580696,
+          8.83209948437985,
+          9.479043479587233,
+          "FAIL"
+        ],
+        [
+          "Endpoint 229.5 bara",
+          1,
+          "N/A",
+          "N/A",
+          "N/A",
+          "N/A",
+          "OPEN"
+        ]
+      ]
+    },
+    {
+      "title": "Model-gap audit and production decision",
+      "headers": [
+        "Test",
+        "Secondary result",
+        "Mainline result",
+        "Decision"
+      ],
+      "rows": [
+        [
+          "Frozen baseline",
+          "MAE 8.819 C",
+          "Root retained through 228 bara",
+          "Keep"
+        ],
+        [
+          "PVTsim water record",
+          "p292 residual 7.690 C",
+          "Not a full correction",
+          "Insufficient"
+        ],
+        [
+          "All water Kij x0.932",
+          "MAE 0.292 C",
+          "No ordinary root by 226 bara",
+          "Reject"
+        ],
+        [
+          "Light water Kij x0.682",
+          "p292 residual -0.188 C",
+          "No ordinary root at 228 bara",
+          "Reject"
+        ]
+      ]
+    },
+    {
+      "title": "Endpoint topology refinement",
+      "headers": [
+        "Quantity",
+        "Value",
+        "Interpretation"
+      ],
+      "rows": [
+        [
+          "Last direct PVTsim GOW-to-GO",
+          "228.5 bara",
+          "Direct ordinary topology demonstrated"
+        ],
+        [
+          "First non-direct/error-wedge case",
+          "228.6 bara",
+          "Direct topology no longer demonstrated"
+        ],
+        [
+          "NeqSim endpoint",
+          "229.932 bara / 313.499 C",
+          "Frozen baseline coupled endpoint"
+        ],
+        [
+          "Pressure difference",
+          "1.33-1.43 bara",
+          "NeqSim endpoint above PVTsim direct-topology bracket"
+        ]
+      ]
+    },
+    {
+      "title": "Root-network classification",
+      "headers": [
+        "Feature",
+        "Pressure (bara)",
+        "Temperature (C)",
+        "Disposition"
+      ],
+      "rows": [
+        [
+          "Formal connected OW-GOW anchor",
+          284.0,
+          261.970466,
+          "Retain"
+        ],
+        [
+          "Lower stable root cluster",
+          "284-286",
+          "248.75-256.56",
+          "Report separately"
+        ],
+        [
+          "Lower-network critical endpoint",
+          286.0,
+          249.375,
+          "Report separately"
+        ],
+        [
+          "Metastable/coalescent roots",
+          "284-286",
+          "246.88-255.94",
+          "Reject as boundary anchors"
+        ]
+      ]
+    },
+    {
+      "title": "Full workflow-candidate gates",
+      "headers": [
+        "Gate",
+        "Result",
+        "Criterion",
+        "Status"
+      ],
+      "rows": [
+        [
+          "Fresh main roots",
+          "15/15; max delta 2.27e-13 C",
+          "15/15; <=0.02 C",
+          "PASS"
+        ],
+        [
+          "Fresh secondary roots",
+          "7/7; max delta 3.17e-6 C",
+          "7/7; <=0.02 C",
+          "PASS"
+        ],
+        [
+          "Fresh coupled endpoint",
+          "delta P 3.94e-11 bara",
+          "<=0.02 bara",
+          "PASS"
+        ],
+        [
+          "Java root-network regression",
+          "1 test, 0 failures/errors",
+          "No failures/errors",
+          "PASS"
+        ],
+        [
+          "Spotless",
+          "check success",
+          "No unformatted Java",
+          "PASS"
+        ]
+      ]
+    },
+    {
+      "title": "PVTsim supplemental campaign summary",
+      "headers": [
+        "Batch",
+        "Solver-successful points",
+        "Phase-identified / QC pass",
+        "Unresolved phase identity"
+      ],
+      "rows": [
+        [
+          "a_coarse",
+          663,
+          663,
+          0
+        ],
+        [
+          "a_refined",
+          1645,
+          1645,
+          0
+        ],
+        [
+          "b_dense",
+          3625,
+          3625,
+          0
+        ],
+        [
+          "b_local",
+          52,
+          52,
+          0
+        ],
+        [
+          "c_dense",
+          18531,
+          14108,
+          4423
+        ],
+        [
+          "c_local",
+          1581,
+          1435,
+          146
+        ],
+        [
+          "smoke + all batches",
+          26102,
+          21533,
+          4569
+        ]
+      ]
+    },
+    {
+      "title": "Supplemental secondary-boundary refinement",
+      "headers": [
+        "Pressure (bara)",
+        "PVTsim T (C)",
+        "NeqSim T (C)",
+        "PVTsim - NeqSim (C)",
+        "PVTsim bracket width (C)"
+      ],
+      "rows": [
+        [
+          284.0,
+          253.83749999999998,
+          261.9704688210851,
+          -8.132968821085115,
+          0.025000000000005684
+        ],
+        [
+          286.0,
+          250.8875,
+          259.1923771941109,
+          -8.30487719411093,
+          0.025000000000005684
+        ],
+        [
+          290.0,
+          244.6875,
+          253.40460827394793,
+          -8.717108273947929,
+          0.125
+        ],
+        [
+          292.0,
+          241.5625,
+          250.38705375139432,
+          -8.824553751394319,
+          0.125
+        ],
+        [
+          294.0,
+          238.3125,
+          247.28035636211519,
+          -8.967856362115185,
+          0.125
+        ],
+        [
+          298.0,
+          231.4375,
+          240.7725393418242,
+          -9.3350393418242,
+          0.125
+        ],
+        [
+          300.0,
+          227.8125,
+          237.35404347958723,
+          -9.541543479587233,
+          0.125
+        ]
+      ]
+    },
+    {
+      "title": "Opt-in branch-aware software-compatibility candidate",
+      "headers": [
+        "Boundary / gate",
+        "Configuration",
+        "Coverage",
+        "MAE",
+        "Maximum deviation",
+        "Decision"
+      ],
+      "rows": [
+        [
+          "Main GO->GOW",
+          "water Kij x 0.98325",
+          "15/15 roots",
+          "0.735 degC",
+          "1.669 degC",
+          "PASS"
+        ],
+        [
+          "Secondary OW->GOW",
+          "water Kij x 0.932",
+          "7/7 roots",
+          "0.299 degC",
+          "0.590 degC",
+          "PASS"
+        ],
+        [
+          "Coupled endpoint",
+          "branch-aware profile",
+          "228.550885 bara",
+          "PVTsim bracket",
+          "228.55-228.56 bara",
+          "PASS"
+        ],
+        [
+          "Frozen/default model",
+          "unchanged payload hash",
+          "mainline regression",
+          "not applicable",
+          "not applicable",
+          "PASS"
+        ],
+        [
+          "Production promotion",
+          "requires exact-fluid lab data",
+          "not authorized",
+          "not applicable",
+          "not applicable",
+          "BLOCKED BY GOVERNANCE"
+        ]
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "PVTsimNova7",
+      "text": "Calsep PVTsim Nova 7 licensed internal calculation services; same-definition PT flash outputs retained under references/pvtsim."
+    },
+    {
+      "id": "NeqSimRoots",
+      "text": "NeqSim verified boundary roots from task 2026-08-08_高含水重油_200_300_bara_包络拓扑闭合."
+    },
+    {
+      "id": "Kruger2019VLLE",
+      "text": "Kruger et al. (2019), High-pressure experimental vapour-liquid-liquid equilibrium measurements of methane + n-hexane + water, Fluid Phase Equilibria, doi:10.1016/j.fluid.2019.112276."
+    },
+    {
+      "id": "Amani2014BitumenWater",
+      "text": "Amani (2014), Phase behavior of Athabasca bitumen and water at high temperature and pressure, University of Alberta, doi:10.7939/R34H55."
+    },
+    {
+      "id": "Matsui2014HeavyOilWater",
+      "text": "Matsui et al. (2014), Phase equilibrium measurement for water and heavy oil mixtures at high temperature and high pressure, doi:10.1627/jpi.57.118."
+    }
+  ],
+  "standards_applied": [
+    {
+      "code": "Same-definition software parity protocol",
+      "version": "2026-08-08",
+      "scope": "Composition, EOS, volume translation, mixing rule, water Kij and topology identity",
+      "status": "PASS"
+    },
+    {
+      "code": "Topology-first boundary acceptance",
+      "version": "2026-08-08",
+      "scope": "Direct GOW-to-target phase brackets; failed states are never interpolated",
+      "status": "FAIL"
+    }
+  ],
+  "benchmark_validation": {
+    "test_1": {
+      "what": "licensed refined flash completion",
+      "description": "licensed refined flash completion",
+      "status": "PASS",
+      "value": "410/410",
+      "criterion": "100%",
+      "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+    },
+    "test_2": {
+      "what": "main topology",
+      "description": "main topology",
+      "status": "PASS",
+      "value": "15/15 direct brackets",
+      "criterion": "all",
+      "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+    },
+    "test_3": {
+      "what": "main engineering alignment",
+      "description": "main engineering alignment",
+      "status": "PASS",
+      "value": 0.8783333333333397,
+      "criterion": "MAE <= 1 C and >=90% within 2 C",
+      "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+    },
+    "test_4": {
+      "what": "secondary engineering alignment",
+      "description": "secondary engineering alignment",
+      "status": "FAIL",
+      "value": 8.819492460580696,
+      "criterion": "MAE <= 1 C and >=90% within 2 C",
+      "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+    },
+    "test_5": {
+      "what": "endpoint topology",
+      "description": "endpoint topology",
+      "status": "FAIL",
+      "value": "no direct bracket",
+      "criterion": "direct GOW->GO bracket",
+      "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+    },
+    "benchmarks": [
+      {
+        "what": "licensed refined flash completion",
+        "description": "licensed refined flash completion",
+        "status": "PASS",
+        "value": "410/410",
+        "criterion": "100%",
+        "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+      },
+      {
+        "what": "main topology",
+        "description": "main topology",
+        "status": "PASS",
+        "value": "15/15 direct brackets",
+        "criterion": "all",
+        "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+      },
+      {
+        "what": "main engineering alignment",
+        "description": "main engineering alignment",
+        "status": "PASS",
+        "value": 0.8783333333333397,
+        "criterion": "MAE <= 1 C and >=90% within 2 C",
+        "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+      },
+      {
+        "what": "secondary engineering alignment",
+        "description": "secondary engineering alignment",
+        "status": "FAIL",
+        "value": 8.819492460580696,
+        "criterion": "MAE <= 1 C and >=90% within 2 C",
+        "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+      },
+      {
+        "what": "endpoint topology",
+        "description": "endpoint topology",
+        "status": "FAIL",
+        "value": "no direct bracket",
+        "criterion": "direct GOW->GO bracket",
+        "reference": "PVTsim Nova 7 licensed same-definition PT flash"
+      }
+    ]
+  },
+  "uncertainty": {
+    "method": "Monte Carlo propagation of full-flash boundary brackets",
+    "n_simulations": 5000,
+    "simulation_engine": "Full NeqSim/PVTsim boundary brackets; Monte Carlo propagates localization only",
+    "input_parameters": [
+      {
+        "name": "Main PVTsim bracket half-width",
+        "unit": "C",
+        "low": -0.025,
+        "base": 0.0,
+        "high": 0.025,
+        "distribution": "uniform per point"
+      },
+      {
+        "name": "Secondary PVTsim bracket half-width",
+        "unit": "C",
+        "low": -0.125,
+        "base": 0.0,
+        "high": 0.125,
+        "distribution": "uniform per point"
+      }
+    ],
+    "output_parameters": {
+      "main_boundary_mae_C": {
+        "p10": 0.8735372055850938,
+        "p50": 0.8783193431094398,
+        "p90": 0.8829896526126683,
+        "mean": 0.8783053635371594,
+        "std": 0.003691878391439794
+      },
+      "secondary_boundary_mae_C": {
+        "p10": 8.783643050822356,
+        "p50": 8.819398598991846,
+        "p90": 8.855294555117553,
+        "mean": 8.81937503378297,
+        "std": 0.02734019755745731
+      }
+    },
+    "output_parameter": "Main boundary MAE (C)",
+    "p10": 0.8735372055850938,
+    "p50": 0.8783193431094398,
+    "p90": 0.8829896526126683,
+    "tornado": [
+      {
+        "parameter": "Secondary branch model gap",
+        "swing_C": 8.819492460580696
+      },
+      {
+        "parameter": "Main high-pressure drift",
+        "swing_C": 2.0249999999999773
+      },
+      {
+        "parameter": "Secondary localization half-step",
+        "swing_C": 0.125
+      },
+      {
+        "parameter": "Main localization half-step",
+        "swing_C": 0.025
+      }
+    ],
+    "model_form_root_network": {
+      "package_secondary_mae_C": 8.819492460580696,
+      "alternate_root_pressure_coverage_bara": [
+        284.0,
+        286.0
+      ],
+      "probability_assigned": false,
+      "reason": "No exact-fluid laboratory data support probabilities for competing root networks."
+    },
+    "recalculated_5000_sample_secondary_mae_C": {
+      "p10": 8.783643050822356,
+      "p50": 8.819398598991846,
+      "p90": 8.855294555117553,
+      "mean": 8.81937503378297,
+      "std": 0.02734019755745731
+    }
+  },
+  "risk_evaluation": {
+    "risks": [
+      {
+        "id": "R1",
+        "description": "Secondary boundary used as interchangeable",
+        "category": "Technical",
+        "likelihood": "Likely",
+        "consequence": "Major",
+        "risk_level": "High",
+        "mitigation": "Retain package-specific boundary or calibrate to lab data"
+      },
+      {
+        "id": "R2",
+        "description": "229.5 bara endpoint treated as closed",
+        "category": "Technical",
+        "likelihood": "Possible",
+        "consequence": "Major",
+        "risk_level": "High",
+        "mitigation": "Keep unresolved; use dedicated endpoint calculation"
+      },
+      {
+        "id": "R3",
+        "description": "Historical HV data mixed with classic results",
+        "category": "Data",
+        "likelihood": "Possible",
+        "consequence": "Moderate",
+        "risk_level": "Medium",
+        "mitigation": "Enforce source/model fingerprint"
+      },
+      {
+        "id": "R4",
+        "description": "Component-order Kij mapping changes",
+        "category": "Quality",
+        "likelihood": "Unlikely",
+        "consequence": "Major",
+        "risk_level": "Medium",
+        "mitigation": "Automated component/Kij checksum"
+      },
+      {
+        "id": "R5",
+        "description": "Full Nova schema regression",
+        "category": "Software",
+        "likelihood": "Possible",
+        "consequence": "Moderate",
+        "risk_level": "Medium",
+        "mitigation": "Keep one-point parser regression fixture"
+      },
+      {
+        "id": "R6",
+        "description": "Unvalidated boundary drives operating decision",
+        "category": "HSE",
+        "likelihood": "Unlikely",
+        "consequence": "Major",
+        "risk_level": "Medium",
+        "mitigation": "Apply design margin and experimental validation"
+      },
+      {
+        "id": "R7",
+        "description": "Near-critical alternate root is substituted for the connected secondary branch",
+        "category": "Technical",
+        "likelihood": "Possible",
+        "consequence": "Major",
+        "risk_level": "High",
+        "mitigation": "Require branch connectivity, global stability, phase-distance classification and explicit endpoint identity"
+      }
+    ],
+    "overall_risk_level": "High until secondary branch and endpoint are resolved",
+    "risk_matrix_used": "5x5 (ISO 31000-style)"
+  },
+  "comparison_detail": {
+    "comparison_definition": {
+      "composition_component_count": 23,
+      "composition_basis": "mol%",
+      "eos": "SRK with Peneloux volume translation",
+      "mixing_rule": "classic quadratic mixing",
+      "polar_components_model": "None",
+      "water_binary_interactions": "PVTsim source set equal to runtime NeqSim classic-SRK Kij",
+      "pvtsim_engine": "PVTsim Nova 7 (licensed bridge)"
+    },
+    "licensed_flash_quality": {
+      "refined_requested_points": 410,
+      "refined_successful_points": 410,
+      "refined_failed_points": 0
+    },
+    "main_boundary": {
+      "metrics": {
+        "point_count": 15,
+        "mean_bias_C": -0.8783333333333397,
+        "mae_C": 0.8783333333333397,
+        "rmse_C": 1.1367900715024977,
+        "max_absolute_deviation_C": 2.0249999999999773,
+        "within_0_5_C_count": 7,
+        "within_1_C_count": 9,
+        "within_2_C_count": 14,
+        "all_same_topology": true
+      },
+      "points": [
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 10.0,
+          "neqsim_temperature_C": 163.9432844218498,
+          "pvtsim_temperature_C": 163.91828442184976,
+          "pvtsim_bracket_low_C": 163.89328442184978,
+          "pvtsim_bracket_high_C": 163.94328442184977,
+          "pvtsim_localization_half_width_C": 0.024999999999991473,
+          "deviation_pvtsim_minus_neqsim_C": -0.025000000000034106,
+          "absolute_deviation_C": 0.025000000000034106,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 20.0,
+          "neqsim_temperature_C": 192.2501850697064,
+          "pvtsim_temperature_C": 192.17518506970637,
+          "pvtsim_bracket_low_C": 192.15018506970637,
+          "pvtsim_bracket_high_C": 192.20018506970638,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -0.07500000000001705,
+          "absolute_deviation_C": 0.07500000000001705,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 28.0,
+          "neqsim_temperature_C": 207.38516144337729,
+          "pvtsim_temperature_C": 207.26016144337729,
+          "pvtsim_bracket_low_C": 207.23516144337728,
+          "pvtsim_bracket_high_C": 207.28516144337726,
+          "pvtsim_localization_half_width_C": 0.024999999999991473,
+          "deviation_pvtsim_minus_neqsim_C": -0.125,
+          "absolute_deviation_C": 0.125,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 50.0,
+          "neqsim_temperature_C": 235.64444262080275,
+          "pvtsim_temperature_C": 235.46944262080274,
+          "pvtsim_bracket_low_C": 235.44444262080273,
+          "pvtsim_bracket_high_C": 235.49444262080274,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -0.17500000000001137,
+          "absolute_deviation_C": 0.17500000000001137,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 65.0,
+          "neqsim_temperature_C": 249.24536274920172,
+          "pvtsim_temperature_C": 248.97036274920168,
+          "pvtsim_bracket_low_C": 248.9453627492017,
+          "pvtsim_bracket_high_C": 248.9953627492017,
+          "pvtsim_localization_half_width_C": 0.024999999999991473,
+          "deviation_pvtsim_minus_neqsim_C": -0.2750000000000341,
+          "absolute_deviation_C": 0.2750000000000341,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 80.0,
+          "neqsim_temperature_C": 260.26518661140926,
+          "pvtsim_temperature_C": 259.89018661140926,
+          "pvtsim_bracket_low_C": 259.86518661140923,
+          "pvtsim_bracket_high_C": 259.91518661140924,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -0.375,
+          "absolute_deviation_C": 0.375,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 100.0,
+          "neqsim_temperature_C": 272.21819334935594,
+          "pvtsim_temperature_C": 271.7431933493559,
+          "pvtsim_bracket_low_C": 271.71819334935594,
+          "pvtsim_bracket_high_C": 271.76819334935595,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -0.47500000000002274,
+          "absolute_deviation_C": 0.47500000000002274,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 120.0,
+          "neqsim_temperature_C": 281.9161858322585,
+          "pvtsim_temperature_C": 281.24118583225845,
+          "pvtsim_bracket_low_C": 281.2161858322585,
+          "pvtsim_bracket_high_C": 281.2661858322585,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -0.6750000000000682,
+          "absolute_deviation_C": 0.6750000000000682,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 140.0,
+          "neqsim_temperature_C": 289.9309055775477,
+          "pvtsim_temperature_C": 289.0559055775477,
+          "pvtsim_bracket_low_C": 289.0309055775477,
+          "pvtsim_bracket_high_C": 289.0809055775477,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -0.875,
+          "absolute_deviation_C": 0.875,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 160.0,
+          "neqsim_temperature_C": 296.63718085511607,
+          "pvtsim_temperature_C": 295.51218085511607,
+          "pvtsim_bracket_low_C": 295.48718085511604,
+          "pvtsim_bracket_high_C": 295.53718085511605,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -1.125,
+          "absolute_deviation_C": 1.125,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 180.0,
+          "neqsim_temperature_C": 302.3173123339559,
+          "pvtsim_temperature_C": 300.9423123339559,
+          "pvtsim_bracket_low_C": 300.9173123339559,
+          "pvtsim_bracket_high_C": 300.9673123339559,
+          "pvtsim_localization_half_width_C": 0.024999999999977263,
+          "deviation_pvtsim_minus_neqsim_C": -1.375,
+          "absolute_deviation_C": 1.375,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 200.0,
+          "neqsim_temperature_C": 307.21012840844276,
+          "pvtsim_temperature_C": 305.5351284084428,
+          "pvtsim_bracket_low_C": 305.5101284084428,
+          "pvtsim_bracket_high_C": 305.5601284084428,
+          "pvtsim_localization_half_width_C": 0.024999999999977263,
+          "deviation_pvtsim_minus_neqsim_C": -1.6749999999999545,
+          "absolute_deviation_C": 1.6749999999999545,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 220.0,
+          "neqsim_temperature_C": 311.52217107034085,
+          "pvtsim_temperature_C": 309.5971710703409,
+          "pvtsim_bracket_low_C": 309.57217107034086,
+          "pvtsim_bracket_high_C": 309.62217107034087,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -1.9249999999999545,
+          "absolute_deviation_C": 1.9249999999999545,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 224.0,
+          "neqsim_temperature_C": 312.32982062623523,
+          "pvtsim_temperature_C": 310.3548206262352,
+          "pvtsim_bracket_low_C": 310.32982062623523,
+          "pvtsim_bracket_high_C": 310.37982062623524,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -1.9750000000000227,
+          "absolute_deviation_C": 1.9750000000000227,
+          "same_topology": true
+        },
+        {
+          "branch": "main",
+          "transition": "GOW->GO",
+          "pressure_bara": 228.0,
+          "neqsim_temperature_C": 313.1217021837058,
+          "pvtsim_temperature_C": 311.0967021837058,
+          "pvtsim_bracket_low_C": 311.0717021837058,
+          "pvtsim_bracket_high_C": 311.1217021837058,
+          "pvtsim_localization_half_width_C": 0.025000000000005684,
+          "deviation_pvtsim_minus_neqsim_C": -2.0249999999999773,
+          "absolute_deviation_C": 2.0249999999999773,
+          "same_topology": true
+        }
+      ]
+    },
+    "secondary_boundary": {
+      "metrics": {
+        "point_count": 7,
+        "mean_bias_C": -8.819492460580696,
+        "mae_C": 8.819492460580696,
+        "rmse_C": 8.83209948437985,
+        "max_absolute_deviation_C": 9.479043479587233,
+        "within_0_5_C_count": 0,
+        "within_1_C_count": 0,
+        "within_2_C_count": 0,
+        "all_same_topology": true
+      },
+      "points": [
+        {
+          "branch": "secondary",
+          "transition": "GOW->OW",
+          "pressure_bara": 284.0,
+          "neqsim_temperature_C": 261.9704688210851,
+          "pvtsim_temperature_C": 253.875,
+          "pvtsim_bracket_low_C": 253.75,
+          "pvtsim_bracket_high_C": 254.0,
+          "pvtsim_localization_half_width_C": 0.125,
+          "deviation_pvtsim_minus_neqsim_C": -8.095468821085092,
+          "absolute_deviation_C": 8.095468821085092,
+          "same_topology": true
+        },
+        {
+          "branch": "secondary",
+          "transition": "GOW->OW",
+          "pressure_bara": 286.0,
+          "neqsim_temperature_C": 259.1923771941109,
+          "pvtsim_temperature_C": 250.875,
+          "pvtsim_bracket_low_C": 250.75,
+          "pvtsim_bracket_high_C": 251.0,
+          "pvtsim_localization_half_width_C": 0.125,
+          "deviation_pvtsim_minus_neqsim_C": -8.317377194110918,
+          "absolute_deviation_C": 8.317377194110918,
+          "same_topology": true
+        },
+        {
+          "branch": "secondary",
+          "transition": "GOW->OW",
+          "pressure_bara": 290.0,
+          "neqsim_temperature_C": 253.40460827394793,
+          "pvtsim_temperature_C": 244.625,
+          "pvtsim_bracket_low_C": 244.5,
+          "pvtsim_bracket_high_C": 244.75,
+          "pvtsim_localization_half_width_C": 0.125,
+          "deviation_pvtsim_minus_neqsim_C": -8.779608273947929,
+          "absolute_deviation_C": 8.779608273947929,
+          "same_topology": true
+        },
+        {
+          "branch": "secondary",
+          "transition": "GOW->OW",
+          "pressure_bara": 292.0,
+          "neqsim_temperature_C": 250.38705375139432,
+          "pvtsim_temperature_C": 241.625,
+          "pvtsim_bracket_low_C": 241.5,
+          "pvtsim_bracket_high_C": 241.75,
+          "pvtsim_localization_half_width_C": 0.125,
+          "deviation_pvtsim_minus_neqsim_C": -8.762053751394319,
+          "absolute_deviation_C": 8.762053751394319,
+          "same_topology": true
+        },
+        {
+          "branch": "secondary",
+          "transition": "GOW->OW",
+          "pressure_bara": 294.0,
+          "neqsim_temperature_C": 247.28035636211519,
+          "pvtsim_temperature_C": 238.375,
+          "pvtsim_bracket_low_C": 238.25,
+          "pvtsim_bracket_high_C": 238.5,
+          "pvtsim_localization_half_width_C": 0.125,
+          "deviation_pvtsim_minus_neqsim_C": -8.905356362115185,
+          "absolute_deviation_C": 8.905356362115185,
+          "same_topology": true
+        },
+        {
+          "branch": "secondary",
+          "transition": "GOW->OW",
+          "pressure_bara": 298.0,
+          "neqsim_temperature_C": 240.7725393418242,
+          "pvtsim_temperature_C": 231.375,
+          "pvtsim_bracket_low_C": 231.25,
+          "pvtsim_bracket_high_C": 231.5,
+          "pvtsim_localization_half_width_C": 0.125,
+          "deviation_pvtsim_minus_neqsim_C": -9.3975393418242,
+          "absolute_deviation_C": 9.3975393418242,
+          "same_topology": true
+        },
+        {
+          "branch": "secondary",
+          "transition": "GOW->OW",
+          "pressure_bara": 300.0,
+          "neqsim_temperature_C": 237.35404347958723,
+          "pvtsim_temperature_C": 227.875,
+          "pvtsim_bracket_low_C": 227.75,
+          "pvtsim_bracket_high_C": 228.0,
+          "pvtsim_localization_half_width_C": 0.125,
+          "deviation_pvtsim_minus_neqsim_C": -9.479043479587233,
+          "absolute_deviation_C": 9.479043479587233,
+          "same_topology": true
+        }
+      ]
+    },
+    "endpoint_229_5_bara": {
+      "pressure_bara": 229.5,
+      "neqsim_boundary_temperature_C": 313.41477294600304,
+      "direct_GOW_to_GO_bracket_found": false,
+      "pvtsim_state_sequence": [
+        {
+          "temperature_C": 305.41477294600304,
+          "status": "ok",
+          "region": "GOW",
+          "error": null
+        },
+        {
+          "temperature_C": 306.21477294600305,
+          "status": "ok",
+          "region": "GOW",
+          "error": null
+        },
+        {
+          "temperature_C": 307.01477294600306,
+          "status": "ok",
+          "region": "GOW",
+          "error": null
+        },
+        {
+          "temperature_C": 307.814772946003,
+          "status": "ok",
+          "region": "GOW",
+          "error": null
+        },
+        {
+          "temperature_C": 308.61477294600303,
+          "status": "ok",
+          "region": "GOW",
+          "error": null
+        },
+        {
+          "temperature_C": 309.41477294600304,
+          "status": "ok",
+          "region": "GOW",
+          "error": null
+        },
+        {
+          "temperature_C": 310.21477294600305,
+          "status": "ok",
+          "region": "GOW",
+          "error": null
+        },
+        {
+          "temperature_C": 311.01477294600306,
+          "status": "ok",
+          "region": "GW",
+          "error": null
+        },
+        {
+          "temperature_C": 311.814772946003,
+          "status": "error",
+          "region": null,
+          "error": "PVTsim flash returned no phase-property rows"
+        },
+        {
+          "temperature_C": 312.61477294600303,
+          "status": "error",
+          "region": null,
+          "error": "PVTsim flash returned no phase-property rows"
+        },
+        {
+          "temperature_C": 313.41477294600304,
+          "status": "error",
+          "region": null,
+          "error": "PVTsim flash returned no phase-property rows"
+        },
+        {
+          "temperature_C": 314.21477294600305,
+          "status": "error",
+          "region": null,
+          "error": "PVTsim flash returned no phase-property rows"
+        },
+        {
+          "temperature_C": 315.01477294600306,
+          "status": "ok",
+          "region": "GO",
+          "error": null
+        },
+        {
+          "temperature_C": 315.814772946003,
+          "status": "ok",
+          "region": "GO",
+          "error": null
+        },
+        {
+          "temperature_C": 316.61477294600303,
+          "status": "ok",
+          "region": "GO",
+          "error": null
+        },
+        {
+          "temperature_C": 317.41477294600304,
+          "status": "ok",
+          "region": "GO",
+          "error": null
+        },
+        {
+          "temperature_C": 318.21477294600305,
+          "status": "ok",
+          "region": "GO",
+          "error": null
+        },
+        {
+          "temperature_C": 319.01477294600306,
+          "status": "ok",
+          "region": "GO",
+          "error": null
+        },
+        {
+          "temperature_C": 319.814772946003,
+          "status": "ok",
+          "region": "GO",
+          "error": null
+        },
+        {
+          "temperature_C": 320.61477294600303,
+          "status": "ok",
+          "region": "GO",
+          "error": null
+        },
+        {
+          "temperature_C": 321.41477294600304,
+          "status": "ok",
+          "region": "GO",
+          "error": null
+        }
+      ],
+      "interpretation": "PVTsim changes GOW->GW, then returns no phase-property rows around the NeqSim root, then returns GO. The endpoint is therefore excluded from direct boundary-error metrics."
+    },
+    "verdict": {
+      "overall": "PARTIAL_ALIGNMENT_NOT_INTERCHANGEABLE",
+      "main_boundary": "Engineering-level agreement over 10-228 bara: MAE below 1 °C, with a monotonic negative PVTsim bias that reaches about 2 °C at 228 bara.",
+      "secondary_boundary": "Not aligned: same GOW-OW topology but PVTsim is approximately 8-9.5 °C lower.",
+      "endpoint": "Not directly comparable because PVTsim does not return a direct GOW-GO bracket."
+    },
+    "supplemental_campaign": {
+      "schemaVersion": "1.0",
+      "campaign": {
+        "licensed_pvtsim_flash_points": 26102,
+        "solver_successful_points": 26102,
+        "solver_failed_points": 0,
+        "resolved_phase_identity_points": 21533,
+        "unresolved_phase_identity_points": 4569,
+        "source_fluid_sha256": "f8f8809e84bc4ac195ff086805bc463f0d892271bc3dd8e0166f00b3c5f77195",
+        "interaction_parameter_sha256": "5f3b2908067728bc08da5dda225a75bfbc501d3eac22b2845d9cf0acca9db7f4",
+        "polar_components_model": "None",
+        "batch_summaries": {
+          "a_coarse": {
+            "total": 663,
+            "passed": 663,
+            "failed": 0,
+            "topologyCounts": {
+              "GOW": 277,
+              "OW": 386
+            }
+          },
+          "a_refined": {
+            "total": 1645,
+            "passed": 1645,
+            "failed": 0,
+            "topologyCounts": {
+              "GOW": 935,
+              "OW": 710
+            }
+          },
+          "b_dense": {
+            "total": 3625,
+            "passed": 3625,
+            "failed": 0,
+            "topologyCounts": {
+              "GOW": 1480,
+              "OW": 2145
+            }
+          },
+          "b_local": {
+            "total": 52,
+            "passed": 52,
+            "failed": 0,
+            "topologyCounts": {
+              "GOW": 25,
+              "OW": 27
+            }
+          },
+          "c_dense": {
+            "total": 18531,
+            "passed": 14108,
+            "failed": 4423,
+            "topologyCounts": {
+              "GO": 9330,
+              "GOW": 3726,
+              "GW": 1052,
+              "UNRESOLVED": 4423
+            }
+          },
+          "c_local": {
+            "total": 1581,
+            "passed": 1435,
+            "failed": 146,
+            "topologyCounts": {
+              "GO": 876,
+              "GOW": 521,
+              "GW": 38,
+              "UNRESOLVED": 146
+            }
+          }
+        }
+      },
+      "secondary_boundary": {
+        "metrics": {
+          "point_count": 7,
+          "mean_bias_C": -8.831992460580702,
+          "mae_C": 8.831992460580702,
+          "rmse_C": 8.844557259716076,
+          "max_absolute_deviation_C": 9.541543479587233,
+          "within_2_C_count": 0
+        },
+        "points": [
+          {
+            "branch": "secondary",
+            "transition": "GOW->OW",
+            "pressure_bara": 284.0,
+            "neqsim_temperature_C": 261.9704688210851,
+            "pvtsim_temperature_C": 253.83749999999998,
+            "pvtsim_bracket_low_C": 253.825,
+            "pvtsim_bracket_high_C": 253.85,
+            "pvtsim_localization_half_width_C": 0.012500000000002842,
+            "deviation_pvtsim_minus_neqsim_C": -8.132968821085115,
+            "absolute_deviation_C": 8.132968821085115,
+            "same_topology": true
+          },
+          {
+            "branch": "secondary",
+            "transition": "GOW->OW",
+            "pressure_bara": 286.0,
+            "neqsim_temperature_C": 259.1923771941109,
+            "pvtsim_temperature_C": 250.8875,
+            "pvtsim_bracket_low_C": 250.875,
+            "pvtsim_bracket_high_C": 250.9,
+            "pvtsim_localization_half_width_C": 0.012500000000002842,
+            "deviation_pvtsim_minus_neqsim_C": -8.30487719411093,
+            "absolute_deviation_C": 8.30487719411093,
+            "same_topology": true
+          },
+          {
+            "branch": "secondary",
+            "transition": "GOW->OW",
+            "pressure_bara": 290.0,
+            "neqsim_temperature_C": 253.40460827394793,
+            "pvtsim_temperature_C": 244.6875,
+            "pvtsim_bracket_low_C": 244.625,
+            "pvtsim_bracket_high_C": 244.75,
+            "pvtsim_localization_half_width_C": 0.0625,
+            "deviation_pvtsim_minus_neqsim_C": -8.717108273947929,
+            "absolute_deviation_C": 8.717108273947929,
+            "same_topology": true
+          },
+          {
+            "branch": "secondary",
+            "transition": "GOW->OW",
+            "pressure_bara": 292.0,
+            "neqsim_temperature_C": 250.38705375139432,
+            "pvtsim_temperature_C": 241.5625,
+            "pvtsim_bracket_low_C": 241.5,
+            "pvtsim_bracket_high_C": 241.625,
+            "pvtsim_localization_half_width_C": 0.0625,
+            "deviation_pvtsim_minus_neqsim_C": -8.824553751394319,
+            "absolute_deviation_C": 8.824553751394319,
+            "same_topology": true
+          },
+          {
+            "branch": "secondary",
+            "transition": "GOW->OW",
+            "pressure_bara": 294.0,
+            "neqsim_temperature_C": 247.28035636211519,
+            "pvtsim_temperature_C": 238.3125,
+            "pvtsim_bracket_low_C": 238.25,
+            "pvtsim_bracket_high_C": 238.375,
+            "pvtsim_localization_half_width_C": 0.0625,
+            "deviation_pvtsim_minus_neqsim_C": -8.967856362115185,
+            "absolute_deviation_C": 8.967856362115185,
+            "same_topology": true
+          },
+          {
+            "branch": "secondary",
+            "transition": "GOW->OW",
+            "pressure_bara": 298.0,
+            "neqsim_temperature_C": 240.7725393418242,
+            "pvtsim_temperature_C": 231.4375,
+            "pvtsim_bracket_low_C": 231.375,
+            "pvtsim_bracket_high_C": 231.5,
+            "pvtsim_localization_half_width_C": 0.0625,
+            "deviation_pvtsim_minus_neqsim_C": -9.3350393418242,
+            "absolute_deviation_C": 9.3350393418242,
+            "same_topology": true
+          },
+          {
+            "branch": "secondary",
+            "transition": "GOW->OW",
+            "pressure_bara": 300.0,
+            "neqsim_temperature_C": 237.35404347958723,
+            "pvtsim_temperature_C": 227.8125,
+            "pvtsim_bracket_low_C": 227.75,
+            "pvtsim_bracket_high_C": 227.875,
+            "pvtsim_localization_half_width_C": 0.0625,
+            "deviation_pvtsim_minus_neqsim_C": -9.541543479587233,
+            "absolute_deviation_C": 9.541543479587233,
+            "same_topology": true
+          }
+        ],
+        "dense_curve": [
+          {
+            "pressure_bara": 280.0,
+            "pvtsim_bracket_low_C": 259.5,
+            "pvtsim_bracket_high_C": 259.625,
+            "pvtsim_temperature_C": 259.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 280.25,
+            "pvtsim_bracket_low_C": 259.125,
+            "pvtsim_bracket_high_C": 259.25,
+            "pvtsim_temperature_C": 259.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 280.5,
+            "pvtsim_bracket_low_C": 258.75,
+            "pvtsim_bracket_high_C": 258.875,
+            "pvtsim_temperature_C": 258.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 280.75,
+            "pvtsim_bracket_low_C": 258.375,
+            "pvtsim_bracket_high_C": 258.5,
+            "pvtsim_temperature_C": 258.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 281.0,
+            "pvtsim_bracket_low_C": 258.125,
+            "pvtsim_bracket_high_C": 258.25,
+            "pvtsim_temperature_C": 258.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 281.25,
+            "pvtsim_bracket_low_C": 257.75,
+            "pvtsim_bracket_high_C": 257.875,
+            "pvtsim_temperature_C": 257.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 281.5,
+            "pvtsim_bracket_low_C": 257.375,
+            "pvtsim_bracket_high_C": 257.5,
+            "pvtsim_temperature_C": 257.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 281.75,
+            "pvtsim_bracket_low_C": 257.0,
+            "pvtsim_bracket_high_C": 257.125,
+            "pvtsim_temperature_C": 257.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 282.0,
+            "pvtsim_bracket_low_C": 256.625,
+            "pvtsim_bracket_high_C": 256.75,
+            "pvtsim_temperature_C": 256.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 282.25,
+            "pvtsim_bracket_low_C": 256.25,
+            "pvtsim_bracket_high_C": 256.375,
+            "pvtsim_temperature_C": 256.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 282.5,
+            "pvtsim_bracket_low_C": 256.0,
+            "pvtsim_bracket_high_C": 256.125,
+            "pvtsim_temperature_C": 256.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 282.75,
+            "pvtsim_bracket_low_C": 255.625,
+            "pvtsim_bracket_high_C": 255.75,
+            "pvtsim_temperature_C": 255.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 283.0,
+            "pvtsim_bracket_low_C": 255.25,
+            "pvtsim_bracket_high_C": 255.375,
+            "pvtsim_temperature_C": 255.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 283.25,
+            "pvtsim_bracket_low_C": 254.875,
+            "pvtsim_bracket_high_C": 255.0,
+            "pvtsim_temperature_C": 254.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 283.5,
+            "pvtsim_bracket_low_C": 254.5,
+            "pvtsim_bracket_high_C": 254.625,
+            "pvtsim_temperature_C": 254.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 283.75,
+            "pvtsim_bracket_low_C": 254.125,
+            "pvtsim_bracket_high_C": 254.25,
+            "pvtsim_temperature_C": 254.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 284.0,
+            "pvtsim_bracket_low_C": 253.75,
+            "pvtsim_bracket_high_C": 253.875,
+            "pvtsim_temperature_C": 253.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 284.25,
+            "pvtsim_bracket_low_C": 253.375,
+            "pvtsim_bracket_high_C": 253.5,
+            "pvtsim_temperature_C": 253.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 284.5,
+            "pvtsim_bracket_low_C": 253.0,
+            "pvtsim_bracket_high_C": 253.125,
+            "pvtsim_temperature_C": 253.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 284.75,
+            "pvtsim_bracket_low_C": 252.625,
+            "pvtsim_bracket_high_C": 252.75,
+            "pvtsim_temperature_C": 252.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 285.0,
+            "pvtsim_bracket_low_C": 252.25,
+            "pvtsim_bracket_high_C": 252.375,
+            "pvtsim_temperature_C": 252.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 285.25,
+            "pvtsim_bracket_low_C": 251.875,
+            "pvtsim_bracket_high_C": 252.0,
+            "pvtsim_temperature_C": 251.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 285.5,
+            "pvtsim_bracket_low_C": 251.625,
+            "pvtsim_bracket_high_C": 251.75,
+            "pvtsim_temperature_C": 251.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 285.75,
+            "pvtsim_bracket_low_C": 251.25,
+            "pvtsim_bracket_high_C": 251.375,
+            "pvtsim_temperature_C": 251.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 286.0,
+            "pvtsim_bracket_low_C": 250.875,
+            "pvtsim_bracket_high_C": 251.0,
+            "pvtsim_temperature_C": 250.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 286.25,
+            "pvtsim_bracket_low_C": 250.5,
+            "pvtsim_bracket_high_C": 250.625,
+            "pvtsim_temperature_C": 250.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 286.5,
+            "pvtsim_bracket_low_C": 250.125,
+            "pvtsim_bracket_high_C": 250.25,
+            "pvtsim_temperature_C": 250.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 286.75,
+            "pvtsim_bracket_low_C": 249.75,
+            "pvtsim_bracket_high_C": 249.875,
+            "pvtsim_temperature_C": 249.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 287.0,
+            "pvtsim_bracket_low_C": 249.375,
+            "pvtsim_bracket_high_C": 249.5,
+            "pvtsim_temperature_C": 249.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 287.25,
+            "pvtsim_bracket_low_C": 248.875,
+            "pvtsim_bracket_high_C": 249.0,
+            "pvtsim_temperature_C": 248.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 287.5,
+            "pvtsim_bracket_low_C": 248.5,
+            "pvtsim_bracket_high_C": 248.625,
+            "pvtsim_temperature_C": 248.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 287.75,
+            "pvtsim_bracket_low_C": 248.125,
+            "pvtsim_bracket_high_C": 248.25,
+            "pvtsim_temperature_C": 248.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 288.0,
+            "pvtsim_bracket_low_C": 247.75,
+            "pvtsim_bracket_high_C": 247.875,
+            "pvtsim_temperature_C": 247.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 288.25,
+            "pvtsim_bracket_low_C": 247.375,
+            "pvtsim_bracket_high_C": 247.5,
+            "pvtsim_temperature_C": 247.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 288.5,
+            "pvtsim_bracket_low_C": 247.0,
+            "pvtsim_bracket_high_C": 247.125,
+            "pvtsim_temperature_C": 247.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 288.75,
+            "pvtsim_bracket_low_C": 246.625,
+            "pvtsim_bracket_high_C": 246.75,
+            "pvtsim_temperature_C": 246.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 289.0,
+            "pvtsim_bracket_low_C": 246.25,
+            "pvtsim_bracket_high_C": 246.375,
+            "pvtsim_temperature_C": 246.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 289.25,
+            "pvtsim_bracket_low_C": 245.875,
+            "pvtsim_bracket_high_C": 246.0,
+            "pvtsim_temperature_C": 245.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 289.5,
+            "pvtsim_bracket_low_C": 245.5,
+            "pvtsim_bracket_high_C": 245.625,
+            "pvtsim_temperature_C": 245.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 289.75,
+            "pvtsim_bracket_low_C": 245.125,
+            "pvtsim_bracket_high_C": 245.25,
+            "pvtsim_temperature_C": 245.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 290.0,
+            "pvtsim_bracket_low_C": 244.625,
+            "pvtsim_bracket_high_C": 244.75,
+            "pvtsim_temperature_C": 244.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 290.25,
+            "pvtsim_bracket_low_C": 244.25,
+            "pvtsim_bracket_high_C": 244.375,
+            "pvtsim_temperature_C": 244.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 290.5,
+            "pvtsim_bracket_low_C": 243.875,
+            "pvtsim_bracket_high_C": 244.0,
+            "pvtsim_temperature_C": 243.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 290.75,
+            "pvtsim_bracket_low_C": 243.5,
+            "pvtsim_bracket_high_C": 243.625,
+            "pvtsim_temperature_C": 243.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 291.0,
+            "pvtsim_bracket_low_C": 243.125,
+            "pvtsim_bracket_high_C": 243.25,
+            "pvtsim_temperature_C": 243.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 291.25,
+            "pvtsim_bracket_low_C": 242.75,
+            "pvtsim_bracket_high_C": 242.875,
+            "pvtsim_temperature_C": 242.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 291.5,
+            "pvtsim_bracket_low_C": 242.25,
+            "pvtsim_bracket_high_C": 242.375,
+            "pvtsim_temperature_C": 242.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 291.75,
+            "pvtsim_bracket_low_C": 241.875,
+            "pvtsim_bracket_high_C": 242.0,
+            "pvtsim_temperature_C": 241.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 292.0,
+            "pvtsim_bracket_low_C": 241.5,
+            "pvtsim_bracket_high_C": 241.625,
+            "pvtsim_temperature_C": 241.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 292.25,
+            "pvtsim_bracket_low_C": 241.125,
+            "pvtsim_bracket_high_C": 241.25,
+            "pvtsim_temperature_C": 241.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 292.5,
+            "pvtsim_bracket_low_C": 240.75,
+            "pvtsim_bracket_high_C": 240.875,
+            "pvtsim_temperature_C": 240.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 292.75,
+            "pvtsim_bracket_low_C": 240.25,
+            "pvtsim_bracket_high_C": 240.375,
+            "pvtsim_temperature_C": 240.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 293.0,
+            "pvtsim_bracket_low_C": 239.875,
+            "pvtsim_bracket_high_C": 240.0,
+            "pvtsim_temperature_C": 239.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 293.25,
+            "pvtsim_bracket_low_C": 239.5,
+            "pvtsim_bracket_high_C": 239.625,
+            "pvtsim_temperature_C": 239.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 293.5,
+            "pvtsim_bracket_low_C": 239.0,
+            "pvtsim_bracket_high_C": 239.125,
+            "pvtsim_temperature_C": 239.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 293.75,
+            "pvtsim_bracket_low_C": 238.625,
+            "pvtsim_bracket_high_C": 238.75,
+            "pvtsim_temperature_C": 238.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 294.0,
+            "pvtsim_bracket_low_C": 238.25,
+            "pvtsim_bracket_high_C": 238.375,
+            "pvtsim_temperature_C": 238.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 294.25,
+            "pvtsim_bracket_low_C": 237.75,
+            "pvtsim_bracket_high_C": 237.875,
+            "pvtsim_temperature_C": 237.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 294.5,
+            "pvtsim_bracket_low_C": 237.375,
+            "pvtsim_bracket_high_C": 237.5,
+            "pvtsim_temperature_C": 237.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 294.75,
+            "pvtsim_bracket_low_C": 237.0,
+            "pvtsim_bracket_high_C": 237.125,
+            "pvtsim_temperature_C": 237.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 295.0,
+            "pvtsim_bracket_low_C": 236.5,
+            "pvtsim_bracket_high_C": 236.625,
+            "pvtsim_temperature_C": 236.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 295.25,
+            "pvtsim_bracket_low_C": 236.125,
+            "pvtsim_bracket_high_C": 236.25,
+            "pvtsim_temperature_C": 236.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 295.5,
+            "pvtsim_bracket_low_C": 235.75,
+            "pvtsim_bracket_high_C": 235.875,
+            "pvtsim_temperature_C": 235.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 295.75,
+            "pvtsim_bracket_low_C": 235.25,
+            "pvtsim_bracket_high_C": 235.375,
+            "pvtsim_temperature_C": 235.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 296.0,
+            "pvtsim_bracket_low_C": 234.875,
+            "pvtsim_bracket_high_C": 235.0,
+            "pvtsim_temperature_C": 234.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 296.25,
+            "pvtsim_bracket_low_C": 234.375,
+            "pvtsim_bracket_high_C": 234.5,
+            "pvtsim_temperature_C": 234.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 296.5,
+            "pvtsim_bracket_low_C": 234.0,
+            "pvtsim_bracket_high_C": 234.125,
+            "pvtsim_temperature_C": 234.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 296.75,
+            "pvtsim_bracket_low_C": 233.625,
+            "pvtsim_bracket_high_C": 233.75,
+            "pvtsim_temperature_C": 233.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 297.0,
+            "pvtsim_bracket_low_C": 233.125,
+            "pvtsim_bracket_high_C": 233.25,
+            "pvtsim_temperature_C": 233.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 297.25,
+            "pvtsim_bracket_low_C": 232.75,
+            "pvtsim_bracket_high_C": 232.875,
+            "pvtsim_temperature_C": 232.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 297.5,
+            "pvtsim_bracket_low_C": 232.25,
+            "pvtsim_bracket_high_C": 232.375,
+            "pvtsim_temperature_C": 232.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 297.75,
+            "pvtsim_bracket_low_C": 231.875,
+            "pvtsim_bracket_high_C": 232.0,
+            "pvtsim_temperature_C": 231.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 298.0,
+            "pvtsim_bracket_low_C": 231.375,
+            "pvtsim_bracket_high_C": 231.5,
+            "pvtsim_temperature_C": 231.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 298.25,
+            "pvtsim_bracket_low_C": 231.0,
+            "pvtsim_bracket_high_C": 231.125,
+            "pvtsim_temperature_C": 231.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 298.5,
+            "pvtsim_bracket_low_C": 230.5,
+            "pvtsim_bracket_high_C": 230.625,
+            "pvtsim_temperature_C": 230.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 298.75,
+            "pvtsim_bracket_low_C": 230.0,
+            "pvtsim_bracket_high_C": 230.125,
+            "pvtsim_temperature_C": 230.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 299.0,
+            "pvtsim_bracket_low_C": 229.625,
+            "pvtsim_bracket_high_C": 229.75,
+            "pvtsim_temperature_C": 229.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 299.25,
+            "pvtsim_bracket_low_C": 229.125,
+            "pvtsim_bracket_high_C": 229.25,
+            "pvtsim_temperature_C": 229.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 299.5,
+            "pvtsim_bracket_low_C": 228.75,
+            "pvtsim_bracket_high_C": 228.875,
+            "pvtsim_temperature_C": 228.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 299.75,
+            "pvtsim_bracket_low_C": 228.25,
+            "pvtsim_bracket_high_C": 228.375,
+            "pvtsim_temperature_C": 228.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 300.0,
+            "pvtsim_bracket_low_C": 227.75,
+            "pvtsim_bracket_high_C": 227.875,
+            "pvtsim_temperature_C": 227.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 300.25,
+            "pvtsim_bracket_low_C": 227.375,
+            "pvtsim_bracket_high_C": 227.5,
+            "pvtsim_temperature_C": 227.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 300.5,
+            "pvtsim_bracket_low_C": 226.875,
+            "pvtsim_bracket_high_C": 227.0,
+            "pvtsim_temperature_C": 226.9375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 300.75,
+            "pvtsim_bracket_low_C": 226.375,
+            "pvtsim_bracket_high_C": 226.5,
+            "pvtsim_temperature_C": 226.4375,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 301.0,
+            "pvtsim_bracket_low_C": 226.0,
+            "pvtsim_bracket_high_C": 226.125,
+            "pvtsim_temperature_C": 226.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 301.25,
+            "pvtsim_bracket_low_C": 225.5,
+            "pvtsim_bracket_high_C": 225.625,
+            "pvtsim_temperature_C": 225.5625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 301.5,
+            "pvtsim_bracket_low_C": 225.0,
+            "pvtsim_bracket_high_C": 225.125,
+            "pvtsim_temperature_C": 225.0625,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 301.75,
+            "pvtsim_bracket_low_C": 224.625,
+            "pvtsim_bracket_high_C": 224.75,
+            "pvtsim_temperature_C": 224.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 302.0,
+            "pvtsim_bracket_low_C": 224.125,
+            "pvtsim_bracket_high_C": 224.25,
+            "pvtsim_temperature_C": 224.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 302.25,
+            "pvtsim_bracket_low_C": 223.625,
+            "pvtsim_bracket_high_C": 223.75,
+            "pvtsim_temperature_C": 223.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 302.5,
+            "pvtsim_bracket_low_C": 223.125,
+            "pvtsim_bracket_high_C": 223.25,
+            "pvtsim_temperature_C": 223.1875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 302.75,
+            "pvtsim_bracket_low_C": 222.625,
+            "pvtsim_bracket_high_C": 222.75,
+            "pvtsim_temperature_C": 222.6875,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 303.0,
+            "pvtsim_bracket_low_C": 222.25,
+            "pvtsim_bracket_high_C": 222.375,
+            "pvtsim_temperature_C": 222.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 303.25,
+            "pvtsim_bracket_low_C": 221.75,
+            "pvtsim_bracket_high_C": 221.875,
+            "pvtsim_temperature_C": 221.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 303.5,
+            "pvtsim_bracket_low_C": 221.25,
+            "pvtsim_bracket_high_C": 221.375,
+            "pvtsim_temperature_C": 221.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 303.75,
+            "pvtsim_bracket_low_C": 220.75,
+            "pvtsim_bracket_high_C": 220.875,
+            "pvtsim_temperature_C": 220.8125,
+            "pvtsim_localization_half_width_C": 0.0625
+          },
+          {
+            "pressure_bara": 304.0,
+            "pvtsim_bracket_low_C": 220.25,
+            "pvtsim_bracket_high_C": 220.375,
+            "pvtsim_temperature_C": 220.3125,
+            "pvtsim_localization_half_width_C": 0.0625
+          }
+        ]
+      },
+      "endpoint_topology": {
+        "local_pressure_rows": [
+          {
+            "pressure_bara": 228.4,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1625,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.41,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1625,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.42,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1625,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.43,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1625,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.44,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1625,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.45,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1625,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.46,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1625,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.47,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1625,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.48,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1625,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.49,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1875,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.5,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1875,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.51,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1875,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.52,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1875,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.53,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1875,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.54,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1875,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.55,
+            "direct_GOW_to_GO": true,
+            "direct_transition_mid_C": 311.1875,
+            "topology_sequence": "GOW->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.56,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.57,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 311.225
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.25,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.58,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 311.275
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.3,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.59,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 311.3
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.325,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.6,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 311.175
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.2,
+                "temperature_high_C": 311.325
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.35,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.61,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.15
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.175,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.375
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.4,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.62,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.125
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.15,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.4
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.425,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.63,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.125
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.15,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.425
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.45,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.64,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.125
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.15,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.475
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.5,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.65,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.125
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.15,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.5
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.525,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.66,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.1
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.125,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.525
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.55,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.67,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.1
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.125,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.575
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.6,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.68,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.1
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.125,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.6
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.625,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.69,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.1
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.125,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.65
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.675,
+                "temperature_high_C": 312.0
+              }
+            ]
+          },
+          {
+            "pressure_bara": 228.7,
+            "direct_GOW_to_GO": false,
+            "direct_transition_mid_C": null,
+            "topology_sequence": "GOW->GW->UNRESOLVED->GO",
+            "intervals": [
+              {
+                "topology": "GOW",
+                "temperature_low_C": 310.75,
+                "temperature_high_C": 311.075
+              },
+              {
+                "topology": "GW",
+                "temperature_low_C": 311.1,
+                "temperature_high_C": 311.2
+              },
+              {
+                "topology": "UNRESOLVED",
+                "temperature_low_C": 311.225,
+                "temperature_high_C": 311.675
+              },
+              {
+                "topology": "GO",
+                "temperature_low_C": 311.7,
+                "temperature_high_C": 312.0
+              }
+            ]
+          }
+        ],
+        "last_direct_GOW_to_GO_pressure_bara": 228.55,
+        "first_non_direct_pressure_bara": 228.56,
+        "direct_topology_termination_bracket_bara": [
+          228.55,
+          228.56
+        ],
+        "neqsim_endpoint": {
+          "pressure_bara": 229.9321709182054,
+          "temperature_C": 313.4988282267665
+        },
+        "pressure_difference_range_bara": [
+          1.3721709182053985,
+          1.3821709182053894
+        ],
+        "interpretation": "PVTsim returns a direct GOW-to-GO transition through 228.55 bara. At 228.56 bara the numeric table loses phase identity before the GO state; at higher pressure a GW band also appears. This brackets direct-topology termination but does not solve a PVTsim critical point."
+      },
+      "decision": {
+        "overall_verdict": "PARTIAL_ALIGNMENT_NOT_INTERCHANGEABLE",
+        "frozen_baseline_preserved": true,
+        "physical_model_change_accepted": false,
+        "pvtsim_samples_are_experimental_truth": false
+      }
+    },
+    "compatibility_candidate": {
+      "candidate_type": "branch_aware_water_kij_compatibility",
+      "calibration_basis": "PVTsim software benchmark; not experimental truth",
+      "default_model_changed": false,
+      "main_water_kij_multiplier": 0.98325,
+      "secondary_water_kij_multiplier": 0.932,
+      "main_boundary": {
+        "rows": [
+          {
+            "pressure_bara": 10.0,
+            "target_temperature_C": 163.91828442184976,
+            "root_found": true,
+            "temperature_C": 163.93860795353845,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.020323531688688945,
+            "absolute_deviation_C": 0.020323531688688945
+          },
+          {
+            "pressure_bara": 20.0,
+            "target_temperature_C": 192.17518506970637,
+            "root_found": true,
+            "temperature_C": 192.2407118579244,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.0655267882180226,
+            "absolute_deviation_C": 0.0655267882180226
+          },
+          {
+            "pressure_bara": 28.0,
+            "target_temperature_C": 207.26016144337729,
+            "root_found": true,
+            "temperature_C": 207.37145407747738,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.11129263410009571,
+            "absolute_deviation_C": 0.11129263410009571
+          },
+          {
+            "pressure_bara": 50.0,
+            "target_temperature_C": 235.46944262080274,
+            "root_found": true,
+            "temperature_C": 235.61690362925924,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.1474610084565029,
+            "absolute_deviation_C": 0.1474610084565029
+          },
+          {
+            "pressure_bara": 65.0,
+            "target_temperature_C": 248.97036274920168,
+            "root_found": true,
+            "temperature_C": 249.20623391316428,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.23587116396259944,
+            "absolute_deviation_C": 0.23587116396259944
+          },
+          {
+            "pressure_bara": 80.0,
+            "target_temperature_C": 259.89018661140926,
+            "root_found": true,
+            "temperature_C": 260.2123887014121,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.32220209000286104,
+            "absolute_deviation_C": 0.32220209000286104
+          },
+          {
+            "pressure_bara": 100.0,
+            "target_temperature_C": 271.7431933493559,
+            "root_found": true,
+            "temperature_C": 272.1433806174175,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.4001872680615861,
+            "absolute_deviation_C": 0.4001872680615861
+          },
+          {
+            "pressure_bara": 120.0,
+            "target_temperature_C": 281.24118583225845,
+            "root_found": true,
+            "temperature_C": 281.8142775658457,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.5730917335872618,
+            "absolute_deviation_C": 0.5730917335872618
+          },
+          {
+            "pressure_bara": 140.0,
+            "target_temperature_C": 289.0559055775477,
+            "root_found": true,
+            "temperature_C": 289.7960170094698,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.7401114319220596,
+            "absolute_deviation_C": 0.7401114319220596
+          },
+          {
+            "pressure_bara": 160.0,
+            "target_temperature_C": 295.51218085511607,
+            "root_found": true,
+            "temperature_C": 296.4627898225989,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.9506089674828218,
+            "absolute_deviation_C": 0.9506089674828218
+          },
+          {
+            "pressure_bara": 180.0,
+            "target_temperature_C": 300.9423123339559,
+            "root_found": true,
+            "temperature_C": 302.09667702962133,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 1.1543646956654356,
+            "absolute_deviation_C": 1.1543646956654356
+          },
+          {
+            "pressure_bara": 200.0,
+            "target_temperature_C": 305.5351284084428,
+            "root_found": true,
+            "temperature_C": 306.93698153581136,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 1.401853127368554,
+            "absolute_deviation_C": 1.401853127368554
+          },
+          {
+            "pressure_bara": 220.0,
+            "target_temperature_C": 309.5971710703409,
+            "root_found": true,
+            "temperature_C": 311.19116603528425,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 1.593994964943363,
+            "absolute_deviation_C": 1.593994964943363
+          },
+          {
+            "pressure_bara": 224.0,
+            "target_temperature_C": 310.3548206262352,
+            "root_found": true,
+            "temperature_C": 311.9866349328978,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 1.6318143066625908,
+            "absolute_deviation_C": 1.6318143066625908
+          },
+          {
+            "pressure_bara": 228.0,
+            "target_temperature_C": 311.0967021837058,
+            "root_found": true,
+            "temperature_C": 312.7661212024085,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 1.6694190187026834,
+            "absolute_deviation_C": 1.6694190187026834
+          }
+        ],
+        "root_count": 15,
+        "target_count": 15,
+        "all_roots_found": true,
+        "all_roots_stable": true,
+        "residual_gate_passed": true,
+        "mae_C": 0.7345415153883418,
+        "max_abs_C": 1.6694190187026834,
+        "within_2C_count": 15
+      },
+      "secondary_boundary": {
+        "rows": [
+          {
+            "pressure_bara": 284.0,
+            "target_temperature_C": 253.83749999999998,
+            "root_found": true,
+            "temperature_C": 253.361337544364,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": -0.47616245563597204,
+            "absolute_deviation_C": 0.47616245563597204
+          },
+          {
+            "pressure_bara": 286.0,
+            "target_temperature_C": 250.8875,
+            "root_found": true,
+            "temperature_C": 250.5454151357053,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": -0.34208486429469076,
+            "absolute_deviation_C": 0.34208486429469076
+          },
+          {
+            "pressure_bara": 290.0,
+            "target_temperature_C": 244.6875,
+            "root_found": true,
+            "temperature_C": 244.68420325912507,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": -0.0032967408749300375,
+            "absolute_deviation_C": 0.0032967408749300375
+          },
+          {
+            "pressure_bara": 292.0,
+            "target_temperature_C": 241.5625,
+            "root_found": true,
+            "temperature_C": 241.62886807858456,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.06636807858455995,
+            "absolute_deviation_C": 0.06636807858455995
+          },
+          {
+            "pressure_bara": 294.0,
+            "target_temperature_C": 238.3125,
+            "root_found": true,
+            "temperature_C": 238.48194623506936,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.1694462350693584,
+            "absolute_deviation_C": 0.1694462350693584
+          },
+          {
+            "pressure_bara": 298.0,
+            "target_temperature_C": 231.4375,
+            "root_found": true,
+            "temperature_C": 231.87961970650832,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.442119706508322,
+            "absolute_deviation_C": 0.442119706508322
+          },
+          {
+            "pressure_bara": 300.0,
+            "target_temperature_C": 227.8125,
+            "root_found": true,
+            "temperature_C": 228.40254123221513,
+            "globally_stable": true,
+            "maximum_residual": 0.0,
+            "delta_candidate_minus_pvtsim_C": 0.5900412322151283,
+            "absolute_deviation_C": 0.5900412322151283
+          }
+        ],
+        "root_count": 7,
+        "target_count": 7,
+        "all_roots_found": true,
+        "all_roots_stable": true,
+        "residual_gate_passed": true,
+        "mae_C": 0.2985027590261374,
+        "max_abs_C": 0.5900412322151283,
+        "within_2C_count": 7
+      },
+      "endpoint": {
+        "converged": true,
+        "pressure_bara": 228.5508849218492,
+        "target_bracket_bara": [
+          228.55,
+          228.56
+        ],
+        "inside_target_bracket": true,
+        "raw": {
+          "seed_pressure_bara": 228.0,
+          "seed_temperature_C": 312.7661212024085,
+          "mother_phase": "GAS",
+          "first_incipient_phase": "OIL",
+          "second_incipient_phase": "AQUEOUS",
+          "temperature_C": 312.8722699770806,
+          "pressure_bara": 228.5508849218492,
+          "initial_maximum_residual": 0.01269672121723886,
+          "maximum_residual": 2.602593696110489e-09,
+          "iterations": 2,
+          "jacobian_condition_number": 118179.96442148529,
+          "residual_converged": true,
+          "distinct_phases": true,
+          "converged": true,
+          "mother_composition": [
+            0.031007806062698366,
+            0.07209944784641266,
+            0.09166936874389649,
+            0.0215944242477417,
+            0.016646053791046143,
+            0.0030026704072952273,
+            0.00922879457473755,
+            0.0038773790001869206,
+            0.005620421171188355,
+            0.0081900817155838,
+            0.008368065357208252,
+            0.008611177802085876,
+            0.007614843845367433,
+            0.01707986354827881,
+            0.011060941219329833,
+            0.007308217883110047,
+            0.0072016137838363655,
+            0.00525538444519043,
+            0.004678024351596833,
+            0.004176700413227081,
+            0.003371324539184571,
+            0.0023373952507972718,
+            0.65
+          ],
+          "first_incipient_composition": [
+            0.01944856870026265,
+            0.05314821148768931,
+            0.0662122506134311,
+            0.0179339476899783,
+            0.015347033693256653,
+            0.0029366925799336847,
+            0.009338404481463098,
+            0.004147246458712726,
+            0.006105862413660855,
+            0.009542907630384142,
+            0.010531637403694557,
+            0.011314276296735856,
+            0.010500053377499598,
+            0.02173777743584924,
+            0.015586622602777718,
+            0.011681732385280122,
+            0.013463336873576278,
+            0.012090040274603935,
+            0.013947833677932366,
+            0.017724637691298686,
+            0.023509703288603936,
+            0.03073446125693605,
+            0.6030167616864391
+          ],
+          "second_incipient_composition": [
+            0.0008677641748210089,
+            0.006917050208306223,
+            0.002980758256358546,
+            0.0004051919166418069,
+            9.71867032228208e-05,
+            6.887163310829893e-06,
+            2.261005324857277e-05,
+            4.202605674325437e-06,
+            5.488209419553958e-06,
+            2.3150504519444625e-06,
+            4.730493085401459e-06,
+            1.9008893584253651e-06,
+            4.842935164938044e-07,
+            5.732638997841149e-06,
+            3.757603143037481e-07,
+            3.555417707194827e-08,
+            9.354767400894879e-09,
+            2.2481923811254195e-09,
+            8.726222761324488e-10,
+            4.3464568848463756e-10,
+            2.4080598352795726e-10,
+            5.934795314414393e-11,
+            0.9886772728187132
+          ]
+        }
+      },
+      "gates": {
+        "frozen_payload_unchanged": true,
+        "main_15_of_15_roots": true,
+        "main_mae_at_most_1C": true,
+        "main_at_least_14_of_15_within_2C": true,
+        "secondary_7_of_7_roots": true,
+        "secondary_mae_at_most_0p5C": true,
+        "endpoint_inside_pvtsim_topology_bracket": true,
+        "all_roots_stable_and_residual_passed": true
+      },
+      "decision": "PASS_OPT_IN_SOFTWARE_COMPATIBILITY",
+      "production_promotion_allowed": false
+    }
+  },
+  "model_gap_audit": {
+    "schema_version": "1.0",
+    "frozen_baseline_unchanged": true,
+    "parameter_audit": {
+      "composition_component_count": 23,
+      "maximum_absolute_composition_difference": 0.0,
+      "imported_component_count": 22,
+      "exact_or_numerically_equal_properties": [
+        "molecular weight",
+        "critical temperature",
+        "critical pressure",
+        "acentric factor",
+        "normal boiling point",
+        "critical volume",
+        "constant Peneloux volume shift"
+      ],
+      "tested_and_excluded_as_primary_cause": [
+        "Mathias-Copeman alpha coefficients",
+        "PVTsim Peneloux temperature parameters",
+        "PVTsim water pure-component record"
+      ]
+    },
+    "secondary_boundary_diagnostic_candidate": {
+      "water_kij_multiplier": 0.932,
+      "pressures_bara": [
+        284.0,
+        286.0,
+        290.0,
+        292.0,
+        294.0,
+        298.0,
+        300.0
+      ],
+      "pvtsim_temperature_C": [
+        253.875,
+        250.875,
+        244.625,
+        241.625,
+        238.375,
+        231.375,
+        227.875
+      ],
+      "neqsim_candidate_temperature_C": [
+        253.36133550806198,
+        250.5454148874852,
+        244.6842029836845,
+        241.62886857070873,
+        238.4819457626926,
+        231.8796199721354,
+        228.40254124467953
+      ],
+      "pvtsim_minus_neqsim_C": [
+        0.513664491938016,
+        0.32958511251479194,
+        -0.059202983684485844,
+        -0.003868570708732477,
+        -0.1069457626925896,
+        -0.5046199721354014,
+        -0.5275412446795258
+      ],
+      "mae_C": 0.2922040197647919,
+      "max_absolute_deviation_C": 0.5275412446795258,
+      "production_accepted": false,
+      "rejection_reason": "It removes the ordinary main GOW-GO boundary by 226 bara, while the frozen baseline and PVTsim retain it through 228 bara."
+    },
+    "constant_kij_conclusion": {
+      "single_constant_correction_supported": false,
+      "reason": "Constant global or component-group water Kij changes that align the secondary branch damage the high-pressure main branch topology.",
+      "next_model_gap_focus": "Disappearing-phase stability and near-critical topology implementation, supported by laboratory three-phase data before any physical calibration."
+    },
+    "endpoint_refinement": {
+      "last_demonstrated_direct_pvtsim_gow_to_go_pressure_bara": 228.5,
+      "first_demonstrated_non_direct_or_error_wedge_pressure_bara": 228.6,
+      "direct_topology_termination_pressure_bracket_bara": [
+        228.5,
+        228.6
+      ],
+      "neqsim_endpoint_pressure_bara": 229.9321709182054,
+      "neqsim_endpoint_temperature_C": 313.4988282267665,
+      "pressure_difference_range_bara": [
+        1.3321709182054065,
+        1.4321709182054008
+      ],
+      "caveat": "This brackets termination of the directly observed PVTsim topology; it is not a solved PVTsim critical endpoint because the licensed PT flashes enter a GW/error wedge."
+    },
+    "production_decision": "KEEP_FROZEN_BASELINE_AND_BRANCH_SPECIFIC_TRUST_RANGE",
+    "overall_verdict": "PARTIAL_ALIGNMENT_NOT_INTERCHANGEABLE",
+    "root_network_diagnostic": {
+      "schema_version": "1.0",
+      "mainline_gate": {
+        "status": "PASS",
+        "baseline_sha256": "36941cdd8d39e7d80567e288b763be84a37de3a6afc1fbcb29ef04c5c22521fd"
+      },
+      "model": "Frozen SRK + Peneloux + classic baseline",
+      "boundary_family": "OW_TO_GOW with incipient GAS",
+      "component_names": [
+        "nitrogen",
+        "CO2",
+        "methane",
+        "ethane",
+        "propane",
+        "i-butane",
+        "n-butane",
+        "i-pentane",
+        "n-pentane",
+        "n-hexane",
+        "C7_PC",
+        "C8_PC",
+        "C9_PC",
+        "C10-C12_PC",
+        "C13-C15_PC",
+        "C16-C18_PC",
+        "C19-C22_PC",
+        "C23-C26_PC",
+        "C27-C31_PC",
+        "C32-C38_PC",
+        "C39-C49_PC",
+        "C50-C80_PC",
+        "water"
+      ],
+      "anchors": [
+        {
+          "pressure_bara": 284.0,
+          "neqsim_temperature_C": 261.97046565175265,
+          "pvtsim_temperature_C": 253.875,
+          "pvtsim_minus_neqsim_C": -8.095468821085092,
+          "beta_oil_in_retained_O_W": 0.5092753317409356,
+          "retained_fugacity_and_balance_max_residual": 1.474376176702208e-11,
+          "incipient_zero_tpd": -4.6372017337148463e-11,
+          "incipient_stationarity_max_residual": 1.2391154768920387e-10,
+          "global_minimum_nontrivial_tpd": 7.931322265651108e-12,
+          "target_composition_l1_recovery_error": 3.206916785077063e-11,
+          "cold_replay_thermodynamic_max_residual": 1.7190515677611984e-10,
+          "gas_oil_l1_distance": 0.08361449688357503,
+          "gas_aqueous_l1_distance": 1.3441419638883778,
+          "oil_aqueous_l1_distance": 1.334947035546775,
+          "incipient_water_molfrac": 0.31785681524895004,
+          "incipient_N2_CO2_C1_C2_molfrac": 0.4562942802030601,
+          "incipient_C7plus_molfrac": 0.1353868920037575,
+          "globally_stable": true,
+          "target_matched": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.31785681524895004
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.19657493679032298
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14552526239787567
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06971194793452765
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04448213308033382
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03334655090344295
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.02940727640041154
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "neqsim_temperature_C": 259.1923798406766,
+          "pvtsim_temperature_C": 250.875,
+          "pvtsim_minus_neqsim_C": -8.317377194110918,
+          "beta_oil_in_retained_O_W": 0.500248985860835,
+          "retained_fugacity_and_balance_max_residual": 3.5491609651217004e-12,
+          "incipient_zero_tpd": 1.8975909732432683e-10,
+          "incipient_stationarity_max_residual": 2.7320368189975852e-12,
+          "global_minimum_nontrivial_tpd": 1.902060731321301e-10,
+          "target_composition_l1_recovery_error": 3.1632075431220485e-13,
+          "cold_replay_thermodynamic_max_residual": 1.9164225761869602e-10,
+          "gas_oil_l1_distance": 0.09805903043495247,
+          "gas_aqueous_l1_distance": 1.371384788688779,
+          "oil_aqueous_l1_distance": 1.359871062475868,
+          "incipient_water_molfrac": 0.30444466560832967,
+          "incipient_N2_CO2_C1_C2_molfrac": 0.4709583388472724,
+          "incipient_C7plus_molfrac": 0.13276647394861513,
+          "globally_stable": true,
+          "target_matched": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.30444466560832967
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.20306751093157402
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14974161773667302
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.07254494818529808
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04560426199372729
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03401807310972894
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.029224809376404214
+            }
+          ]
+        },
+        {
+          "pressure_bara": 290.0,
+          "neqsim_temperature_C": 253.40460786678454,
+          "pvtsim_temperature_C": 244.625,
+          "pvtsim_minus_neqsim_C": -8.779608273947929,
+          "beta_oil_in_retained_O_W": 0.48336877287517693,
+          "retained_fugacity_and_balance_max_residual": 6.462386181738111e-12,
+          "incipient_zero_tpd": 5.462674756984143e-11,
+          "incipient_stationarity_max_residual": 8.775202786637237e-13,
+          "global_minimum_nontrivial_tpd": 5.4530158168185805e-11,
+          "target_composition_l1_recovery_error": 9.316831160732786e-14,
+          "cold_replay_thermodynamic_max_residual": 5.7898130734201914e-11,
+          "gas_oil_l1_distance": 0.1276888641027607,
+          "gas_aqueous_l1_distance": 1.4257057470516408,
+          "oil_aqueous_l1_distance": 1.409201695239756,
+          "incipient_water_molfrac": 0.2777291735553758,
+          "incipient_N2_CO2_C1_C2_molfrac": 0.5005416459922865,
+          "incipient_C7plus_molfrac": 0.127355505405041,
+          "globally_stable": true,
+          "target_matched": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2777291735553758
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.21618811546524147
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.15816353610450568
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.07838068834550851
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.0478093060770308
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03530771496920446
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.02873394536602914
+            }
+          ]
+        },
+        {
+          "pressure_bara": 292.0,
+          "neqsim_temperature_C": 250.38705366807494,
+          "pvtsim_temperature_C": 241.625,
+          "pvtsim_minus_neqsim_C": -8.762053751394319,
+          "beta_oil_in_retained_O_W": 0.4754724187626266,
+          "retained_fugacity_and_balance_max_residual": 1.8474111129762605e-13,
+          "incipient_zero_tpd": 3.909961243664384e-11,
+          "incipient_stationarity_max_residual": 1.4210854715202004e-14,
+          "global_minimum_nontrivial_tpd": 3.909206292084048e-11,
+          "target_composition_l1_recovery_error": 4.705654269021586e-15,
+          "cold_replay_thermodynamic_max_residual": 3.919642388439115e-11,
+          "gas_oil_l1_distance": 0.14280688998052649,
+          "gas_aqueous_l1_distance": 1.4526960183022084,
+          "oil_aqueous_l1_distance": 1.4335937793760734,
+          "incipient_water_molfrac": 0.2644691417504054,
+          "incipient_N2_CO2_C1_C2_molfrac": 0.5154274513655881,
+          "incipient_C7plus_molfrac": 0.12456377634039349,
+          "globally_stable": true,
+          "target_matched": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2644691417504054
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.22280074622044946
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.16235786338427508
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.08138125589983547
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.048887585861028086
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03592232662662106
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.02842640106669717
+            }
+          ]
+        },
+        {
+          "pressure_bara": 294.0,
+          "neqsim_temperature_C": 247.2803570131324,
+          "pvtsim_temperature_C": 238.375,
+          "pvtsim_minus_neqsim_C": -8.905356362115185,
+          "beta_oil_in_retained_O_W": 0.46791093570984293,
+          "retained_fugacity_and_balance_max_residual": 2.8421709430404007e-13,
+          "incipient_zero_tpd": 4.623945670800822e-11,
+          "incipient_stationarity_max_residual": 6.217248937900877e-15,
+          "global_minimum_nontrivial_tpd": 4.6229464701855175e-11,
+          "target_composition_l1_recovery_error": 7.052409871366461e-15,
+          "cold_replay_thermodynamic_max_residual": 4.6383119567394715e-11,
+          "gas_oil_l1_distance": 0.1580845490859689,
+          "gas_aqueous_l1_distance": 1.4795224816436752,
+          "oil_aqueous_l1_distance": 1.4578001674678334,
+          "incipient_water_molfrac": 0.2512990793970984,
+          "incipient_N2_CO2_C1_C2_molfrac": 0.5303578151375912,
+          "incipient_C7plus_molfrac": 0.1217133788459125,
+          "globally_stable": true,
+          "target_matched": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2512990793970984
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.2294397582861003
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.1665346660269846
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.08443651740782294
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.0499468734166833
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03651461258305868
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.028078060346321723
+            }
+          ]
+        },
+        {
+          "pressure_bara": 298.0,
+          "neqsim_temperature_C": 240.77253937082583,
+          "pvtsim_temperature_C": 231.375,
+          "pvtsim_minus_neqsim_C": -9.3975393418242,
+          "beta_oil_in_retained_O_W": 0.4537118964976437,
+          "retained_fugacity_and_balance_max_residual": 8.881784197001252e-13,
+          "incipient_zero_tpd": 1.7047696587724204e-11,
+          "incipient_stationarity_max_residual": 7.105427357601002e-15,
+          "global_minimum_nontrivial_tpd": 1.7015722164759766e-11,
+          "target_composition_l1_recovery_error": 2.0743389644861665e-14,
+          "cold_replay_thermodynamic_max_residual": 1.7557066911422226e-11,
+          "gas_oil_l1_distance": 0.18902248190930557,
+          "gas_aqueous_l1_distance": 1.5325660805881256,
+          "oil_aqueous_l1_distance": 1.5056699597565064,
+          "incipient_water_molfrac": 0.2252871461763202,
+          "incipient_N2_CO2_C1_C2_molfrac": 0.5603157336740782,
+          "incipient_C7plus_molfrac": 0.11583037090304066,
+          "globally_stable": true,
+          "target_matched": true,
+          "top_incipient_components": [
+            {
+              "component": "methane",
+              "mole_fraction": 0.24277936642286493
+            },
+            {
+              "component": "water",
+              "mole_fraction": 0.2252871461763202
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.1748207109115444
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.09071471881293534
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.052000937526733425
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03762609668570832
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.027260523012675626
+            }
+          ]
+        },
+        {
+          "pressure_bara": 300.0,
+          "neqsim_temperature_C": 237.35404307141766,
+          "pvtsim_temperature_C": 227.875,
+          "pvtsim_minus_neqsim_C": -9.479043479587233,
+          "beta_oil_in_retained_O_W": 0.4470346390766533,
+          "retained_fugacity_and_balance_max_residual": 2.0961010704922955e-13,
+          "incipient_zero_tpd": 5.686562332130052e-13,
+          "incipient_stationarity_max_residual": 1.2221335055073723e-12,
+          "global_minimum_nontrivial_tpd": 7.753797603985099e-13,
+          "target_composition_l1_recovery_error": 1.4654212088585639e-13,
+          "cold_replay_thermodynamic_max_residual": 1.02873265461767e-12,
+          "gas_oil_l1_distance": 0.20464601264869878,
+          "gas_aqueous_l1_distance": 1.55873973904997,
+          "oil_aqueous_l1_distance": 1.5293523915266964,
+          "incipient_water_molfrac": 0.21246687765860642,
+          "incipient_N2_CO2_C1_C2_molfrac": 0.5753344928666588,
+          "incipient_C7plus_molfrac": 0.11279276260919507,
+          "globally_stable": true,
+          "target_matched": true,
+          "top_incipient_components": [
+            {
+              "component": "methane",
+              "mole_fraction": 0.24947537331665093
+            },
+            {
+              "component": "water",
+              "mole_fraction": 0.21246687765860642
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.17892454322475398
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.09394223464623574
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.05299234167901816
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03814235418469962
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.02679172601542649
+            }
+          ]
+        }
+      ],
+      "alternate_globally_stable_seed_roots": [
+        {
+          "pressure_bara": 284.0,
+          "temperature_C": 256.25,
+          "formal_branch_temperature_C": 261.9704688210851,
+          "temperature_offset_from_formal_C": -5.720468821085092,
+          "global_minimum_nontrivial_tpd": 1.8449850553248345e-09,
+          "cold_replay_thermodynamic_max_residual": 1.8991128669654245e-09,
+          "gas_oil_l1_distance": 0.002138967592358514,
+          "gas_aqueous_l1_distance": 1.3819997333597795,
+          "oil_aqueous_l1_distance": 1.3817997228563446,
+          "globally_stable": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.29944846673463155
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.18476353682985863
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.13920800391489324
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.0626040392165939
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.043752096514952724
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.034572405253865485
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.0337910004108312
+            }
+          ]
+        },
+        {
+          "pressure_bara": 284.0,
+          "temperature_C": 256.5625,
+          "formal_branch_temperature_C": 261.9704688210851,
+          "temperature_offset_from_formal_C": -5.407968821085092,
+          "global_minimum_nontrivial_tpd": 6.25679132685346e-09,
+          "cold_replay_thermodynamic_max_residual": 6.3112044479396445e-09,
+          "gas_oil_l1_distance": 0.0032313351199149323,
+          "gas_aqueous_l1_distance": 1.379604592572523,
+          "oil_aqueous_l1_distance": 1.3793032378242658,
+          "globally_stable": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.300617920386709
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.184675992813773
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.13911458366594734
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06261207186521253
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04370679053266423
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.0344667041779896
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03374391482414864
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 248.75,
+          "formal_branch_temperature_C": 259.1923771941109,
+          "temperature_offset_from_formal_C": -10.442377194110918,
+          "global_minimum_nontrivial_tpd": 1.8485213360010565e-13,
+          "cold_replay_thermodynamic_max_residual": 9.848832860370749e-11,
+          "gas_oil_l1_distance": 9.500018147913947e-05,
+          "gas_aqueous_l1_distance": 1.4411246244725147,
+          "oil_aqueous_l1_distance": 1.4411146244002617,
+          "globally_stable": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2705117808782608
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.1920470500971469
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14468818356196636
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06499143312288548
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04550801143254171
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.03607922914718316
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03515798599707968
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 249.0625,
+          "formal_branch_temperature_C": 259.1923771941109,
+          "temperature_offset_from_formal_C": -10.129877194110918,
+          "global_minimum_nontrivial_tpd": 6.98769930831389e-11,
+          "cold_replay_thermodynamic_max_residual": 3.956390770554208e-10,
+          "gas_oil_l1_distance": 0.000688560214265342,
+          "gas_aqueous_l1_distance": 1.4388704364843636,
+          "oil_aqueous_l1_distance": 1.4387981617964043,
+          "globally_stable": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.27161151029870045
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.19187523901318676
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14454136124998893
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.0649539722021616
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04545451706205768
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.035999828202202044
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03511049322979729
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 249.09295563392698,
+          "formal_branch_temperature_C": 259.1923771941109,
+          "temperature_offset_from_formal_C": -10.099421560183941,
+          "global_minimum_nontrivial_tpd": 8.934497586609581e-11,
+          "cold_replay_thermodynamic_max_residual": 4.743085924019397e-10,
+          "gas_oil_l1_distance": 0.0007475122714233626,
+          "gas_aqueous_l1_distance": 1.4386504711523416,
+          "oil_aqueous_l1_distance": 1.4385720302486378,
+          "globally_stable": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2717188237421901
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.19185868532892938
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.1445271718867383
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06495042481437052
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04544932204014973
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.035992030408217246
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03510586556632775
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 249.1000783661019,
+          "formal_branch_temperature_C": 259.1923771941109,
+          "temperature_offset_from_formal_C": -10.092298828009007,
+          "global_minimum_nontrivial_tpd": 9.43720657220603e-11,
+          "cold_replay_thermodynamic_max_residual": 2.105942087382573e-10,
+          "gas_oil_l1_distance": 0.0007612365412832424,
+          "gas_aqueous_l1_distance": 1.4385990106021307,
+          "oil_aqueous_l1_distance": 1.4385191347476634,
+          "globally_stable": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.27174392970019906
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.1918547989231785
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.1445238441415823
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06494958797893062
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.045448104940400524
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.0359902089285283
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03510478233368159
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 249.6875,
+          "formal_branch_temperature_C": 259.1923771941109,
+          "temperature_offset_from_formal_C": -9.504877194110918,
+          "global_minimum_nontrivial_tpd": 1.537118988830334e-09,
+          "cold_replay_thermodynamic_max_residual": 1.7428032350608191e-09,
+          "gas_oil_l1_distance": 0.0019393327141810305,
+          "gas_aqueous_l1_distance": 1.4343466719282414,
+          "oil_aqueous_l1_distance": 1.4341442576401915,
+          "globally_stable": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2738185332433465
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.1915426785761397
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14425465281442945
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06488504206540573
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04534860594750931
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.03583760030360857
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03501556964794279
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 250.0,
+          "formal_branch_temperature_C": 259.1923771941109,
+          "temperature_offset_from_formal_C": -9.192377194110918,
+          "global_minimum_nontrivial_tpd": 3.666457033595524e-09,
+          "cold_replay_thermodynamic_max_residual": 3.913394053256525e-09,
+          "gas_oil_l1_distance": 0.0025985843515816762,
+          "gas_aqueous_l1_distance": 1.4320772604564849,
+          "oil_aqueous_l1_distance": 1.4318067967349124,
+          "globally_stable": true,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2749257445082488
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.19138237392506957
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14411503987968108
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06485380004454956
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04529624267827471
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.035754669922635735
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.034968154217691984
+            }
+          ]
+        }
+      ],
+      "independent_special_points": [
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 249.375,
+          "classification": "CRITICAL_END_POINT",
+          "failure_message": null,
+          "minimum_phase_distance_reported": 1.4365323882260111e-07,
+          "gas_oil_l1_distance": 1.4365323882260111e-07,
+          "gas_aqueous_l1_distance": 1.436474694524732,
+          "oil_aqueous_l1_distance": 1.43647470944619,
+          "incipient_zero_tpd": -2.3840418528209284e-10,
+          "incipient_stationarity_max_residual": 9.579643744928035e-10,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.27278197326168613
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.19142383386518638
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14422103511643225
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06477789444371074
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04536426544154118
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.03597271450533445
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.0350491493242046
+            }
+          ]
+        }
+      ],
+      "rejected_near_coalescent_seed_roots": [
+        {
+          "pressure_bara": 284.0,
+          "temperature_C": 254.375,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.0035213688450887954,
+          "gas_oil_l1_distance": 0.0035213688450887954,
+          "gas_aqueous_l1_distance": 1.3962916162748564,
+          "oil_aqueous_l1_distance": 1.3966270195977122,
+          "incipient_zero_tpd": -8.94791285510621e-09,
+          "incipient_stationarity_max_residual": 2.4513724383723456e-13,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.29247041587252104
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.18546354056300812
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.139877703471307
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06264693958965546
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.0440434460287949
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.03516053895718404
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03407756771423793
+            }
+          ]
+        },
+        {
+          "pressure_bara": 284.0,
+          "temperature_C": 254.6875,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.002670750106975937,
+          "gas_oil_l1_distance": 0.002670750106975937,
+          "gas_aqueous_l1_distance": 1.393920267257373,
+          "oil_aqueous_l1_distance": 1.3941738118230933,
+          "incipient_zero_tpd": -3.866075015679371e-09,
+          "incipient_stationarity_max_residual": 6.501466032204917e-13,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2936282059854812
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.1853290591890755
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.13975491846354765
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.062630470383983
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04399292535259523
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.035067306012810724
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.034029429566442185
+            }
+          ]
+        },
+        {
+          "pressure_bara": 284.0,
+          "temperature_C": 255.0,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.0017861665634080369,
+          "gas_oil_l1_distance": 0.0017861665634080369,
+          "gas_aqueous_l1_distance": 1.3915443904551252,
+          "oil_aqueous_l1_distance": 1.3917134117602439,
+          "incipient_zero_tpd": -1.152430595396936e-09,
+          "incipient_stationarity_max_residual": 6.750155989720952e-14,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.294788220790698
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.18520101539826023
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.13963617893826738
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06261737785233028
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04394310648664977
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.03497231724515019
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.0339814177834522
+            }
+          ]
+        },
+        {
+          "pressure_bara": 284.0,
+          "temperature_C": 255.3125,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.0008654573740485144,
+          "gas_oil_l1_distance": 0.0008654573740485144,
+          "gas_aqueous_l1_distance": 1.3891641713062781,
+          "oil_aqueous_l1_distance": 1.3892458110529429,
+          "incipient_zero_tpd": -1.432338692097801e-10,
+          "incipient_stationarity_max_residual": 2.62545540863357e-12,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.29595036775651345
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.1850798819427574
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.13952177508980598
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06260790302959435
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04389404661682823
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.03487546286195498
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03393354916188292
+            }
+          ]
+        },
+        {
+          "pressure_bara": 284.0,
+          "temperature_C": 255.625,
+          "classification": "PHASE_COALESCENCE_CANDIDATE",
+          "failure_message": "zero-TPD root contains duplicate phases but independent critical-endpoint conditions did not pass",
+          "minimum_phase_distance_reported": 3.286443263127506e-07,
+          "gas_oil_l1_distance": 3.286443263127506e-07,
+          "gas_aqueous_l1_distance": 1.386770970523789,
+          "oil_aqueous_l1_distance": 1.3867710014347066,
+          "incipient_zero_tpd": -5.226041821515537e-11,
+          "incipient_stationarity_max_residual": 1.4640377798968984e-10,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2971189667160463
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.1849457595972165
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.13939925132566575
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06259220340800721
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04384312929066536
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.034780519119206724
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.0338848520632903
+            }
+          ]
+        },
+        {
+          "pressure_bara": 284.0,
+          "temperature_C": 255.9375,
+          "classification": "PHASE_COALESCENCE_CANDIDATE",
+          "failure_message": "zero-TPD root contains duplicate phases but independent critical-endpoint conditions did not pass",
+          "minimum_phase_distance_reported": 1.025867362846461e-07,
+          "gas_oil_l1_distance": 1.025867362846461e-07,
+          "gas_aqueous_l1_distance": 1.3842889651730945,
+          "oil_aqueous_l1_distance": 1.3842889747301443,
+          "incipient_zero_tpd": -1.5668089048404e-10,
+          "incipient_stationarity_max_residual": 5.54653212248013e-10,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.29833192932835795
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.18462297937441696
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.13915870720290263
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.062483291685289155
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04376732676614475
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.034721118162219115
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03382684134380291
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 246.875,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.0030709408563690775,
+          "gas_oil_l1_distance": 0.0030709408563690775,
+          "gas_aqueous_l1_distance": 1.4545383555771607,
+          "oil_aqueous_l1_distance": 1.4548671671200484,
+          "incipient_zero_tpd": -6.510783023827571e-09,
+          "incipient_stationarity_max_residual": 9.947598300641403e-14,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.26396818266729816
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.1931444850459582
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14561097926467673
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06525258627191284
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.045835221089033235
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.036534210579947136
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03544301142932918
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 247.1875,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.0025868174252270436,
+          "gas_oil_l1_distance": 0.0025868174252270436,
+          "gas_aqueous_l1_distance": 1.4523162370979594,
+          "oil_aqueous_l1_distance": 1.4525924355365865,
+          "incipient_zero_tpd": -3.872835163676314e-09,
+          "incipient_stationarity_max_residual": 4.618527782440651e-13,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.26505214089849344
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.19295441139374211
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14545266409039365
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06520511535582942
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.045780033686841866
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.03646075330817973
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03539552457914142
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 247.5,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.0020861433314055006,
+          "gas_oil_l1_distance": 0.0020861433314055006,
+          "gas_aqueous_l1_distance": 1.4500886592912594,
+          "oil_aqueous_l1_distance": 1.450310773789189,
+          "incipient_zero_tpd": -2.0237316267213146e-09,
+          "incipient_stationarity_max_residual": 1.2079226507921703e-13,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2661387845293161
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.1927670169688361
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14529603896333065
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06515912677488409
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04572508467595899
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.03638639073909822
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.0353480243750939
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 247.8125,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.0015683486623422728,
+          "gas_oil_l1_distance": 0.0015683486623422728,
+          "gas_aqueous_l1_distance": 1.4478556617437421,
+          "oil_aqueous_l1_distance": 1.4480221717947612,
+          "incipient_zero_tpd": -8.603968648657201e-10,
+          "incipient_stationarity_max_residual": 2.4158453015843406e-13,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2672280938985781
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.19258243438090422
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14514118606017468
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06511468814008167
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.045670389995642074
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.036311091862857324
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03530051531561815
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 248.125,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.0010327433023945148,
+          "gas_oil_l1_distance": 0.0010327433023945148,
+          "gas_aqueous_l1_distance": 1.445617286878328,
+          "oil_aqueous_l1_distance": 1.4457266195299354,
+          "incipient_zero_tpd": -2.676994181882719e-10,
+          "incipient_stationarity_max_residual": 7.071321306284517e-11,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.26832004792882397
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.19240080247903002
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.14498819129461063
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06507187032235522
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.04561596629292173
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.036234824053763354
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03525300206574695
+            }
+          ]
+        },
+        {
+          "pressure_bara": 286.0,
+          "temperature_C": 248.4375,
+          "classification": "METASTABLE_BOUNDARY_ROOT",
+          "failure_message": "retained OIL phase has a negative homogeneous TPD eigenvalue",
+          "minimum_phase_distance_reported": 0.0004785896819959612,
+          "gas_oil_l1_distance": 0.0004785896819959612,
+          "gas_aqueous_l1_distance": 1.4433735849822074,
+          "oil_aqueous_l1_distance": 1.4434241070320655,
+          "incipient_zero_tpd": -4.593192493018705e-11,
+          "incipient_stationarity_max_residual": 4.990852175978944e-11,
+          "top_incipient_components": [
+            {
+              "component": "water",
+              "mole_fraction": 0.2694146216123264
+            },
+            {
+              "component": "methane",
+              "mole_fraction": 0.19222227668896844
+            },
+            {
+              "component": "CO2",
+              "mole_fraction": 0.1448371507142441
+            },
+            {
+              "component": "nitrogen",
+              "mole_fraction": 0.06503075259470496
+            },
+            {
+              "component": "ethane",
+              "mole_fraction": 0.0455618322701941
+            },
+            {
+              "component": "C10-C12_PC",
+              "mole_fraction": 0.036157551093906524
+            },
+            {
+              "component": "propane",
+              "mole_fraction": 0.03520548995604819
+            }
+          ]
+        }
+      ],
+      "diagnostic_decision": "FORMAL_ROOTS_CONVERGED_WITH_SEPARATE_NEAR_CRITICAL_NETWORK_AT_284_TO_286_BARA"
+    },
+    "constrained_correction_evaluation": {
+      "schema_version": "1.0",
+      "hard_gates": [
+        "The frozen main GO->GOW branch and coupled endpoint must remain within the regression tolerances.",
+        "No physical parameter change is accepted without exact-fluid laboratory support.",
+        "A replacement branch must be continuous over the declared pressure range and retain its physical identity.",
+        "Every accepted root must satisfy the 1e-7 thermodynamic residual gate."
+      ],
+      "mainline_status": "PASS",
+      "maximum_formal_root_residual": 1.9164225761869602e-10,
+      "formal_pressure_coverage_bara": [
+        284.0,
+        286.0,
+        290.0,
+        292.0,
+        294.0,
+        298.0,
+        300.0
+      ],
+      "alternate_root_pressure_coverage_bara": [
+        284.0,
+        286.0
+      ],
+      "candidates": [
+        {
+          "id": "C0",
+          "change": "Keep the frozen physical model and add branch-network-aware reporting",
+          "claimed_benefit": "Preserves the verified mainline while separating the formal OW->GOW branch, alternate stable roots, rejected roots and the independent critical endpoint",
+          "checks": {
+            "mainline_regression": "PASS",
+            "physical_definition_unchanged": "PASS",
+            "formal_root_residual_gate": "PASS",
+            "branch_identity_preserved": "PASS",
+            "independent_lab_calibration_required": "NOT_APPLICABLE"
+          },
+          "decision": "ACCEPT_WORKFLOW_ONLY",
+          "reason": "This is the only candidate that improves robustness without changing the EOS or pretending PVTsim is experimental truth."
+        },
+        {
+          "id": "C1",
+          "change": "Multiply every water Kij by 0.932",
+          "claimed_benefit": "Reduces seven-point secondary MAE to 0.292 degC",
+          "checks": {
+            "mainline_regression": "FAIL: ordinary GO->GOW branch absent by 226 bara",
+            "physical_definition_unchanged": "FAIL",
+            "independent_lab_support": "FAIL: exact-fluid data unavailable",
+            "secondary_full_pressure_coverage": "PASS"
+          },
+          "decision": "REJECT",
+          "reason": "It removes the ordinary main GOW-GO boundary by 226 bara, while the frozen baseline and PVTsim retain it through 228 bara."
+        },
+        {
+          "id": "C2",
+          "change": "Multiply light-group water Kij by 0.682",
+          "claimed_benefit": "Moves the 292-bara root to within about 0.19 degC of PVTsim",
+          "checks": {
+            "mainline_regression": "FAIL: 228-bara ordinary main root lost",
+            "physical_definition_unchanged": "FAIL",
+            "independent_lab_support": "FAIL: exact-fluid data unavailable",
+            "secondary_full_pressure_coverage": "NOT_DEMONSTRATED"
+          },
+          "decision": "REJECT",
+          "reason": "A one-point match is not admissible when it removes the verified high-pressure mainline."
+        },
+        {
+          "id": "C3",
+          "change": "Replace the formal secondary branch with the lower near-critical roots",
+          "claimed_benefit": "At 284-286 bara the lower roots lie closer to the PVTsim temperatures than the formal connected branch",
+          "checks": {
+            "mainline_regression": "PASS: no model change",
+            "physical_definition_unchanged": "PASS",
+            "connected_284_to_300_coverage": "FAIL",
+            "branch_identity_preserved": "FAIL: the lower network terminates at a 286-bara critical endpoint"
+          },
+          "decision": "REJECT_AS_REPLACEMENT",
+          "reason": "The lower roots are a separate near-critical network and do not supply the formal branch through 290-300 bara."
+        },
+        {
+          "id": "C4",
+          "change": "Loosen or tighten convergence tolerances to move the formal root",
+          "claimed_benefit": "Would be a purely numerical change",
+          "checks": {
+            "mainline_regression": "NOT_NEEDED",
+            "formal_maximum_residual": 1.9164225761869602e-10,
+            "formal_root_residual_gate": "PASS",
+            "explains_8_to_9_5_degC_gap": "FAIL"
+          },
+          "decision": "REJECT",
+          "reason": "The accepted roots already close fugacity, TPD, stationarity and replay equations by more than two orders of magnitude beyond the gate."
+        },
+        {
+          "id": "C5",
+          "change": "Substitute the PVTsim water pure-component record",
+          "claimed_benefit": "Moves the 292-bara NeqSim root by only about -1.1 degC",
+          "checks": {
+            "same_definition": "FAIL",
+            "explains_secondary_gap": "FAIL",
+            "mainline_regression": "NOT_SCREENED_BECAUSE_BENEFIT_INSUFFICIENT"
+          },
+          "decision": "REJECT",
+          "reason": "It breaks the frozen definition and leaves most of the discrepancy unresolved."
+        }
+      ],
+      "decision": "ACCEPT_C0_WORKFLOW_ONLY_KEEP_FROZEN_PHYSICAL_BASELINE",
+      "physical_model_change_accepted": false
+    },
+    "full_candidate_validation_status": "PASS",
+    "accepted_change": "Workflow-only branch-network-aware reporting; frozen physical model retained",
+    "branch_aware_compatibility_profile": {
+      "implemented_class": "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryModelProfile",
+      "mode": "explicit opt-in; clone-only; boundary-family-specific",
+      "main_water_kij_multiplier": 0.98325,
+      "secondary_water_kij_multiplier": 0.932,
+      "software_compatibility_decision": "PASS_OPT_IN_SOFTWARE_COMPATIBILITY",
+      "default_model_changed": false,
+      "production_promotion_allowed": false,
+      "required_next_evidence": "exact-fluid laboratory phase-boundary measurements"
+    }
+  },
+  "compatibility_candidate": {
+    "schema_version": "1.0",
+    "candidate_type": "branch_aware_water_kij_compatibility",
+    "calibration_basis": "PVTsim software benchmark; not experimental truth",
+    "default_model_changed": false,
+    "base_payload_sha256_before": "be7e0e04b1dac9fa9673d2b975dfe1a55342e274c16aad806af82da2adc1e850",
+    "base_payload_sha256_after": "be7e0e04b1dac9fa9673d2b975dfe1a55342e274c16aad806af82da2adc1e850",
+    "main_water_kij_multiplier": 0.98325,
+    "secondary_water_kij_multiplier": 0.932,
+    "main_boundary": {
+      "rows": [
+        {
+          "pressure_bara": 10.0,
+          "target_temperature_C": 163.91828442184976,
+          "root_found": true,
+          "temperature_C": 163.93860795353845,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.020323531688688945,
+          "absolute_deviation_C": 0.020323531688688945
+        },
+        {
+          "pressure_bara": 20.0,
+          "target_temperature_C": 192.17518506970637,
+          "root_found": true,
+          "temperature_C": 192.2407118579244,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.0655267882180226,
+          "absolute_deviation_C": 0.0655267882180226
+        },
+        {
+          "pressure_bara": 28.0,
+          "target_temperature_C": 207.26016144337729,
+          "root_found": true,
+          "temperature_C": 207.37145407747738,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.11129263410009571,
+          "absolute_deviation_C": 0.11129263410009571
+        },
+        {
+          "pressure_bara": 50.0,
+          "target_temperature_C": 235.46944262080274,
+          "root_found": true,
+          "temperature_C": 235.61690362925924,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.1474610084565029,
+          "absolute_deviation_C": 0.1474610084565029
+        },
+        {
+          "pressure_bara": 65.0,
+          "target_temperature_C": 248.97036274920168,
+          "root_found": true,
+          "temperature_C": 249.20623391316428,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.23587116396259944,
+          "absolute_deviation_C": 0.23587116396259944
+        },
+        {
+          "pressure_bara": 80.0,
+          "target_temperature_C": 259.89018661140926,
+          "root_found": true,
+          "temperature_C": 260.2123887014121,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.32220209000286104,
+          "absolute_deviation_C": 0.32220209000286104
+        },
+        {
+          "pressure_bara": 100.0,
+          "target_temperature_C": 271.7431933493559,
+          "root_found": true,
+          "temperature_C": 272.1433806174175,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.4001872680615861,
+          "absolute_deviation_C": 0.4001872680615861
+        },
+        {
+          "pressure_bara": 120.0,
+          "target_temperature_C": 281.24118583225845,
+          "root_found": true,
+          "temperature_C": 281.8142775658457,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.5730917335872618,
+          "absolute_deviation_C": 0.5730917335872618
+        },
+        {
+          "pressure_bara": 140.0,
+          "target_temperature_C": 289.0559055775477,
+          "root_found": true,
+          "temperature_C": 289.7960170094698,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.7401114319220596,
+          "absolute_deviation_C": 0.7401114319220596
+        },
+        {
+          "pressure_bara": 160.0,
+          "target_temperature_C": 295.51218085511607,
+          "root_found": true,
+          "temperature_C": 296.4627898225989,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.9506089674828218,
+          "absolute_deviation_C": 0.9506089674828218
+        },
+        {
+          "pressure_bara": 180.0,
+          "target_temperature_C": 300.9423123339559,
+          "root_found": true,
+          "temperature_C": 302.09667702962133,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 1.1543646956654356,
+          "absolute_deviation_C": 1.1543646956654356
+        },
+        {
+          "pressure_bara": 200.0,
+          "target_temperature_C": 305.5351284084428,
+          "root_found": true,
+          "temperature_C": 306.93698153581136,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 1.401853127368554,
+          "absolute_deviation_C": 1.401853127368554
+        },
+        {
+          "pressure_bara": 220.0,
+          "target_temperature_C": 309.5971710703409,
+          "root_found": true,
+          "temperature_C": 311.19116603528425,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 1.593994964943363,
+          "absolute_deviation_C": 1.593994964943363
+        },
+        {
+          "pressure_bara": 224.0,
+          "target_temperature_C": 310.3548206262352,
+          "root_found": true,
+          "temperature_C": 311.9866349328978,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 1.6318143066625908,
+          "absolute_deviation_C": 1.6318143066625908
+        },
+        {
+          "pressure_bara": 228.0,
+          "target_temperature_C": 311.0967021837058,
+          "root_found": true,
+          "temperature_C": 312.7661212024085,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 1.6694190187026834,
+          "absolute_deviation_C": 1.6694190187026834
+        }
+      ],
+      "root_count": 15,
+      "target_count": 15,
+      "all_roots_found": true,
+      "all_roots_stable": true,
+      "residual_gate_passed": true,
+      "mae_C": 0.7345415153883418,
+      "max_abs_C": 1.6694190187026834,
+      "within_2C_count": 15
+    },
+    "secondary_boundary": {
+      "rows": [
+        {
+          "pressure_bara": 284.0,
+          "target_temperature_C": 253.83749999999998,
+          "root_found": true,
+          "temperature_C": 253.361337544364,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": -0.47616245563597204,
+          "absolute_deviation_C": 0.47616245563597204
+        },
+        {
+          "pressure_bara": 286.0,
+          "target_temperature_C": 250.8875,
+          "root_found": true,
+          "temperature_C": 250.5454151357053,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": -0.34208486429469076,
+          "absolute_deviation_C": 0.34208486429469076
+        },
+        {
+          "pressure_bara": 290.0,
+          "target_temperature_C": 244.6875,
+          "root_found": true,
+          "temperature_C": 244.68420325912507,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": -0.0032967408749300375,
+          "absolute_deviation_C": 0.0032967408749300375
+        },
+        {
+          "pressure_bara": 292.0,
+          "target_temperature_C": 241.5625,
+          "root_found": true,
+          "temperature_C": 241.62886807858456,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.06636807858455995,
+          "absolute_deviation_C": 0.06636807858455995
+        },
+        {
+          "pressure_bara": 294.0,
+          "target_temperature_C": 238.3125,
+          "root_found": true,
+          "temperature_C": 238.48194623506936,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.1694462350693584,
+          "absolute_deviation_C": 0.1694462350693584
+        },
+        {
+          "pressure_bara": 298.0,
+          "target_temperature_C": 231.4375,
+          "root_found": true,
+          "temperature_C": 231.87961970650832,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.442119706508322,
+          "absolute_deviation_C": 0.442119706508322
+        },
+        {
+          "pressure_bara": 300.0,
+          "target_temperature_C": 227.8125,
+          "root_found": true,
+          "temperature_C": 228.40254123221513,
+          "globally_stable": true,
+          "maximum_residual": 0.0,
+          "delta_candidate_minus_pvtsim_C": 0.5900412322151283,
+          "absolute_deviation_C": 0.5900412322151283
+        }
+      ],
+      "root_count": 7,
+      "target_count": 7,
+      "all_roots_found": true,
+      "all_roots_stable": true,
+      "residual_gate_passed": true,
+      "mae_C": 0.2985027590261374,
+      "max_abs_C": 0.5900412322151283,
+      "within_2C_count": 7
+    },
+    "endpoint": {
+      "converged": true,
+      "pressure_bara": 228.5508849218492,
+      "target_bracket_bara": [
+        228.55,
+        228.56
+      ],
+      "inside_target_bracket": true,
+      "raw": {
+        "seed_pressure_bara": 228.0,
+        "seed_temperature_C": 312.7661212024085,
+        "mother_phase": "GAS",
+        "first_incipient_phase": "OIL",
+        "second_incipient_phase": "AQUEOUS",
+        "temperature_C": 312.8722699770806,
+        "pressure_bara": 228.5508849218492,
+        "initial_maximum_residual": 0.01269672121723886,
+        "maximum_residual": 2.602593696110489e-09,
+        "iterations": 2,
+        "jacobian_condition_number": 118179.96442148529,
+        "residual_converged": true,
+        "distinct_phases": true,
+        "converged": true,
+        "mother_composition": [
+          0.031007806062698366,
+          0.07209944784641266,
+          0.09166936874389649,
+          0.0215944242477417,
+          0.016646053791046143,
+          0.0030026704072952273,
+          0.00922879457473755,
+          0.0038773790001869206,
+          0.005620421171188355,
+          0.0081900817155838,
+          0.008368065357208252,
+          0.008611177802085876,
+          0.007614843845367433,
+          0.01707986354827881,
+          0.011060941219329833,
+          0.007308217883110047,
+          0.0072016137838363655,
+          0.00525538444519043,
+          0.004678024351596833,
+          0.004176700413227081,
+          0.003371324539184571,
+          0.0023373952507972718,
+          0.65
+        ],
+        "first_incipient_composition": [
+          0.01944856870026265,
+          0.05314821148768931,
+          0.0662122506134311,
+          0.0179339476899783,
+          0.015347033693256653,
+          0.0029366925799336847,
+          0.009338404481463098,
+          0.004147246458712726,
+          0.006105862413660855,
+          0.009542907630384142,
+          0.010531637403694557,
+          0.011314276296735856,
+          0.010500053377499598,
+          0.02173777743584924,
+          0.015586622602777718,
+          0.011681732385280122,
+          0.013463336873576278,
+          0.012090040274603935,
+          0.013947833677932366,
+          0.017724637691298686,
+          0.023509703288603936,
+          0.03073446125693605,
+          0.6030167616864391
+        ],
+        "second_incipient_composition": [
+          0.0008677641748210089,
+          0.006917050208306223,
+          0.002980758256358546,
+          0.0004051919166418069,
+          9.71867032228208e-05,
+          6.887163310829893e-06,
+          2.261005324857277e-05,
+          4.202605674325437e-06,
+          5.488209419553958e-06,
+          2.3150504519444625e-06,
+          4.730493085401459e-06,
+          1.9008893584253651e-06,
+          4.842935164938044e-07,
+          5.732638997841149e-06,
+          3.757603143037481e-07,
+          3.555417707194827e-08,
+          9.354767400894879e-09,
+          2.2481923811254195e-09,
+          8.726222761324488e-10,
+          4.3464568848463756e-10,
+          2.4080598352795726e-10,
+          5.934795314414393e-11,
+          0.9886772728187132
+        ]
+      }
+    },
+    "gates": {
+      "frozen_payload_unchanged": true,
+      "main_15_of_15_roots": true,
+      "main_mae_at_most_1C": true,
+      "main_at_least_14_of_15_within_2C": true,
+      "secondary_7_of_7_roots": true,
+      "secondary_mae_at_most_0p5C": true,
+      "endpoint_inside_pvtsim_topology_bracket": true,
+      "all_roots_stable_and_residual_passed": true
+    },
+    "decision": "PASS_OPT_IN_SOFTWARE_COMPATIBILITY",
+    "production_promotion_allowed": false
+  }
+}

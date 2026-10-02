@@ -5,8 +5,7 @@ on:
     inputs:
       version:
         description: Personal candidate version
-        required: true
-        default: 3.17.0-cupbhan.1-rc.1
+        required: false
   pull_request:
     paths:
       - 'src/**'
@@ -37,7 +36,7 @@ jobs:
         run: python devtools/test_build_shared_thermo.py
       - name: Build and validate candidate
         env:
-          CANDIDATE_VERSION: ${{ inputs.version || '3.17.0-cupbhan.1-rc.1' }}
+          CANDIDATE_VERSION: ${{ inputs.version || format('3.17.0-cupbhan.1-rc.{0}', github.run_id) }}
         run: python devtools/build_shared_thermo.py --version "$CANDIDATE_VERSION"
       - name: Save candidate and validation evidence
         if: always()

@@ -1,0 +1,172 @@
+# 高含水重油 2-HC 相包络求解器结果
+
+## 结论
+
+- NeqSim 当前正式版的 `PTPhaseEnvelopeMichelsen` 是烃相包络的预测—校正求解器，但并没有完成针对烃—水多相拓扑的专用算法。
+- 官方 issue #530 对应的实验分支只搭建了烃—水包络入口，核心包络构造仍为空，因此不能直接合入作为工程实现。
+- 本次增加混合求解器：优先使用 Michelsen 连续追踪；失败时可启用基于稳定 TP 闪蒸和 marching squares 的全域拓扑回退。回退保留所有不连通分支，不按温度行拼点。
+- 对实际 22 组分 Peneloux + Huron-Vidal 流体，普通状态点仍使用有硬迭代上限的计算；水—重油—CO₂—N₂验证页会显式启动专用烃—水稳定区/严格延续审计。若全局网络未闭合，则返回状态点、PVT 参数和完整诊断，但不绘制 NeqSim 假包络，也不进入与 PVTsim 的曲线误差。
+
+## 模型传递修正
+
+- 从 PVTsim `Fluid.json` 读取 22 个组分、12 个伪组分、41 个常规二元参数和 17 组有方向的 Huron-Vidal G/R 参数。
+- 保留伪组分内部名称，避免 NeqSim 数据库及 Huron-Vidal 参数映射失效。
+- 界面显示实际使用的 `Huron-Vidal (NRTL)` 混合规则。
+
+## 验证
+
+- NeqSim 定向测试通过：`TwoHydrocarbonPhaseEnvelopeSolverTest`、`FieldFluidRunnerTest`、`PTPhaseEnvelopeMichelsenTest`。
+- 前端生产构建通过。
+- PVTsim 转换器、模型契约、曲线比较和实际重油工况测试通过。
+- 实际重油工况交互计算约 1.2 s；PVTsim 基准保留 378 个边界点及临界点 401.108 °C / 203.789 bara；NeqSim 未形成完整闭合包络时返回 0 条工程曲线。
+
+## 后续工程路径
+
+专用烃—水多相延续、稳定区发现与全局网络质量门已经实现并开始处理真实 22 组分流体；真实流体的 `GO→GOW` 主分支已经从低压计算域出口闭合至高压 OIL spinodal。`OW→GOW` 也已被独立稳定区邻接和严格校正证明为真实普通分支；旧的“孤立点”是全域压力探针过稀造成的发现盲区。当前未决项是将该分支两端延续至物理端点或声明计算域，然后完成同拓扑基准冻结。
+
+## 主线重置（2026-08-03）
+
+### 已冻结的真实 22 组分成果
+
+- `GO→GOW:AQUEOUS#0` 已形成 53 个严格热力学点，其中 10 个为稀疏 anchor 之间经独立全局稳定性门验收的桥接点。
+- 低压端为 `DOMAIN_EXIT`：`301.872192227 K / 0.0486042998 bara`。
+- 高压端为独立精化的 `RETAINED_PHASE_SPINODAL`：`548.982017977 K / 111.718812723 bara`。
+- 分支质量门通过：最大热力学残差 `9.0955e-9`，最大相邻组成跳变 `0.114409`，最小相间 L1 距离 `0.597181`，无分支级违规。
+- 8×8 发现覆盖门通过，64/64 网格状态成功，覆盖 `G/GO/GW/OW/GOW` 五种稳定区域。
+
+### 已跳出的局部最小值
+
+- 独立对称 PT 邻域扫描在 `221.73–281.87 bara` 恢复 7 个组成连续、全局稳定的 `OW→GOW` 严格根；中心根两侧均有支撑，拓扑正式分类为 `REGULAR_BRANCH_SUPPORTED`。
+- 恢复点回填后，真实流体从 6 个 anchor 增至 10 个，孤立分支数从 1 降至 0；`OW→GOW` 五点段最大残差 `9.861e-10`、最大组成跳变 `0.03367`、最小相距 `0.6531`。
+- 固定压力严格延续已在实际 22 组分 PR+HV 流体上从 `260.2027/270.8218 bara` 两个种子生成 `281.8743 bara / 346.9980 K` 新点，全局稳定且最大相关残差约 `9.9e-10`。
+- 分支组装器现采用混合策略：伪弧长纯数值起步失败时转入固定压力严格延续；压力参数步长反复塌缩后才从最近两个严格点切回伪弧长。各段证据和终止原因独立保留。
+
+### 下一主线里程碑
+
+1. 将 `OW→GOW` 混合延续追踪至两个物理端点或明确计算域，不以请求点数完成代替拓扑闭合。
+2. 冻结 Lindeloff–Michelsen Fluid 1/2 论文级自动回归。
+3. 从 PVTsim 导出与 `GO→GOW/GW→GOW/OW→GOW` 相同定义的 aqueous/three-phase 边界；现有 `2-HC` 仅作另一种拓扑展示，不用于本算法误差评分。
+4. 界面先按“已验证分支/未闭合网络”分层展示，只有完整网络通过后才进入工程计算。
+
+## 长期目标阶段更新（2026-08-02）
+
+- 已完成 Fluid 1 在 SRK Peneloux + HV/NRTL 和 PR78 + HV/NRTL 下的闭合两相基线。
+- 已实现独立气/油/水 TPD 驻点搜索、分支暖启动、重复驻点去重和非平凡相型质量门。
+- 旧 TP 相数跳变得到的 3 个粗候选已被联立残差正式拒绝；常规 GO 包络上的水相实际全部失稳，不能作为 GW↔GOW 切换边界。
+- 已实现单相→两相零 TPD 点、指定 GAS+AQUEOUS 两相闪蒸和 GW→GOW 固定压力边界点求解器。
+- Fluid 1 SRK/HV 已收敛 0.5/10/50 bara 三个 GW→GOW 根，温度分别为 216.58938480/254.77208573/270.87149818 K；PR78/HV 的 10 bara 根为 237.00558211 K。
+- 已实现阶段 3 的规则压力预测—校正骨架：SRK/HV 从 0.5 到 50 bara 得到 12 个全热力学校正点，自适应缩步 2 次后到达终点，没有插值点进入曲线。
+- 已实现显式伪弧长方程 `[ln(K), β, ln(W3), ln(T), ln(P)]`。单步自由 T/P 校正收敛至 42.73756746 bara / 270.70486230 K，热力学残差 `2.38e-11`、弧长残差 `5.55e-17`，并通过独立固定压力根复核。
+- 伪弧长追踪已改为完整变换变量空间的绝对步长，并修复第三相严格零分数触发底层非有限逸度的问题。32 点标准回归依次穿越温度与压力回折及原 `61.4 bara` 伪终止位置；48 点长追踪最终在 `38.923064390 bara / 198.760752050 K` 以最小弧长门终止。
+- 阶段 4 已实现第一版全局质量门：检查残差、组成归一化、三相非平凡性、相邻连续性、拓扑定义、PT 自交和开放端点分类，并强制逐条保留孤立/失败分支报告。
+- 细步长特殊点检测器对 Fluid 1 给出 cricondentherm `270.897335783 K / 48.053526900 bara`，cricondenbar `246.267585643 K / 92.629458922 bara`；端部相距离现在只产生候选标签，不能冒充临界端点。
+- 已加入初生相 TPD 曲率分析和驻点折叠联合门。新长追踪末点的 TPD 为 `-2.6191e-10`、最小 Hessian 特征值 `2.1985e-11`，失败校正 Jacobian 条件数 `3.9819e6`，因此标注为 `STABILITY_STATIONARY_FOLD`；由于最小相组成距离仍为 `0.0528523`，没有冒充 `CRITICAL_END_POINT`。
+- 100 bara 上所有可用油相驻点 TPD 均为负，50 bara 上还观察到油相驻点在约 294.40 K 并入平凡相；这一高压端拓扑留待阶段 4 的驻点合并/临界端点方程。
+- 65 bara 已拆分两组零 TPD 证据：`GO→GOW` 方程低温根 `212.387785259 K`，`GW→GOW` 普通边界根 `268.989799225 K`。端点联立复核证明低温根的母油相与试探气相组成距离仅 `2.6923e-15`，它是退化根而非普通 GO→GOW 边界点。
+- 已增加 `HydrocarbonWaterBoundaryAnchorDiscoverer` 与 `HydrocarbonWaterBoundaryEndpointClassifier`：自动遍历三种 2P→GOW 方程族，先保留全部严格根，再将三相两两独立的有限分数根送入普通 anchor 聚类，将退化根送入端点联立复核。65 bara 低温根现保留为 `PHASE_COALESCENCE_CANDIDATE`，普通分支计数为 0。
+- 伪弧长追踪现在保存每个接受点的 Newton 残差证据；工程质量门已明确拒绝以 `STABILITY_STATIONARY_FOLD` 或 criconden 极值冒充物理端点。当前折叠末端仍保持“未解决”，不会因已有标签而进入用户计算。
+- 已增加 `HydrocarbonWaterBoundaryBranchAssembler`：多 anchor 分支可从两端自动伪弧长扩展并合并逐点证据，同时原样保留被扣留的端点候选。Fluid 1 的 3-anchor `GW→GOW` 回归已形成 7 个严格证据点；65 bara 退化根不再生成 isolated 假分支。
+- 已实现独立临界端点方程：指定两相平衡与 `λmin(TPD Hessian)=0`、沿零特征向量的三阶导数为零联立求解，再以独立油相驻点合并验收。Fluid 1 `GW→GOW` 气—油 CEP 为 `206.97619256 K / 36.61109242 bara`，相合并距离 `2.7147e-14`，并通过事件与工程质量门回归。
+- 全局质量门现在同时审计已分类分支和未连接端点候选；任何 `UNATTACHED_ENDPOINT_CANDIDATE` 都会阻止工程验收，不得为获得通过状态而删除。
+- 已将独立全局 TPD 稳定性门接入普通 anchor 和每个伪弧长新点。Fluid 2、50 bara 旧方法的 4 个零 TPD 根存在 `-2.31–-2.91` 的更深负 TPD 驻点，已正式分类为 `METASTABLE_BOUNDARY_ROOT`，不再进入曲线。
+- 已实现稳定相区邻接括区和受控扩括严格校正。Fluid 2 真实 `GO→GOW` 边界在 40/50/60 bara 的温度为 `469.302578919 / 475.195256650 / 479.882100516 K`，三点聚成同一分支后已向两端各延续 2 点，得到 7 个全局稳定证据点。
+- Fluid 2 高压 `GO→GOW` 分支已严格追踪到保留 OIL 驻点分岔极限：`504.366971105 K / 275.169677734 bara`。显式第二 OIL 驻点在 275.1697–284 bara 上保持组成连续，TPD 从 `-2.60e-7` 降至 `-6.49e-3`，与原 OIL 的 L1 组成距离从 `5.08e-6` 增至 `0.1236`，但没有第二个有限组成零 TPD 交点。
+- 18 个 `G/O1/O2` 分岔种子虽达到约 `7.7e-10` 的方程残差，第三槽均演化为水富集相，已被物理相身份门拒绝。独立四槽 `G/O1/O2/W` 定温定压审计同样把新增有限相分数压回零；不得将这些数值根画成四相包络。
+- 显式第二 OIL 候选可生成 1 个保持有限气油组成距离的新 GO 数学分支，但其水相零 TPD 校正只返回 `503.591855977 K` 的相合并候选，未通过独立临界端点和全局拓扑门。因此本模型/总体组成下的工程结论是分支在约 275.17 bara 终止，而不是强制延伸为 G/O1/O2/W 曲线。
+- Fluid 2 的广域 `GO→GOW` 分支现已从声明的低压计算域出口连续接到高压 spinodal，并在 15×15 稳定网格覆盖率门下通过；实际 22 组分重油流体仍禁止进入用户工程主图，下一步需要验证其余边界族并完成阶段 5 论文/PVTsim 同拓扑基准冻结。
+- 已将高压终止从测试诊断提升为生产结果契约：`HydrocarbonWaterBoundaryTerminationClassifier` 只在最后通过根与首个稳定性拒绝根的保留相特征值异号、且独立 `HydrocarbonWaterRetainedPhaseSpinodalSolver` 在括区内收敛时，返回 `RETAINED_PHASE_SPINODAL` 物理端点。最小步长失败、未夹住零特征值或只有较低 TPD 驻点仍保持未解决状态。
+- 分支组装器现在保存正向/反向终止分类，并把精确 spinodal 状态作为末端热力学证据加入分支。质量门仅在终止类型、独立收敛证据和端点 PT 坐标三者一致时接受保留相 spinodal；仅设置同名标签仍会产生 `UNRESOLVED_RETAINED_PHASE_SPINODAL_ENDPOINT`。
+- 新增 PVTsim/NeqSim 边界拓扑契约。PVTsim `2-HC` 只可与 NeqSim 单烃相↔气油两烃相包络比较，不能与 `GO→GOW`、`GW→GOW` 或 `OW→GOW` 水相出现边界计算温差。桌面端和重油基准脚本现会在拓扑不一致时清空误差指标并显示明确原因，避免“曲线看似接近但物理定义不同”的假评分。
+- `runFieldFluid` 新增显式 `hydrocarbonWaterBoundaryAudit` 请求对象；调用方必须提供温度探针和压力探针。该开发期选项返回稳定相区括区、严格校正 anchor、孤立分支、被扣留端点和精确物理终止的 JSON 审计，也永远不会仅凭 anchor 数量把结果标成工程可用。水—重油—CO₂—N₂页面现自动请求已验证的 8×8/双向 40 点审计，并为该长任务单独使用 300 s 超时；客户端质量保护在隐藏不合格曲线时仍保留完整诊断。
+- 新增 `HydrocarbonWaterBoundaryNetworkAssembler`。它按边界族、变换 PT 距离、独立证据来源和端点连接度自动接合分支；重复端点、未连接端点、孤立分支、相同端点误接两端、三相点连接度不足和逐分支质量门失败都会保留为网络违规。调用方提供的端点证据会先复制，组装过程不会污染可复用求解结果。
+- Fluid 1 真实网络回归已从声明的低压 `DOMAIN_EXIT` 连续接至独立 `CRITICAL_END_POINT`：CEP 仍为 `206.97619256 K / 36.61109242 bara`，完整分支包含 40 个以上严格点，端点度数、逐点残差、相邻连续性和网络级拓扑门全部通过。由于发现阶段只输入 2 个压力探针，新的覆盖率门仍将整个审计保持为诊断态，避免把“已发现分支闭合”误报成“全域无漏支路”。
+- Fluid 2 的截断高压输入只会接入 `504.366971105 K / 275.169677734 bara` 的 Oil spinodal 并报告低压端未连接；改用 15 个温度与 15 个压力的广域探针后，低压端被严格分类为 `DOMAIN_EXIT`，同一 `GO→GOW` 分支两端闭合，发现覆盖率、逐点质量门与网络拓扑门全部通过。
+- MCP 新增发现覆盖率门：至少 8 个温度和 8 个压力探针、最大归一化温度/对数压力间隙≤0.25、初始稳定网格成功率≥98%、每个可延续分支至少 3 个严格 anchor，且转换括区与严格校正清单必须一一对应。网络分支通过但覆盖不足时输出 `branchNetworkEligible=true`、`discoveryCoveragePassed=false`，不得进入工程主图。
+- MCP 审计现执行稳定区发现、严格校正、双向伪弧长延续、CEP/域出口补充求解、spinodal 接合和全局网络质量门，并序列化每条分支的严格点、两端连接、物理端点和全部违规。桌面端只有在网络整体通过时才绘制这组严格网络点；诊断网络继续保留但不参与工程误差。
+- 真实 PVTsim 22 组分重油定义已完成首次端到端审计：22 个组分、12 个伪组分、41 组 Kij 和 17 组 HV 参数以 PR 候选模型，与 65 mol% 水、25 mol% 重油、7 mol% CO₂、3 mol% N₂ 混合。5×5 冒烟网格的 25 个状态全部成功，发现 `G/GO/OW/GOW` 四个稳定区域、2 个 `GO→GOW` 和 1 个 `OW→GOW` 转换括区；严格校正接受 `364.207132135 K / 1 bara` 的 `GO→GOW` anchor，并拒绝另一个亚稳根。由于只有 1 个严格 anchor、无独立端点，网络正确保持不通过。
+- 性能路径已按阶段计时修正：稳定拓扑括区改为 0.25 K 后再做独立严格零 TPD 校正；同一局部根不再跨扩区重复分类，局部根被独立门拒绝后不再搜索远处无关根；跨压力聚类的对数压力阈值由 1.5 修正为 1.75；伪弧长在首次越过声明域时以 `DOMAIN_EXIT` 主动终止。5×5 冒烟由 `149152 ms` 降至 `52368 ms`，8×8/双向 40 点全链路为 `169572 ms`。
+- 8×8 真实流体审计现有 64/64 初始状态成功，观察到 `G/GO/GW/OW/GOW`，发现覆盖门全部通过。修正实非对称驻点 Jacobian 的实分岔模态选择后，`GO→GOW` 主分支形成 53 个严格证据点，从 `DOMAIN_EXIT` 接至独立精化的 `RETAINED_PHASE_SPINODAL`并通过分支质量门。后续独立局部拓扑扫描将 `OW→GOW` 从单根恢复为五锚点普通分支，孤立分支数已降为 0；全网仍因该分支两端未闭合而拒绝工程发布。
+
+## 2026-08-03 OW→GOW 回折、分支切换与目标气相合并结点
+
+- 规则压力延续越过 `306.929285 bara / 115.9448 °C` 后，伪弧长严格穿过压力极大值；实测最高约为 `307.5969 bara / 117.0737 °C`。检查点/重启状态包含完整三相身份、温压、相分率和 23 维相组成，避免重复做全域发现。
+- 原延续在 `303.147324 bara / 111.766622 °C` 停止后，独立局部稳定拓扑审计得到 4 个严格根，证明该点是 `REGULAR_BRANCH_SUPPORTED`，不是临界点或相合并端点。
+- 分支切换协议改为三状态：旧支末点只验证连接质量；新支上两个严格根定义延续切向。真实 22 组分质量门结果为：连接组成跳变 `0.1122053`、目标种子组成跳变 `0.0196030`、连接 PT 距离 `0.0050765`、目标种子 PT 距离 `0.0123677`；5 个新点全部严格收敛且前向位移门通过。
+- 增加前向位移和重复状态门。旧的两状态跨支割线虽然报告 5 次收敛，但实际在目标根附近反向塌缩，现会被判为不可用；三状态切换产生 5/5 个可用点、0 次拒绝。
+- 反向追踪暴露并修复 `TwoToThreePhaseArcLengthCorrector` 的确定性缺陷：低温水相重伪组分使 `ln(K)>100`，旧上限把严格真根刚载入就截断，初始残差约为 `3.4`。`ln(K)` 上限扩展到双精度安全的 `700`，`ln(W)` 仍保持独立上限；同一用例由 0 点/12 次拒绝变为 5/5 点/0 次拒绝，并从 `303.147 bara / 108.916 °C` 推进到 `292.159 bara / 89.277 °C`。
+- 伪弧长度量改为相组成加权的五块尺度：保留两相 `ln(K)`、初生相 `ln(W3)`、`beta`、`ln(T)`、`ln(P)`。每个组成块按对应摩尔分数归一，痕量水相重组分不再支配切向。
+- 反向半支随后连续接受 50 个严格点（拒绝 5 次），覆盖最低约 `-26.5428 °C / 35.6436 bara` 后重新升温升压；下一段再接受 32 个严格点，并在 `109.7910 °C / 301.1943 bara` 由更低负 TPD 气相驻点触发全局稳定性拒绝。终端 Newton 热力学残差为 `4.55e-13`，因此不是数值失收敛。
+- 终止正式分类为 `UNRESOLVED_GLOBAL_STABILITY_LIMIT`，并序列化被拒边界根与最低 TPD 候选。该第二气相候选 TPD 为 `-0.00152901`、驻点残差 `9.16e-11`，与目标初生气相组成距离 `0.142404`。
+- 显式二级驻点反向身份追踪证明：第二气相支在 `117.070883 °C / 307.596301 bara` 与目标初生气相合并，组成距离 `3.68e-10`；下一点已分离到 `0.0043486` 且二级支 TPD 为 `-5.47e-7`。该结点分类为 `TARGET_BRANCH_MERGE`，原先结点之后仍能收敛的段是亚稳支，必须从工程边界截断。
+- 实物证据：`actual_22_component_branch_switch_3state_5x.json`、`actual_22_component_logk700_reverse_5x.json`、`actual_22_component_logk700_reverse_restart_50x.json`、`actual_22_component_global_limit_full_states.json`、`actual_22_component_secondary_gas_target_merge.json`。
+- 当前主线进入同拓扑回归：以 `OW→GOW` 可用严格段及 `TARGET_BRANCH_MERGE` 结点为 NeqSim 候选，和论文/PVTsim 的同定义 aqueous/three-phase 边界比较；不得再使用 PVTsim `2-HC` 包络对该水相边界评分。
+
+## 2026-08-03 OW→GOW 低压回折贯通
+
+- 固定压力续算从 `190.368 bara / -13.458 °C` 连续降至 `176.006 bara / -24.915 °C`，5/5 个新点均为全局稳定严格根；继续减压时返回 `PRESSURE_PARAMETER_LIMIT`，而不是 Newton 失收敛。
+- 低压折返点使用最近两个完整检查点切换到组成加权伪弧长。首段新增 20 个严格点，接受 20 次、拒绝 4 次，越过最低约 `36.1186 bara / -24.9723 °C` 后重新升压；终点 `41.8876 bara / -25.0769 °C` 仍通过全局稳定性门。
+- 从检查点继续 50 点，接受 50 次、拒绝 10 次，用时 `89.655 s`；该段覆盖 `-26.5417–117.0793 °C / 36.4054–307.6014 bara`，最终回到已独立证明的高压目标气相合并邻域。
+- 与 `117.070883 °C / 307.596301 bara` 的 `TARGET_BRANCH_MERGE` 对照，最近严格点位于续算序号 40，变换 PT 距离约 `3.81e-5`。序号 41 以后是越过合并结点后折返的亚稳段，必须在主网络组装时回溯截断，不能因局部残差收敛而保留。
+- 这证明实际 22 组分 `OW→GOW` 主支的数值延续已经贯通；尚未完成的是把目标分支合并证据提升为网络端点、自动裁剪亚稳尾段并重新执行完整拓扑质量门。因此本分支当前仍是开发候选，不是用户工程曲线。
+- 新增实物证据：`actual_22_component_low_pressure_decreasing_5x.json`、`actual_22_component_low_turn_regular_restart_5x.json`、`actual_22_component_low_turn_pseudo_20x.json`、`actual_22_component_low_turn_pseudo_restart_50x.json`。
+
+## 2026-08-03 TARGET_BRANCH_MERGE 正式网络端点
+
+- `HydrocarbonWaterPhaseTopology.SpecialPointType` 新增 `TARGET_BRANCH_MERGE`；端点证据只能由 `HydrocarbonWaterSecondaryStationaryBranchTracker.TargetBranchMergeBracket` 创建，证据源固定为 `SECONDARY_STATIONARY_BRANCH_TRACKER`，不能由普通 PT 极值标签冒充。
+- 网络端点同时保存合并根、合并后首个“仍分离”驻点和保留方向。组装器先用分离点确定亚稳侧，再裁剪该侧，最后以精确合并根替换分支端点；这避免在紧密 PT 回折处仅按几何最近距离裁错方向。
+- 工程质量门现接受已独立证明的 `TARGET_BRANCH_MERGE`，但仍拒绝未解决的 `STABILITY_STATIONARY_FOLD`、`ALTERNATE_STATIONARY_BRANCH_ONSET` 和 `PHASE_COALESCENCE_CANDIDATE`。
+- 合成网络回归证明内部端点会在质量门之前裁去尾段，并序列化 `trimmedPointCount`、端点证据来源和要求连接的分支端。
+- 真实 22 组分 52 状态检查点重新执行二级 GAS 身份追踪，只用 `3.544 s` 得到 1 个目标合并 bracket、0 个伪零 TPD bracket。合并根为 `117.079315616 °C / 307.601376817 bara`，目标组成距离 `1.457e-9`；相邻分离根为 `117.058394429 °C / 307.586344394 bara`，二级支 TPD `-1.0831e-6`。
+- 同一生产裁剪器对实物链返回 `accepted=true`：原 52 点，保留 41 点，删除 11 个合并后的亚稳点，排除侧起始序号为 41，端点类型和证据来源均通过契约检查。
+- 新增实物证据：`actual_22_component_full_branch_target_merge_trimmed.json`。下一步是按完整状态身份把规则压力、低压回折和高压换支片段无重复拼接，再将此端点接入整网而不是只验证单一检查点片段。
+
+## 2026-08-03 OW→GOW 闭环拓扑与独立逐点证据
+
+- 相同普通起点到 `TARGET_BRANCH_MERGE` 存在一条 7 状态直达路径和一条 72 状态多回折路径。两路普通端点的变换 PT/组分距离为 `4.15e-12/4.58e-12`，合并端为 `1.70e-5/1.031e-3`；正确拓扑是一条含内部合并事件的闭环，不是开曲线。
+- `HydrocarbonWaterClosedBoundaryLoopAssembler` 只在两端 PT、三组相组成和相身份同时匹配时闭合；实物结果为 78 个有序状态，合并事件索引为 6。
+- 独立证据校验器对 77 个唯一状态重新执行指定两相闪蒸、目标第三相零 TPD 恢复、全相族稳定性搜索和拓扑质量门，77/77 全部通过。最大两相残差 `9.09e-10`，最大目标 TPD 偏差 `2.83e-9`，最大驻点残差 `9.96e-10`，最低非平凡 TPD `-1.81e-9`。
+- 修复 `SpecifiedTwoPhaseFlashSolver` 结果合同：此前 EOS 使用归一化组成，结果却暴露归一化前中间量；现返回 EOS 实际使用的相摩尔分数，并增加组成和回归断言。
+- PT 平面有 45 个投影交点，但 beta 和三组相组成身份自交数为 0，最小状态距离 `1.775e-6`。质量门现分开报告 PT 投影交点和完整热力学身份自交。
+- 内部证据/拓扑门已通过，但仍标记 `benchmarkPending=true` 和 `engineeringEligible=false`。下一主线是论文与 PVTsim 同拓扑基准，不是提前接入界面。
+- 实物证据：`actual_22_component_stitched_direct_to_merge_states.json`、`actual_22_component_stitched_reverse_to_merge_states.json`、`actual_22_component_closed_ow_gow_loop_internal_gate.json`。
+
+## 2026-08-03 PVTsim 同拓扑基准合同与首次资格预检
+
+- 本地 PVTsim 结果盘点确认：既有水—重油—CO₂—N₂ 结果只含 `2-HC`，官方定义为一相→两相的烃相出现边界，不是 Issue #530 所需的两相→三相边界。PVTsim `3-Aq` 可直接标识 `GO→GOW`；`3-HC` 必须由曲线两侧多相 PT 闪蒸区分 `GW→GOW` 与 `OW→GOW`。
+- PVTsim 桥已显式打开 `ThreePhaseSearch`，并对 `3-HC` 每条分支使用两个法向偏移级别、曲线两侧、至少两组独立成对闪蒸投票。标签本身不能使曲线进入回归。
+- 新增 `HydrocarbonWaterBoundaryRegression`及独立 MCP 工具。数值误差只在 EOS、Peneloux 体积平移、HV 混合规则、组成指纹、完整参数指纹与边界拓扑全部一致后计算；指标为双向同压温差覆盖率、最大/RMS/P95 绝对与相对温差，并单列临界温压差。
+- 基准阈值未冻结时只输出指标与 `benchmarkPending=true`，不允许“通过”；即使基准通过，也必须再与独立内部闪蒸/TPD/拓扑质量门取逻辑与，才可进入工程路由。
+- 首次真实文件资格预检已生成 `actual_22_component_pvtsim_regression_precheck.json`。PVTsim 参考为 SRK `2-HC` 378 点，NeqSim 候选为 PR78 `OW→GOW` 78 状态闭环；预检正确拒绝数值比较，原因为 `REFERENCE_TOPOLOGY_UNRESOLVED`、`EQUATION_OF_STATE_MISMATCH`和 `PARAMETER_FINGERPRINT_UNRESOLVED`。
+- Windows 队列已同时准备 SRK 和 PR78 Peneloux 的 PVTsim 三相搜索任务。当前任务监听器未运行，因此尚未取得可供同 EOS 预检的 `3-HC`/`3-Aq` 实算结果。
+
+## 2026-08-03 PVTsim 实算与 NeqSim SRK 主线定位
+
+- Windows 任务监听器已经恢复运行。PVTsim SRK Peneloux + HV 的 `ThreePhaseSearch` 请求、支持状态和运行时回读均为 `true`，但实际仍只返回 378 个 `2-HC` 点，没有 `3-Aq` 或 `3-HC`；因此它仍不是 Issue #530 的同拓扑参考曲线。PR78 Peneloux + HV 返回 0 个物理相包络点，不能作为比较曲线。
+- NeqSim SRK + HV 的轻量稳定相态扫描明确观察到 `G/W/GW/OW/GOW`，并在 280 bara 和 300 bara 找到两个 `OW→GOW` 稳定相区夹逼区间：约 `140.820–141.016 °C` 与 `129.297–129.492 °C`。这证明目标相态和邻接关系不是 PR 专属，也不是 NeqSim SRK 完全不可计算。
+- 审计入口此前把稳定夹逼区间的严格校正扩展次数硬限制为 1，实际绕过了校正器设计的受控区间扩展。现统一改为最多 6 次，覆盖校正器完整、有限的 25 K 半宽上限，并序列化每个区间的耗时、尝试次数、根和拒绝原因。
+- 同一 SRK 280/300 bara 工况在 6 次受控扩展后仍得到 0 个严格根：280 bara 的指定 OIL+AQUEOUS 两相支路无法连续追踪；300 bara 支路上第三相 TPD 全为负，范围约 `[-0.016699, -0.00349981]`，没有零点穿越。由此已排除“只因尝试次数不足”的解释。
+- 当前瓶颈正式定位为：稳定多相 TP 闪蒸的相数切换与“冻结两相侧 split/组成后追踪指定两相支路，再求第三相零 TPD”的初始化/方程合同不一致。下一步重构必须让两相状态、相分率和初生相驻点在校正过程中联立更新；继续扩大扫描范围或放松质量门不会解决该问题。
+- 新增实物证据：`actual_22_component_srk_topology_scan.json`、`actual_22_component_srk_ow_gow_topology_scan.json`、`actual_22_component_srk_ow_gow_strict_roots_expanded.json`。以上 SRK 结果仍为开发诊断，`engineeringEligible=false`。
+
+## 2026-08-03 SRK 模型同伦发现与 OW→GOW 闭环
+
+- 300 bara 附近的稳定 TP 相数切换不是连续 2P→3P onset：在仅 0.195 K 的括区两侧，GOW 侧气相分率仍为 `0.0318647`，归一化油相 split 跳变 `0.120939`，油相组成 L1 跳变 `0.0442700`。两相侧和三相侧保留相初值最终收敛到同一油—水两相支路，第三相 TPD 全为负；该切换因此只能作为 TP-flash 分支跳变诊断，不能作为严格边界种子。
+- 新增 `runModelSeededFixedPressureDiagnostic`：序列化边界状态只作为数值初值，当前 EOS 会重新求解指定两相平衡、第三相驻点、零 TPD、端点分类和全局稳定性。由 PR 闭环状态引导、但在 SRK 下完整重求后，300.383237 bara 得到 `346.981464 K / 73.831464 °C` 的全局稳定普通 `OW→GOW` 根；最大两相残差 `8.53e-14`、目标 TPD `-8.84e-14`、驻点残差 `9.90e-10`。
+- 279.698915 bara 的 SRK 重校正得到两个数学根：`318.915359 K / 45.765359 °C` 为全局稳定普通根；`351.321620 K / 78.171620 °C` 的另一个根存在 `-0.0203652` 的更低 TPD 驻点，已作为 `METASTABLE_BOUNDARY_ROOT` 拒绝。
+- 两个 SRK 普通根的油/水/初生气相组成 L1 跳变分别为 `0.0192149 / 0.00180184 / 0.0739555`。固定压力延续新增 4 个严格点，并在约 322 bara 发生压力参数回折；伪弧长随后严格穿过极值，局部最高约为 `322.181765 bara / 116.549101 °C`。
+- 低压方向固定压力延续至 `205.016143 bara / -27.312055 °C`；继续固定压力计算超时后没有误报端点，而是从完整检查点切换伪弧长。后续严格路径穿过约 248–249 bara 的低温回折、最低约 42.24 bara 的压力回折，再升温回接高压极值附近。
+- 闭环组装新增非物理 bookkeeping 类型 `CLOSED_LOOP_SEAM`，避免把普通状态会合错误标为 `TARGET_BRANCH_MERGE`、临界点或端点。两条 SRK 路径组成 77 个有序状态；普通起点 PT/组成身份距离均为 0，高压 seam 的变换 PT 距离 `1.41648e-5`、最大相组成距离 `6.78692e-4`。
+- 76 个唯一 SRK 状态全部经过独立指定两相闪蒸、目标气相驻点恢复、零 TPD、全相族稳定性搜索和拓扑质量门，76/76 接受。最大两相残差 `9.30214e-10`、最大目标 TPD 偏差 `1.26221e-8`、最大驻点残差 `9.99188e-10`、最低非平凡 TPD `-1.65535e-9`；最大相邻组成跳变 `0.135281`，最小相间距离 `0.501608`，PT 投影交点 54 个但完整热力学身份自交为 0。
+- SRK 闭环当前 `internalQualityEligible=true`、`benchmarkPending=true`、`engineeringEligible=false`。算法内部主线已从“没有严格根”推进到“同 EOS 完整闭环逐点通过”；剩余发布门是论文/PVTsim 同拓扑基准和阈值冻结，而不是继续调 TP 闪蒸示意曲线。
+- 新增实物证据：`actual_22_component_pr_seed_to_srk_ow_gow_280bara.json`、`actual_22_component_pr_seed_to_srk_ow_gow_300bara.json`、`actual_22_component_srk_ow_gow_regular_continuation_3x.json`、`actual_22_component_srk_ow_gow_high_turn_pseudo_restart_20x.json`、`actual_22_component_srk_ow_gow_regular_decreasing_5x.json`、`actual_22_component_srk_ow_gow_low_side_pseudo_20x.json`、`actual_22_component_srk_ow_gow_low_side_pseudo_restart_30x.json`、`actual_22_component_srk_ow_gow_low_side_pseudo_restart_15x.json`、`actual_22_component_srk_ow_gow_closed_loop_internal_gate.json`。
+
+## 2026-08-03 SRK 两分支完整内部网络门
+
+- `GO→GOW` 从原有 25/20 bara 严格检查点反向伪弧长延续至低压计算域出口。第一版低压段虽然 33/33 个普通点独立复算通过，但最低压两个间隔的压力比超过连续性门，因此整支保持拒绝，没有通过放宽阈值掩盖稀疏取点。
+- 伪弧长重启增加显式最大步长合同；用 `initialArcStep=0.1`、`maximumArcStep=0.5` 重新追踪后得到 24 个低压新严格点，并在 `0.0461050 bara / 303.0153 K` 穿出声明的 `0.05 bara` 计算域。低压相邻压力比最大约 `1.406`，重新满足原连续性门。
+- 开放分支验证器不接受序列化端点标签：它重新计算每个普通点的指定两相闪蒸、目标水相驻点和全相族稳定性，再用最后稳定根与首个失稳根独立括区精化油相 spinodal。结果为 45/45 个普通点接受，高压物理端点 `547.748378876 K / 111.213481763 bara`，开放分支质量门无违规。
+- `OW→GOW` 闭环与 `GO→GOW` 开放支随后在同一 SRK Peneloux + HV、同一实际运行时组成下重新计算并进入一个两分支质量门。OW 76/76 唯一点接受，GO 45/45 普通点接受；组合报告包含 77 点闭环和 46 点域出口至 spinodal 分支，两个分支均无完整热力学身份自交、无连续性或端点违规，`internalQualityEligible=true`。
+- Ma 2021 拓扑回归现读取上述完整网络证据：论文来源哈希、要求的 `GO/OW/GOW` 相区和 `OW→GOW`、`GO→GOW` 边界均通过，且 `candidateInternalQualityEligible=true`。该文采用修改 PR 与相型相关参数，只作拓扑证据，`numericComparisonEligible=false` 仍被强制保留。
+- PVTsim SRK Peneloux + HV 的 `ThreePhaseSearch` 请求、支持和运行时回读均为真，但结果仍只有 378 个 `2-HC` 点；自动回归资格预检因 `REFERENCE_TOPOLOGY_UNRESOLVED` 与 `PARAMETER_FINGERPRINT_UNRESOLVED` 拒绝数值评分。PR78 任务返回 0 个物理相包络点。两者都不能冒充 Issue #530 同拓扑数值基准。
+- 新增实物证据：`actual_22_component_srk_go_gow_backward_dense_120x_20260803.json`、`actual_22_component_srk_go_gow_open_internal_gate_dense_20260803.json`、`actual_22_component_srk_full_two_branch_internal_gate_20260803.json`、`actual_22_component_ma2021_full_network_topology_gate_20260803.json`、`actual_22_component_pvtsim_srk_three_phase_search_regression_precheck_20260803.json`。
+- 当前发布状态仍为 `benchmarkPending=true`、`engineeringEligible=false`。下一主线不是继续修饰曲线，而是取得同组成、同模型、同边界定义的独立数值参考并冻结阈值，同时把完整网络冷启动从超过 600 s 降至生产可接受范围。

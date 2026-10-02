@@ -1,0 +1,1139 @@
+{
+  "schemaVersion": "1.0",
+  "stage": "L5-NH3-5-complete-envelope",
+  "fluidContract": "HeavyOil-DEV-H2O65-CO27-N23-NH3-SRK-v1",
+  "compositionMolPercent": {
+    "H2O": 61.75,
+    "CO2": 6.65,
+    "N2": 2.85,
+    "NH3": 5.0,
+    "HeavyOil": 23.75
+  },
+  "model": "nonreactive SRK + Peneloux + CLASSIC_T_TABULATED",
+  "domain": {
+    "temperatureC": [
+      20.0,
+      250.0
+    ],
+    "pressureBara": [
+      1.0,
+      100.0
+    ],
+    "temperatureStepC": 10.0,
+    "coarsePressureStepBara": 2.0,
+    "boundaryRefinementStepBara": 0.25
+  },
+  "qualityControl": {
+    "pvtSimCoarse": {
+      "requested": 1224,
+      "returned": 1224,
+      "passed": 1224,
+      "failed": 0,
+      "enhancedRecoveryCount": 0,
+      "topologyCounts": {
+        "GOW": 545,
+        "OW": 512,
+        "GO": 167
+      }
+    },
+    "neqSimCoarse": {
+      "requested": 1224,
+      "returned": 1224,
+      "passed": 1224,
+      "failed": 0,
+      "enhancedRecoveryCount": 4,
+      "topologyCounts": {
+        "GOW": 563,
+        "OW": 495,
+        "GO": 166
+      }
+    },
+    "pvtSimRefined": {
+      "requested": 1152,
+      "returned": 1152,
+      "passed": 1152,
+      "failed": 0,
+      "enhancedRecoveryCount": 0,
+      "topologyCounts": {
+        "GOW": 517,
+        "OW": 444,
+        "GO": 191
+      }
+    },
+    "neqSimRefined": {
+      "requested": 1152,
+      "returned": 1152,
+      "passed": 1152,
+      "failed": 0,
+      "enhancedRecoveryCount": 7,
+      "topologyCounts": {
+        "GOW": 692,
+        "OW": 280,
+        "GO": 173,
+        "GW": 7
+      }
+    }
+  },
+  "coarseTopologyAgreement": {
+    "pointsCompared": 1224,
+    "topologyMatches": 1204,
+    "topologyAgreementPct": 98.36601307189542
+  },
+  "pvtSimBoundaryCurves": {
+    "gas-disappearance": [
+      {
+        "temperatureC": 20.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 35.0,
+        "upperBara": 35.25,
+        "pressureBara": 35.125
+      },
+      {
+        "temperatureC": 30.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 37.25,
+        "upperBara": 37.5,
+        "pressureBara": 37.375
+      },
+      {
+        "temperatureC": 40.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 39.5,
+        "upperBara": 39.75,
+        "pressureBara": 39.625
+      },
+      {
+        "temperatureC": 50.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 41.75,
+        "upperBara": 42.0,
+        "pressureBara": 41.875
+      },
+      {
+        "temperatureC": 60.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 44.0,
+        "upperBara": 44.25,
+        "pressureBara": 44.125
+      },
+      {
+        "temperatureC": 70.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 46.0,
+        "upperBara": 46.25,
+        "pressureBara": 46.125
+      },
+      {
+        "temperatureC": 80.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 48.25,
+        "upperBara": 48.5,
+        "pressureBara": 48.375
+      },
+      {
+        "temperatureC": 90.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 50.25,
+        "upperBara": 50.5,
+        "pressureBara": 50.375
+      },
+      {
+        "temperatureC": 100.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 52.25,
+        "upperBara": 52.5,
+        "pressureBara": 52.375
+      },
+      {
+        "temperatureC": 110.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 54.0,
+        "upperBara": 54.25,
+        "pressureBara": 54.125
+      },
+      {
+        "temperatureC": 120.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 55.75,
+        "upperBara": 56.0,
+        "pressureBara": 55.875
+      },
+      {
+        "temperatureC": 130.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 57.5,
+        "upperBara": 57.75,
+        "pressureBara": 57.625
+      },
+      {
+        "temperatureC": 140.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 59.25,
+        "upperBara": 59.5,
+        "pressureBara": 59.375
+      },
+      {
+        "temperatureC": 150.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 61.0,
+        "upperBara": 61.25,
+        "pressureBara": 61.125
+      },
+      {
+        "temperatureC": 160.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 62.75,
+        "upperBara": 63.0,
+        "pressureBara": 62.875
+      },
+      {
+        "temperatureC": 170.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 64.75,
+        "upperBara": 65.0,
+        "pressureBara": 64.875
+      },
+      {
+        "temperatureC": 180.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 66.75,
+        "upperBara": 67.0,
+        "pressureBara": 66.875
+      },
+      {
+        "temperatureC": 190.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 68.75,
+        "upperBara": 69.0,
+        "pressureBara": 68.875
+      },
+      {
+        "temperatureC": 200.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 71.25,
+        "upperBara": 71.5,
+        "pressureBara": 71.375
+      },
+      {
+        "temperatureC": 210.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 74.0,
+        "upperBara": 74.25,
+        "pressureBara": 74.125
+      },
+      {
+        "temperatureC": 220.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 77.0,
+        "upperBara": 77.25,
+        "pressureBara": 77.125
+      },
+      {
+        "temperatureC": 230.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 80.5,
+        "upperBara": 80.75,
+        "pressureBara": 80.625
+      },
+      {
+        "temperatureC": 240.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 84.5,
+        "upperBara": 84.75,
+        "pressureBara": 84.625
+      },
+      {
+        "temperatureC": 250.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 89.0,
+        "upperBara": 89.25,
+        "pressureBara": 89.125
+      }
+    ],
+    "water-appearance": [
+      {
+        "temperatureC": 100.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 1.0,
+        "upperBara": 1.25,
+        "pressureBara": 1.125
+      },
+      {
+        "temperatureC": 110.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 1.75,
+        "upperBara": 2.0,
+        "pressureBara": 1.875
+      },
+      {
+        "temperatureC": 120.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 2.5,
+        "upperBara": 2.75,
+        "pressureBara": 2.625
+      },
+      {
+        "temperatureC": 130.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 3.25,
+        "upperBara": 3.5,
+        "pressureBara": 3.375
+      },
+      {
+        "temperatureC": 140.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 4.5,
+        "upperBara": 4.75,
+        "pressureBara": 4.625
+      },
+      {
+        "temperatureC": 150.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 6.25,
+        "upperBara": 6.5,
+        "pressureBara": 6.375
+      },
+      {
+        "temperatureC": 160.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 8.25,
+        "upperBara": 8.5,
+        "pressureBara": 8.375
+      },
+      {
+        "temperatureC": 170.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 10.75,
+        "upperBara": 11.0,
+        "pressureBara": 10.875
+      },
+      {
+        "temperatureC": 180.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 13.75,
+        "upperBara": 14.0,
+        "pressureBara": 13.875
+      },
+      {
+        "temperatureC": 190.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 17.5,
+        "upperBara": 17.75,
+        "pressureBara": 17.625
+      },
+      {
+        "temperatureC": 200.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 22.25,
+        "upperBara": 22.5,
+        "pressureBara": 22.375
+      },
+      {
+        "temperatureC": 210.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 28.0,
+        "upperBara": 28.25,
+        "pressureBara": 28.125
+      },
+      {
+        "temperatureC": 220.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 35.0,
+        "upperBara": 35.25,
+        "pressureBara": 35.125
+      },
+      {
+        "temperatureC": 230.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 44.0,
+        "upperBara": 44.25,
+        "pressureBara": 44.125
+      },
+      {
+        "temperatureC": 240.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 56.25,
+        "upperBara": 56.5,
+        "pressureBara": 56.375
+      },
+      {
+        "temperatureC": 250.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 78.75,
+        "upperBara": 79.0,
+        "pressureBara": 78.875
+      }
+    ]
+  },
+  "neqSimBoundaryCurves": {
+    "gas-disappearance": [
+      {
+        "temperatureC": 20.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 35.25,
+        "upperBara": 35.5,
+        "pressureBara": 35.375
+      },
+      {
+        "temperatureC": 30.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 38.0,
+        "upperBara": 38.25,
+        "pressureBara": 38.125
+      },
+      {
+        "temperatureC": 40.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 40.5,
+        "upperBara": 40.75,
+        "pressureBara": 40.625
+      },
+      {
+        "temperatureC": 50.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 42.5,
+        "upperBara": 42.75,
+        "pressureBara": 42.625
+      },
+      {
+        "temperatureC": 60.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 46.0,
+        "upperBara": 46.25,
+        "pressureBara": 46.125
+      },
+      {
+        "temperatureC": 70.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 49.25,
+        "upperBara": 49.5,
+        "pressureBara": 49.375
+      },
+      {
+        "temperatureC": 80.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 52.5,
+        "upperBara": 52.75,
+        "pressureBara": 52.625
+      },
+      {
+        "temperatureC": 90.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 53.75,
+        "upperBara": 54.0,
+        "pressureBara": 53.875
+      },
+      {
+        "temperatureC": 100.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 55.0,
+        "upperBara": 55.25,
+        "pressureBara": 55.125
+      },
+      {
+        "temperatureC": 110.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 56.25,
+        "upperBara": 56.5,
+        "pressureBara": 56.375
+      },
+      {
+        "temperatureC": 120.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 57.75,
+        "upperBara": 58.0,
+        "pressureBara": 57.875
+      },
+      {
+        "temperatureC": 130.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 59.25,
+        "upperBara": 59.5,
+        "pressureBara": 59.375
+      },
+      {
+        "temperatureC": 140.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 60.75,
+        "upperBara": 61.0,
+        "pressureBara": 60.875
+      },
+      {
+        "temperatureC": 150.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 62.5,
+        "upperBara": 62.75,
+        "pressureBara": 62.625
+      },
+      {
+        "temperatureC": 160.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 64.5,
+        "upperBara": 64.75,
+        "pressureBara": 64.625
+      },
+      {
+        "temperatureC": 170.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 66.5,
+        "upperBara": 66.75,
+        "pressureBara": 66.625
+      },
+      {
+        "temperatureC": 180.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 68.5,
+        "upperBara": 68.75,
+        "pressureBara": 68.625
+      },
+      {
+        "temperatureC": 190.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 70.5,
+        "upperBara": 70.75,
+        "pressureBara": 70.625
+      },
+      {
+        "temperatureC": 200.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 72.75,
+        "upperBara": 73.0,
+        "pressureBara": 72.875
+      },
+      {
+        "temperatureC": 210.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 75.25,
+        "upperBara": 75.5,
+        "pressureBara": 75.375
+      },
+      {
+        "temperatureC": 220.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 78.5,
+        "upperBara": 78.75,
+        "pressureBara": 78.625
+      },
+      {
+        "temperatureC": 230.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 81.0,
+        "upperBara": 81.25,
+        "pressureBara": 81.125
+      },
+      {
+        "temperatureC": 240.0,
+        "from": "GOW",
+        "to": "OW",
+        "lowerBara": 84.75,
+        "upperBara": 85.0,
+        "pressureBara": 84.875
+      },
+      {
+        "temperatureC": 250.0,
+        "from": "GW",
+        "to": "OW",
+        "lowerBara": 90.75,
+        "upperBara": 91.0,
+        "pressureBara": 90.875
+      }
+    ],
+    "water-appearance": [
+      {
+        "temperatureC": 100.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 1.0,
+        "upperBara": 1.25,
+        "pressureBara": 1.125
+      },
+      {
+        "temperatureC": 110.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 1.75,
+        "upperBara": 2.0,
+        "pressureBara": 1.875
+      },
+      {
+        "temperatureC": 120.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 2.25,
+        "upperBara": 2.5,
+        "pressureBara": 2.375
+      },
+      {
+        "temperatureC": 130.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 3.25,
+        "upperBara": 3.5,
+        "pressureBara": 3.375
+      },
+      {
+        "temperatureC": 140.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 4.5,
+        "upperBara": 4.75,
+        "pressureBara": 4.625
+      },
+      {
+        "temperatureC": 150.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 6.0,
+        "upperBara": 6.25,
+        "pressureBara": 6.125
+      },
+      {
+        "temperatureC": 160.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 8.0,
+        "upperBara": 8.25,
+        "pressureBara": 8.125
+      },
+      {
+        "temperatureC": 170.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 10.5,
+        "upperBara": 10.75,
+        "pressureBara": 10.625
+      },
+      {
+        "temperatureC": 180.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 13.5,
+        "upperBara": 13.75,
+        "pressureBara": 13.625
+      },
+      {
+        "temperatureC": 190.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 17.25,
+        "upperBara": 17.5,
+        "pressureBara": 17.375
+      },
+      {
+        "temperatureC": 200.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 22.0,
+        "upperBara": 22.25,
+        "pressureBara": 22.125
+      },
+      {
+        "temperatureC": 210.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 27.5,
+        "upperBara": 27.75,
+        "pressureBara": 27.625
+      },
+      {
+        "temperatureC": 220.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 34.75,
+        "upperBara": 35.0,
+        "pressureBara": 34.875
+      },
+      {
+        "temperatureC": 230.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 43.5,
+        "upperBara": 43.75,
+        "pressureBara": 43.625
+      },
+      {
+        "temperatureC": 240.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 55.75,
+        "upperBara": 56.0,
+        "pressureBara": 55.875
+      },
+      {
+        "temperatureC": 250.0,
+        "from": "GO",
+        "to": "GOW",
+        "lowerBara": 77.75,
+        "upperBara": 78.0,
+        "pressureBara": 77.875
+      }
+    ]
+  },
+  "rawTopologyAnomalies": {
+    "pvtSim": [],
+    "neqSim": [
+      {
+        "temperatureC": 130.0,
+        "rawTransitions": [
+          {
+            "from": "GO",
+            "to": "GOW",
+            "lowerBara": 3.25,
+            "upperBara": 3.5,
+            "pressureBara": 3.375
+          },
+          {
+            "from": "GOW",
+            "to": "OW",
+            "lowerBara": 52.75,
+            "upperBara": 53.0,
+            "pressureBara": 52.875
+          },
+          {
+            "from": "OW",
+            "to": "GOW",
+            "lowerBara": 53.0,
+            "upperBara": 53.25,
+            "pressureBara": 53.125
+          },
+          {
+            "from": "GOW",
+            "to": "OW",
+            "lowerBara": 59.25,
+            "upperBara": 59.5,
+            "pressureBara": 59.375
+          }
+        ],
+        "interpretation": "Short solver topology island collapsed only for physical boundary plotting; the raw topology discrepancy remains recorded."
+      },
+      {
+        "temperatureC": 250.0,
+        "rawTransitions": [
+          {
+            "from": "GO",
+            "to": "GOW",
+            "lowerBara": 77.75,
+            "upperBara": 78.0,
+            "pressureBara": 77.875
+          },
+          {
+            "from": "GOW",
+            "to": "GW",
+            "lowerBara": 89.0,
+            "upperBara": 89.25,
+            "pressureBara": 89.125
+          },
+          {
+            "from": "GW",
+            "to": "OW",
+            "lowerBara": 90.75,
+            "upperBara": 91.0,
+            "pressureBara": 90.875
+          }
+        ],
+        "interpretation": "Short solver topology island collapsed only for physical boundary plotting; the raw topology discrepancy remains recorded."
+      }
+    ]
+  },
+  "boundaryComparison": [
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 20.0,
+      "pvtSimPressureBara": 35.125,
+      "neqSimPressureBara": 35.375,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 30.0,
+      "pvtSimPressureBara": 37.375,
+      "neqSimPressureBara": 38.125,
+      "absoluteDeviationBara": 0.75,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 40.0,
+      "pvtSimPressureBara": 39.625,
+      "neqSimPressureBara": 40.625,
+      "absoluteDeviationBara": 1.0,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 50.0,
+      "pvtSimPressureBara": 41.875,
+      "neqSimPressureBara": 42.625,
+      "absoluteDeviationBara": 0.75,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 60.0,
+      "pvtSimPressureBara": 44.125,
+      "neqSimPressureBara": 46.125,
+      "absoluteDeviationBara": 2.0,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 70.0,
+      "pvtSimPressureBara": 46.125,
+      "neqSimPressureBara": 49.375,
+      "absoluteDeviationBara": 3.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 80.0,
+      "pvtSimPressureBara": 48.375,
+      "neqSimPressureBara": 52.625,
+      "absoluteDeviationBara": 4.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 90.0,
+      "pvtSimPressureBara": 50.375,
+      "neqSimPressureBara": 53.875,
+      "absoluteDeviationBara": 3.5,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 100.0,
+      "pvtSimPressureBara": 52.375,
+      "neqSimPressureBara": 55.125,
+      "absoluteDeviationBara": 2.75,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 110.0,
+      "pvtSimPressureBara": 54.125,
+      "neqSimPressureBara": 56.375,
+      "absoluteDeviationBara": 2.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 120.0,
+      "pvtSimPressureBara": 55.875,
+      "neqSimPressureBara": 57.875,
+      "absoluteDeviationBara": 2.0,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 130.0,
+      "pvtSimPressureBara": 57.625,
+      "neqSimPressureBara": 59.375,
+      "absoluteDeviationBara": 1.75,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 140.0,
+      "pvtSimPressureBara": 59.375,
+      "neqSimPressureBara": 60.875,
+      "absoluteDeviationBara": 1.5,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 150.0,
+      "pvtSimPressureBara": 61.125,
+      "neqSimPressureBara": 62.625,
+      "absoluteDeviationBara": 1.5,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 160.0,
+      "pvtSimPressureBara": 62.875,
+      "neqSimPressureBara": 64.625,
+      "absoluteDeviationBara": 1.75,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 170.0,
+      "pvtSimPressureBara": 64.875,
+      "neqSimPressureBara": 66.625,
+      "absoluteDeviationBara": 1.75,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 180.0,
+      "pvtSimPressureBara": 66.875,
+      "neqSimPressureBara": 68.625,
+      "absoluteDeviationBara": 1.75,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 190.0,
+      "pvtSimPressureBara": 68.875,
+      "neqSimPressureBara": 70.625,
+      "absoluteDeviationBara": 1.75,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 200.0,
+      "pvtSimPressureBara": 71.375,
+      "neqSimPressureBara": 72.875,
+      "absoluteDeviationBara": 1.5,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 210.0,
+      "pvtSimPressureBara": 74.125,
+      "neqSimPressureBara": 75.375,
+      "absoluteDeviationBara": 1.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 220.0,
+      "pvtSimPressureBara": 77.125,
+      "neqSimPressureBara": 78.625,
+      "absoluteDeviationBara": 1.5,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 230.0,
+      "pvtSimPressureBara": 80.625,
+      "neqSimPressureBara": 81.125,
+      "absoluteDeviationBara": 0.5,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 240.0,
+      "pvtSimPressureBara": 84.625,
+      "neqSimPressureBara": 84.875,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "gas-disappearance",
+      "temperatureC": 250.0,
+      "pvtSimPressureBara": 89.125,
+      "neqSimPressureBara": 90.875,
+      "absoluteDeviationBara": 1.75,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 100.0,
+      "pvtSimPressureBara": 1.125,
+      "neqSimPressureBara": 1.125,
+      "absoluteDeviationBara": 0.0,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 110.0,
+      "pvtSimPressureBara": 1.875,
+      "neqSimPressureBara": 1.875,
+      "absoluteDeviationBara": 0.0,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 120.0,
+      "pvtSimPressureBara": 2.625,
+      "neqSimPressureBara": 2.375,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 130.0,
+      "pvtSimPressureBara": 3.375,
+      "neqSimPressureBara": 3.375,
+      "absoluteDeviationBara": 0.0,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 140.0,
+      "pvtSimPressureBara": 4.625,
+      "neqSimPressureBara": 4.625,
+      "absoluteDeviationBara": 0.0,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 150.0,
+      "pvtSimPressureBara": 6.375,
+      "neqSimPressureBara": 6.125,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 160.0,
+      "pvtSimPressureBara": 8.375,
+      "neqSimPressureBara": 8.125,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 170.0,
+      "pvtSimPressureBara": 10.875,
+      "neqSimPressureBara": 10.625,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 180.0,
+      "pvtSimPressureBara": 13.875,
+      "neqSimPressureBara": 13.625,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 190.0,
+      "pvtSimPressureBara": 17.625,
+      "neqSimPressureBara": 17.375,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 200.0,
+      "pvtSimPressureBara": 22.375,
+      "neqSimPressureBara": 22.125,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 210.0,
+      "pvtSimPressureBara": 28.125,
+      "neqSimPressureBara": 27.625,
+      "absoluteDeviationBara": 0.5,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 220.0,
+      "pvtSimPressureBara": 35.125,
+      "neqSimPressureBara": 34.875,
+      "absoluteDeviationBara": 0.25,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 230.0,
+      "pvtSimPressureBara": 44.125,
+      "neqSimPressureBara": 43.625,
+      "absoluteDeviationBara": 0.5,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 240.0,
+      "pvtSimPressureBara": 56.375,
+      "neqSimPressureBara": 55.875,
+      "absoluteDeviationBara": 0.5,
+      "labelsMatch": true
+    },
+    {
+      "boundary": "water-appearance",
+      "temperatureC": 250.0,
+      "pvtSimPressureBara": 78.875,
+      "neqSimPressureBara": 77.875,
+      "absoluteDeviationBara": 1.0,
+      "labelsMatch": true
+    }
+  ],
+  "summary": {
+    "matchedBoundaryPoints": 40,
+    "boundaryLabelsMatch": true,
+    "meanAbsoluteBoundaryDeviationBara": 1.14375,
+    "maximumAbsoluteBoundaryDeviationBara": 4.25,
+    "strictResearchGatePassed": false,
+    "deliveryReleaseGate": {
+      "status": "PASS_WITH_KNOWN_LIMITATIONS",
+      "userAuthorizedScheduleDrivenRelaxation": true,
+      "minimumTopologyAgreementPct": 98.0,
+      "maximumMeanBoundaryDeviationBara": 1.5,
+      "maximumBoundaryDeviationBara": 5.0,
+      "passed": true,
+      "knownLimitation": "Largest deviation is on the gas-disappearance boundary from 70 to 110 C; maximum 4.25 bara at 80 C."
+    }
+  },
+  "figure": "figures/l5_nh35_complete_envelope.png"
+}

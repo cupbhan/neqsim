@@ -1,0 +1,242 @@
+{
+  "task_type": "NeqSim thermodynamic solver feature validation",
+  "objective": "Recover all 17 explicitly rejected high-pressure wet-heavy-oil TP-flash states without regressing the frozen 39/49/22 mainline or weakening product acceptance gates.",
+  "executive_summary": "Two ordering defects were corrected. A late aqueous seed is now passed through the phase-fraction solver before final validation, and a non-equilibrium water-rich two-phase endpoint above the water critical pressure is repaired before tangent-plane stability expansion. The exact SRK/Peneloux/classic cold-start grid improves from 865/882 to 882/882 accepted states. The engineering classification above 200 bara is upgraded from partly UNVERIFIED to LIMITED, not VERIFIED, because independent boundary closure remains available only through 200 bara.",
+  "key_results": {
+    "baseline_grid_accepted_states": 865,
+    "baseline_grid_rejected_states": 17,
+    "final_grid_accepted_states": 882,
+    "final_grid_rejected_states": 0,
+    "recovered_rejected_states": 17,
+    "high_pressure_correct_states": 39,
+    "high_pressure_wrong_states": 0,
+    "low_pressure_balanced_states": 49,
+    "wet_boundary_crosscheck_points": 22,
+    "wet_boundary_max_delta_K": 0.000056769465487604975,
+    "solver_status_tests_passed": 7,
+    "targeted_product_tests_passed": 2
+  },
+  "validation": {
+    "final_grid_882_of_882": true,
+    "no_explicit_solver_or_physics_gate_failures": true,
+    "high_pressure_correct_branch_39_of_39": true,
+    "high_pressure_wrong_branch_0_of_39": true,
+    "low_pressure_material_balance_49_of_49": true,
+    "wet_boundary_crosscheck_22_of_22": true,
+    "wet_boundary_delta_within_1_K": true,
+    "targeted_solver_tests_7_of_7": true,
+    "targeted_product_tests_2_of_2": true,
+    "java_8_source_compile_passed": true,
+    "spotless_check_passed": true,
+    "acceptance_criteria_met": true
+  },
+  "approach": "The 17 failures were first frozen and classified into 10 STALLED, 5 invalid phase-removal, and 2 NOT_REQUIRED states that failed the independent fugacity gate. The high-temperature fixed residual was traced to a late aqueous seed that bypassed solveBeta. The low- and mid-temperature failures were traced to tangent-plane stability analysis being run on a non-equilibrium water-rich two-phase endpoint. The implementation changes solver ordering only; EOS parameters, damping, ridge regularization, and acceptance tolerances are unchanged.",
+  "conclusions": "All 17 baseline rejects are recovered with no new failed state in the 882-point cold-start grid. The frozen 39/49/22 gates and both targeted product states pass. Numerical state solving is therefore closed for the sampled domain. High-pressure phase-envelope topology is not independently closed above 200 bara, so >200-300 bara is LIMITED rather than VERIFIED.",
+  "recommendations": [
+    "Use 0.5-200 bara as VERIFIED for the exact sampled model and temperature range.",
+    "Use >200-300 bara only with the existing per-state status, material-balance, and fugacity gates until an independent high-pressure boundary is closed.",
+    "Do not generalize the repair to reactive, ionic, CPA, different-composition, or different-mixing-rule systems without separate validation.",
+    "Keep the water-critical-pressure guard; it prevents the repair path from replacing the reliable subcritical-pressure stability workflow."
+  ],
+  "evidence_gaps": [
+    {
+      "gap": "No independent wet-boundary closure above 200 bara.",
+      "action": "Add a separate high-pressure topology study before promoting >200-300 bara to VERIFIED."
+    },
+    {
+      "gap": "No external numerical benchmark with identical composition, EOS, translation, mixing rule, and boundary definition.",
+      "action": "Retain LIMITED classification even though all sampled state gates pass."
+    },
+    {
+      "gap": "The full FieldFluidRunnerTest class has two pre-existing envelope-method expectation failures unrelated to TPmultiflash; the two targeted product-path tests pass.",
+      "action": "Handle the 2-HC envelope method/label contract in a separate task; do not mix it into this solver closeout."
+    }
+  ],
+  "benchmark_validation": {
+    "cold_start_grid": {
+      "status": "PASS",
+      "baseline_accepted": 865,
+      "final_accepted": 882,
+      "total": 882,
+      "final_rejected": 0
+    },
+    "cold_warm_branch_equivalence": {
+      "status": "PASS",
+      "points": 39,
+      "maximum_absolute_gibbs_difference_J": 2.9467628337442875e-10,
+      "maximum_mass_balance_residual": 1.0658141036401503e-14
+    },
+    "wet_boundary_independent_method": {
+      "status": "PASS",
+      "points": 22,
+      "maximum_absolute_temperature_difference_K": 0.000056769465487604975,
+      "acceptance_limit_K": 1
+    },
+    "external_same_topology_numeric_reference": {
+      "status": "N/A",
+      "availability": "Not available",
+      "engineering_effect": "Prevents VERIFIED classification above 200 bara."
+    }
+  },
+  "agent_workflow_plan": {
+    "agents_used": [
+      {
+        "name": "Codex primary agent",
+        "role": "classification, root-cause analysis, implementation, verification, and closeout"
+      }
+    ],
+    "workflow_type": "single_agent_stage_gates",
+    "workflow": "freeze baseline -> classify mechanism families -> repair one solver ordering layer at a time -> rerun 39/49/22 -> rerun 882 -> product gate -> trusted-range update",
+    "rationale": "The user required the mainline to remain continuously runnable; the work therefore used one bounded vertical slice at a time with frozen gates."
+  },
+  "figure_captions": {},
+  "figure_discussion": [],
+  "equations": [
+    {
+      "label": "Component material-balance residual",
+      "latex": "r_{MB}=\\max_i\\left|z_i-\\sum_{\\alpha}\\beta_{\\alpha}x_{i,\\alpha}\\right|"
+    },
+    {
+      "label": "Interphase fugacity residual",
+      "latex": "r_f=\\max_{i,\\alpha,\\gamma}\\left|\\ln f_{i,\\alpha}-\\ln f_{i,\\gamma}\\right|"
+    }
+  ],
+  "tables": [
+    {
+      "title": "Mainline Verification",
+      "headers": [
+        "Gate",
+        "Result",
+        "Acceptance",
+        "Status"
+      ],
+      "rows": [
+        [
+          "Cold-start grid",
+          "882/882 accepted; 0 rejected",
+          "No explicit or physics-gate failure",
+          "PASS"
+        ],
+        [
+          "240 bara target",
+          "39/39 correct; 0/39 wrong",
+          "All target states retain GAS+OIL+AQUEOUS",
+          "PASS"
+        ],
+        [
+          "0.5 bara control",
+          "49/49; max MB 6.40e-13",
+          "MB <= 1e-9",
+          "PASS"
+        ],
+        [
+          "Wet boundary",
+          "22/22; max delta 0.000057 K",
+          "Delta T <= 1 K",
+          "PASS"
+        ],
+        [
+          "Product path",
+          "2/2 targeted states",
+          "FieldFluidRunner status=success with expected phases",
+          "PASS"
+        ]
+      ]
+    },
+    {
+      "title": "Trusted Range Classification",
+      "headers": [
+        "Class",
+        "Pressure (bara)",
+        "Cold-start states",
+        "Failures",
+        "Use"
+      ],
+      "rows": [
+        [
+          "VERIFIED",
+          "0.5-200",
+          637,
+          0,
+          "Exact-model engineering states and independently cross-checked wet boundary"
+        ],
+        [
+          "LIMITED",
+          ">200-300",
+          245,
+          0,
+          "Per-state gated work; no closed high-pressure boundary claim"
+        ],
+        [
+          "UNVERIFIED",
+          "Outside sampled domain",
+          "N/A",
+          "N/A",
+          "No extrapolation"
+        ]
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "PreviousStage",
+      "text": "2026-08-02 high-water heavy-oil hydrocarbon phase-envelope solver task and its frozen machine-readable baseline."
+    },
+    {
+      "id": "SourceFluid",
+      "text": "PVTsim-derived 22-component high-water heavy-oil definition archived under step1_scope_and_research/references/manual/previous_stage/."
+    }
+  ],
+  "risk_evaluation": {
+    "overall_risk_level": "Medium",
+    "risk_matrix_used": "qualitative task closeout",
+    "risks": [
+      {
+        "id": "R1",
+        "category": "Topology",
+        "description": "High-pressure boundary is not independently closed above 200 bara.",
+        "risk_level": "Medium",
+        "mitigation": "Keep >200-300 bara LIMITED."
+      },
+      {
+        "id": "R2",
+        "category": "Scope",
+        "description": "Repair is applied to a different EOS, composition, or reactive/ionic system.",
+        "risk_level": "Medium",
+        "mitigation": "Guard scope and require separate grids."
+      },
+      {
+        "id": "R3",
+        "category": "Regression",
+        "description": "Subcritical-pressure stability path is replaced by the repair path.",
+        "risk_level": "Low",
+        "mitigation": "Water-critical-pressure guard plus 200 bara regression tests."
+      }
+    ]
+  },
+  "provenance": {
+    "generated_on": "2026-08-08",
+    "model_identity": {
+      "eos": "SRK",
+      "volume_translation": "Peneloux",
+      "mixing_rule": "classic",
+      "reactive": false,
+      "feed_mole_fractions": {
+        "water": 0.65,
+        "heavyOil": 0.25,
+        "CO2": 0.07,
+        "nitrogen": 0.03
+      },
+      "note": "The source PVTsim fluid declares classic mixing; this result must not be labelled Huron-Vidal."
+    },
+    "source_artifacts": [
+      "step2_analysis/baseline/trusted_range_grid.json",
+      "step2_analysis/baseline_failure_classification.json",
+      "step2_analysis/trusted_range_after_supercritical_guard.json",
+      "step2_analysis/a7_240bara_39point.json",
+      "step2_analysis/a7_low_pressure_49point.json",
+      "step2_analysis/a7_boundary_crosscheck.json"
+    ],
+    "known_unrelated_test_result": "FieldFluidRunnerTest full class: 10/12; two 2-HC envelope method/label expectation failures are outside this TPmultiflash change. Targeted product tests: 2/2."
+  }
+}
