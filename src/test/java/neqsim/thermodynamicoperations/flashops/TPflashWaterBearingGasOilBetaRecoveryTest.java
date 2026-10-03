@@ -82,6 +82,70 @@ class TPflashWaterBearingGasOilBetaRecoveryTest {
   }
 
   /**
+   * Retains the lower-Gibbs incipient vapor on both cold and repeated ordinary/multiphase flashes.
+   *
+   * @param waterFraction overall water mole fraction
+   * @param temperatureC temperature in degrees Celsius
+   * @param pressureBara absolute pressure in bar
+   * @throws IOException if the public development fluid resource cannot be read
+   */
+  @ParameterizedTest
+  @CsvSource({"0.1,120,1.4", "0.1,140,2.1", "0.1,160,3", "0.1,170,3.55", "0.1,180,4.2", "0.1,190,4.9", "0.1,200,5.65",
+      "0.1,200,5.7", "0.1,210,6.55", "0.1,220,7.5", "0.1,230,8.5", "0.1,230,8.55", "0.3,170,8.05", "0.3,170,8.1",
+      "0.3,170,8.15", "0.3,170,8.2", "0.3,180,9.35", "0.3,180,9.4", "0.3,180,9.45", "0.3,180,9.5", "0.3,190,10.75",
+      "0.3,190,10.8", "0.3,190,10.85", "0.3,190,10.9", "0.3,200,12.3", "0.3,200,12.35", "0.3,200,12.4", "0.3,200,12.45",
+      "0.3,210,14.0", "0.3,210,14.05", "0.3,210,14.1", "0.3,210,14.15", "0.3,220,15.8", "0.3,220,15.85", "0.3,220,15.9",
+      "0.3,230,17.75", "0.3,230,17.8", "0.3,240,19.8", "0.3,240,19.85"})
+  void coldAndRepeatedFlashRetainsIncipientVapor(double waterFraction, double temperatureC, double pressureBara)
+      throws IOException {
+    for (boolean multiphase : new boolean[] {false, true}) {
+      SystemInterface fluid = createFluid(waterFraction, temperatureC, pressureBara);
+      fluid.setMultiPhaseCheck(multiphase);
+      ThermodynamicOperations operations = new ThermodynamicOperations(fluid);
+      operations.TPflash();
+      fluid.init(1);
+      assertEquals(2, fluid.getNumberOfPhases(), "incipient gas/oil split");
+      assertTrue(fluid.hasPhaseType(PhaseType.GAS));
+      assertTrue(fluid.hasPhaseType(PhaseType.OIL));
+      assertEquilibrium(fluid);
+      double gasBeta = fluid.getBeta(fluid.getPhaseNumberOfPhase("gas"));
+      double gibbs = fluid.getGibbsEnergy();
+      operations.TPflash();
+      fluid.init(1);
+      assertEquals(2, fluid.getNumberOfPhases(), "repeated flash must preserve the stable split");
+      assertEquilibrium(fluid);
+      assertEquals(gasBeta, fluid.getBeta(fluid.getPhaseNumberOfPhase("gas")), 1.0e-9);
+      assertEquals(gibbs, fluid.getGibbsEnergy(), 1.0e-7);
+    }
+  }
+
+  /**
+   * Preserves the stable liquid just above the bubble boundary and after pressure round trips.
+   *
+   * @param waterFraction overall water mole fraction
+   * @param temperatureC temperature in degrees Celsius
+   * @param pressureBara single-liquid pressure in absolute bar
+   * @throws IOException if the public development fluid resource cannot be read
+   */
+  @ParameterizedTest
+  @CsvSource({"0.1,120,1.45", "0.1,170,3.6", "0.1,200,5.75", "0.1,210,6.6", "0.1,230,8.6", "0.1,240,9.75",
+      "0.3,170,8.25", "0.3,200,12.5", "0.3,210,14.2", "0.3,230,17.85", "0.3,240,19.9"})
+  void stableLiquidSurvivesBoundaryRoundTrip(double waterFraction, double temperatureC, double pressureBara)
+      throws IOException {
+    SystemInterface fluid = createFluid(waterFraction, temperatureC, pressureBara);
+    ThermodynamicOperations operations = new ThermodynamicOperations(fluid);
+    for (double offset : new double[] {0.0, -0.05, 0.0}) {
+      fluid.setPressure(pressureBara + offset);
+      operations.TPflash();
+      fluid.init(1);
+      assertEquilibrium(fluid);
+      assertTrue(fluid.hasPhaseType(PhaseType.OIL));
+      assertEquals(offset == 0.0 ? 1 : 2, fluid.getNumberOfPhases());
+      assertEquals(offset != 0.0, fluid.hasPhaseType(PhaseType.GAS));
+    }
+  }
+
+  /**
    * Derives an explicit zero-kij water/heavy-oil contract without modifying the frozen NH3 preset.
    *
    * @param waterFraction overall water mole fraction

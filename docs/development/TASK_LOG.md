@@ -5,6 +5,15 @@ description: "Chronological record of engineering tasks solved in the NeqSim rep
 
 # Task Log
 
+### 2026-10-03 — Restore incipient vapor near water-bearing heavy-oil bubble points
+**Type:** C (PVT)
+**Keywords:** SRK, water, incipient vapor, tangent-plane stability, PVTsim, phase-slot ambiguity
+**Solution:** `Flash.waterBearingVaporStabilityRetry` and mandatory `TPflashWaterBearingGasOilBetaRecoveryTest`.
+**Notes:** Independent gas-root trials retain feed chemical potentials and seed only converged, nontrivial unstable states.
+Regressions cover 39 missed splits, repeated flashes, 11 liquid-side boundary round trips and the existing conservation cases.
+Use evaluated roots instead of phase slots, including one-ULP pressure perturbations. Frozen NH3 models remain unchanged;
+native-reference calibration validation remains separate from same-parameter solver verification.
+
 > **Purpose:** Persistent memory across sessions. Every solved task gets an entry here
 > so future sessions can find prior solutions instead of starting from scratch.
 >

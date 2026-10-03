@@ -317,6 +317,12 @@ Symptoms that a continuation result is truncated:
   to a new upstream merge. Compare numerical residuals as well as pass/fail counts; a retained personal patch
   can leave much larger conservation errors than the official result. See
   `docs/development/shared-thermo-compatibility-audit.md` for the bounded rc.3 findings.
+- A single-phase flash can satisfy conservation while missing a lower-Gibbs incipient vapor. For a water-bearing
+  liquid reference, test a separately initialized gas root against the original feed chemical potentials. Require
+  convergence, negative tangent-plane distance, a nontrivial composition, and finite positive K-values before
+  seeding the ordinary flash; never accept the trial as the final equilibrium. Compare cold and repeated flashes,
+  and include stable-liquid controls on the other side of the bubble boundary. Keep chemical, ionic, CPA, solid,
+  wax, and zero-water systems on their established paths unless separately validated.
 
 ## Known Limitations
 

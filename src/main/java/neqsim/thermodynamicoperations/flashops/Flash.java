@@ -56,6 +56,10 @@ public abstract class Flash extends BaseOperation {
   private static final double LOG_MIN_EXP = Math.log(Double.MIN_NORMAL);
   private static final double LOG_MAX_EXP = Math.log(Double.MAX_VALUE);
   private static final double SUPPLEMENTARY_TPD_NUMERICAL_FLOOR = -1.0e-6;
+  /** Convergence limit for the independently initialized water-bearing vapor trial. */
+  private static final double WATER_VAPOR_STABILITY_CONVERGENCE_TOLERANCE = 1.0e-10;
+  /** Maximum fixed-point iterations for the supplementary vapor trial. */
+  private static final int WATER_VAPOR_STABILITY_MAX_ITERATIONS = 100;
   private static final String STABILITY_OUTCOME_NOT_EVALUATED = "not evaluated";
   private String lastStabilityOutcome = STABILITY_OUTCOME_NOT_EVALUATED;
   private boolean lastStabilityAnalysisFailed = false;
@@ -1127,6 +1131,113 @@ public abstract class Flash extends BaseOperation {
   }
 
   /**
+   * Tests a neutral water-bearing liquid reference against a separately initialized vapor root.
+   *
+   * <p>
+   * The ordinary stability path can miss the water-rich vapor minimum near a heavy-oil bubble point. The amplified
+   * retry targets higher-pressure hydrocarbon boundaries and does not cover these low-pressure liquid references. Start
+   * a Wilson vapor trial on an independent clone, retaining the original feed chemical potentials and explicitly
+   * selecting the gas root on every iteration. Only a converged, nontrivial trial with negative tangent-plane distance
+   * may seed the ordinary two-phase flash. The trial itself is never returned as an equilibrium state. Chemical, ionic,
+   * CPA, solid, wax, and zero-water cases retain their existing paths.
+   * </p>
+   *
+   * @return true if a qualified unstable vapor trial supplied finite positive K-values
+   */
+  private boolean waterBearingVaporStabilityRetry() {
+    if (!system.hasComponent("water") || system.getComponent("water").getz() <= 1.0e-50 || system.isChemicalSystem()
+        || system.hasIons() || system.getModelName().contains("CPA") || solidCheck || system.doSolidPhaseCheck()
+        || system.isMultiphaseWaxCheck()) {
+      return false;
+    }
+    try {
+      SystemInterface trial = minimumGibbsEnergySystem.clone();
+      trial.init(0);
+      trial.setNumberOfPhases(2);
+      trial.setPhaseIndex(0, 0);
+      trial.setPhaseIndex(1, 1);
+      trial.init(1);
+      // A gas slot can evaluate to the same dense root as the liquid slot. Gate on the evaluated root,
+      // since near-equal Gibbs energies can select either slot after a one-ULP pressure change.
+      if (trial.getPhase(lowestGibbsEnergyPhase).getType() == PhaseType.GAS) {
+        return false;
+      }
+      int count = trial.getNumberOfComponents();
+      double[] weights = new double[count];
+      double[] updated = new double[count];
+      for (int componentIndex = 0; componentIndex < count; componentIndex++) {
+        ComponentInterface component = trial.getPhase(0).getComponent(componentIndex);
+        weights[componentIndex] = component.getz() * safeExp(Math.log(component.getPC() / system.getPressure())
+            + 5.373 * (1.0 + component.getAcentricFactor()) * (1.0 - component.getTC() / system.getTemperature()));
+      }
+      for (int iteration = 0; iteration < WATER_VAPOR_STABILITY_MAX_ITERATIONS; iteration++) {
+        double sum = 0.0;
+        for (double weight : weights) {
+          sum += weight;
+        }
+        if (!Double.isFinite(sum) || sum <= 0.0) {
+          return false;
+        }
+        for (int componentIndex = 0; componentIndex < count; componentIndex++) {
+          trial.getPhase(0).getComponent(componentIndex).setx(weights[componentIndex] / sum);
+        }
+        trial.setPhaseType(0, PhaseType.GAS);
+        trial.init(1, 0);
+        double residual = 0.0;
+        double updatedSum = 0.0;
+        for (int componentIndex = 0; componentIndex < count; componentIndex++) {
+          ComponentInterface component = trial.getPhase(0).getComponent(componentIndex);
+          if (component.getz() <= 1.0e-50) {
+            updated[componentIndex] = 0.0;
+            continue;
+          }
+          double targetLog = minGibsPhaseLogZ[componentIndex] + minGibsLogFugCoef[componentIndex]
+              - component.getLogFugacityCoefficient();
+          residual = Math.max(residual, Math.abs(targetLog - Math.log(weights[componentIndex])));
+          updated[componentIndex] = safeExp(targetLog);
+          updatedSum += updated[componentIndex];
+        }
+        System.arraycopy(updated, 0, weights, 0, count);
+        if (!Double.isFinite(residual) || !Double.isFinite(updatedSum)) {
+          return false;
+        }
+        if (residual <= WATER_VAPOR_STABILITY_CONVERGENCE_TOLERANCE) {
+          if (!(updatedSum > 1.0 && -Math.log(updatedSum) < tmLimit)) {
+            return false;
+          }
+          double maxDeparture = 0.0;
+          double[] candidateK = new double[count];
+          for (int componentIndex = 0; componentIndex < count; componentIndex++) {
+            double feed = trial.getPhase(0).getComponent(componentIndex).getz();
+            maxDeparture = Math.max(maxDeparture, Math.abs(weights[componentIndex] / updatedSum - feed));
+            if (feed > 1.0e-50) {
+              candidateK[componentIndex] = weights[componentIndex] / feed;
+              if (!Double.isFinite(candidateK[componentIndex]) || candidateK[componentIndex] <= 0.0) {
+                return false;
+              }
+            }
+          }
+          if (maxDeparture < 1.0e-4) {
+            return false;
+          }
+          for (int componentIndex = 0; componentIndex < count; componentIndex++) {
+            if (candidateK[componentIndex] > 0.0) {
+              system.getPhase(0).getComponent(componentIndex).setK(candidateK[componentIndex]);
+              system.getPhase(1).getComponent(componentIndex).setK(candidateK[componentIndex]);
+            }
+          }
+          tm[0] = 1.0 - updatedSum;
+          recordTangentPlaneDistances();
+          return true;
+        }
+      }
+    } catch (RuntimeException ex) {
+      logger.debug("Water-bearing vapor stability trial failed: {}", ex.getMessage());
+    }
+    return false;
+  }
+
+  /**
    * stabilityCheck.
    *
    * @return a boolean
@@ -1171,8 +1282,10 @@ public abstract class Flash extends BaseOperation {
       } catch (Exception ignored) {
         preTrialKvector = null;
       }
+      retryFoundInstability = waterBearingVaporStabilityRetry();
       // Amplified K-value trials catch near-critical VLE instability (near cricondenbar)
-      if ((tm[0] < 0.5 || tm[1] < 0.5 || ambiguousStability) && !system.getModelName().contains("CPA")) {
+      if (!retryFoundInstability && (tm[0] < 0.5 || tm[1] < 0.5 || ambiguousStability)
+          && !system.getModelName().contains("CPA")) {
         retryFoundInstability = amplifiedKStabilityRetry();
       }
       // Pure-component trials catch LLE instability (Wilson K fails at T << Tc).
