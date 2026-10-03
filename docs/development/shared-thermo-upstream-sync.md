@@ -123,6 +123,9 @@ Python 和 T2WELL 比较入口读取同一版本锁。回退时激活保留的�
 
 后续扩大官方行为回归发现旧补丁与新版恢复逻辑存在冲突，原回归不足以证明完整兼容。
 修复、默认参数显式化和扩展候选门槛见[行为兼容性审计](shared-thermo-compatibility-audit.md)。
+当前已选择 `3.23.0-cupbhan.1-rc.3`：76 个核心测试类共 416 项，415 通过、1 项已登记的官方禁用用例；
+其中新增官方检查 215 项全部通过。个人回归、MCP、发行包 Python、热井筒和 T2WELL 候选检查通过后切换，
+随后也通过了 Python 绑定及部署副本的来源一致性检查。
 
 相关说明：[仓库职责](shared-thermo-repository.md)、[目录统一](local-directory-consolidation.md)、
 [官方 3.23.0 发布说明](https://github.com/equinor/neqsim/releases/tag/v3.23.0)、

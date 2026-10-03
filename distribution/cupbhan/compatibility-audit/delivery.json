@@ -1,0 +1,403 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-03T01:04:16.988444+00:00",
+  "status": "validated-and-selected-local-candidate",
+  "version": "3.23.0-cupbhan.1-rc.3",
+  "sourceCommit": "a1d8ec050ca198609d100e81625e02da29725652",
+  "officialBaseline": "v3.23.0",
+  "officialCommit": "280152d97763672fb79c9139e421adf85663a930",
+  "runnerSha256": "588a113ec3fa522504fd1b694f2776ad66859c1e9bc11f0a7ce23391356105e6",
+  "sourceMetadataSha256": "a153451268b6e13a68eead7e394f5558f3707fbc238e7df5cb485256a0bbc79b",
+  "runtimeLock": "distribution/cupbhan/runtime.json",
+  "fallbackVersionRetained": "3.23.0-cupbhan.1-rc.2",
+  "core": {
+    "suites": [
+      "neqsim.mcp.runners.ComponentQueryTest",
+      "neqsim.mcp.runners.FieldFluidRunnerTest",
+      "neqsim.mcp.runners.HydrocarbonWaterBoundaryRegressionRunnerTest",
+      "neqsim.mcp.runners.HydrocarbonWaterModelIdentityTest",
+      "neqsim.mcp.runners.HydrocarbonWaterTopologyBenchmarkRunnerTest",
+      "neqsim.mcp.runners.WaterIF97RunnerTest",
+      "neqsim.thermo.mixingrule.ClassicSRKTabulatedTest",
+      "neqsim.thermo.mixingrule.EosMixingRulesTest",
+      "neqsim.thermo.phase.CPAAssociationInitializationTest",
+      "neqsim.thermo.phase.PhaseGEInfiniteDilutionTest",
+      "neqsim.thermo.system.HeavyOilMultimediaFluidTest",
+      "neqsim.thermo.system.SystemThermoChemicalReactionStaleStateTest",
+      "neqsim.thermo.system.SystemThermoReactiveCloneTest",
+      "neqsim.thermo.system.SystemThermoSerializationInventoryTest",
+      "neqsim.thermo.system.SystemThermoSetMolarCompositionTest",
+      "neqsim.thermo.system.SystemThermoSulfurPhaseExtractionTest",
+      "neqsim.thermodynamicoperations.flashops.PSFlashEntropyClosureTest",
+      "neqsim.thermodynamicoperations.flashops.PSFlashWarmStartPolicyTest",
+      "neqsim.thermodynamicoperations.flashops.reactiveflash.ReactiveElectrolyteStateConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.StabilityOptimizationInvariantTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousCrossAlgorithmFallbackTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousEndpointTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousFinalRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousMaterialBalanceRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousPhaseRemovalRecoveryTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousResidualRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootTransitionCandidateTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashCpaAqueousStabilityConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashCpaHydrocarbonLiquidStabilityTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashCubicRootSelectionTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashIncipientPhaseStabilityTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashIonicGasAqueousConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashIssue3943PumpRegressionTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashLargeVolatilityHydrocarbonConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashLiquidLiquidConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashMissingAqueousNearBubblePointTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashNearCricondenbarConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashRichGasBoundaryTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSourGasConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSrkAqueousLowerGibbsRootTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSrkWaterRichSeededPhaseSetTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashTerminalEquilibriumRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashTraceAqueousRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashTwuSourFluidConservationTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWarmStartThreePhaseTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterRichColdSeedConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterRichEndpointTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWellFluidConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashHighWaterGasSeedTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashPhaseDisappearanceTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashSolveStatusTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashStrippedIonTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashWaterRichVapourTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryModelProfileTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryRegressionTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterClosedBoundaryLoopAssemblerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterContinuationChainAssemblerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterIsolatedBoundaryRootClassifierTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterOpenBoundaryVerifierTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterPhaseIdentityConsistencyTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterPhaseTopologyTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterRegularPressureBoundaryTracerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterStableRegionTransitionScannerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhasePointFinderTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhaseTopologyFinderTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterTopologyBenchmarkTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeComponentLimitTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeContinuityTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeMichelsenTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeReferenceEosTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeSegmentsTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.RetainedPhaseBifurcationCorrectorTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.SpecifiedMultiphaseFlashAcceptanceTest"
+    ],
+    "tests": 416,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "skippedCases": [
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest#testPureMethane"
+    ]
+  },
+  "mcp": {
+    "suites": [
+      "neqsim.mcp.server.NeqSimToolsContractTest"
+    ],
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "skippedCases": []
+  },
+  "stdio": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "runtime-version",
+        "passed": true,
+        "version": "3.23.0-cupbhan.1-rc.3"
+      },
+      {
+        "name": "tool-discovery",
+        "passed": true,
+        "count": 76
+      },
+      {
+        "name": "pr-flash",
+        "passed": true
+      },
+      {
+        "name": "nonreactive-cpa-ammonia",
+        "passed": true
+      },
+      {
+        "name": "water-rich-three-phase-recovery",
+        "passed": true
+      },
+      {
+        "name": "water-if97",
+        "passed": true
+      }
+    ],
+    "tools": [
+      "bridgeTaskWorkflow",
+      "calculateStandard",
+      "checkToolAccess",
+      "compareProcesses",
+      "compareSimulationStates",
+      "composeMultiServerWorkflow",
+      "composeWorkflow",
+      "crossValidateModels",
+      "designUtilities",
+      "diagnoseAutomation",
+      "generateReport",
+      "generateVisualization",
+      "getAdjustableParameters",
+      "getAutomationLearningReport",
+      "getBenchmarkTrust",
+      "getCapabilities",
+      "getExample",
+      "getPhaseEnvelope",
+      "getProgress",
+      "getPropertyTable",
+      "getSchema",
+      "getSimulationVariable",
+      "inspectApi",
+      "listSimulationUnits",
+      "listUnitVariables",
+      "manageIndustrialProfile",
+      "manageModel",
+      "manageSecurity",
+      "manageSession",
+      "manageState",
+      "manageValidationProfile",
+      "queryDataCatalog",
+      "runAgenticEngineering",
+      "runBarrierRegister",
+      "runBatch",
+      "runBioprocess",
+      "runCapability",
+      "runChemistry",
+      "runDynamic",
+      "runFieldEconomics",
+      "runFieldFluid",
+      "runFlareNetwork",
+      "runFlash",
+      "runFlowAssurance",
+      "runFluidFlash",
+      "runHAZOP",
+      "runHazopScenario",
+      "runHydrocarbonWaterBoundaryRegression",
+      "runHydrocarbonWaterTopologyBenchmark",
+      "runLOPA",
+      "runMaterialsReview",
+      "runNorsokS001Clause10Review",
+      "runOpenDrainReview",
+      "runOperationalStudy",
+      "runPVT",
+      "runParametricStudy",
+      "runPipeline",
+      "runPlugin",
+      "runProcess",
+      "runProcessLoop",
+      "runRelief",
+      "runReservoir",
+      "runRiskMatrix",
+      "runRootCauseAnalysis",
+      "runSIL",
+      "runSafetySystemPerformance",
+      "runWaterHammer",
+      "runWaterIF97",
+      "saveSimulationState",
+      "searchComponents",
+      "setSimulationVariable",
+      "sizeEquipment",
+      "solveTask",
+      "streamSimulation",
+      "validateInput",
+      "validateResults"
+    ],
+    "notCovered": [
+      "HTTP transport",
+      "full PVTsim rerun",
+      "product UI",
+      "heavy-oil multimedia dedicated MCP endpoints"
+    ]
+  },
+  "expandedOfficialBefore": {
+    "tests": 215,
+    "failures": 17,
+    "errors": 0,
+    "skipped": 0
+  },
+  "expandedOfficialAfter": {
+    "tests": 215,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "packagedResearchApis": {
+    "version": "3.23.0-cupbhan.1-rc.3",
+    "commit": "a1d8ec050ca198609d100e81625e02da29725652",
+    "jarSha256": "588a113ec3fa522504fd1b694f2776ad66859c1e9bc11f0a7ce23391356105e6",
+    "source": "packaged-runner-only",
+    "loadedClasses": [
+      "HydrocarbonWaterBoundaryModelProfile",
+      "RetainedPhaseBifurcationCorrector",
+      "SpecifiedMultiphaseFlashSolver",
+      "SpecifiedPhaseEquilibriumValidator"
+    ],
+    "checks": [
+      {
+        "check": "2-phase-released-api",
+        "passed": true,
+        "materialBalanceResidual": 8.659739592076221e-15
+      },
+      {
+        "check": "3-phase-released-api",
+        "passed": true,
+        "materialBalanceResidual": 4.6351811278100286e-14
+      },
+      {
+        "check": "clone-only-research-profile",
+        "passed": true
+      },
+      {
+        "check": "released-bifurcation-root-and-identity-rejection",
+        "passed": true
+      },
+      {
+        "check": "official-default-and-explicit-historical-light-pseudo",
+        "passed": true
+      },
+      {
+        "check": "water-vapor-identity-in-released-stability-apis",
+        "passed": true
+      }
+    ],
+    "passed": true
+  },
+  "pythonBindings": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "thermalWellbore": {
+    "candidatePvtPassed": true,
+    "runtimeAligned": true,
+    "adapterAndPythonChecksPassed": true
+  },
+  "t2well": {
+    "eos": "PR",
+    "states": 8,
+    "passed": true,
+    "viscosity": "Reported only; different correlations are not an acceptance criterion."
+  },
+  "quality": {
+    "java8": {
+      "exitCode": 0,
+      "files": [
+        "src/main/java/neqsim/thermo/mixingrule/EosMixingRuleHandler.java",
+        "src/main/java/neqsim/thermo/phase/LiquidPhaseClassification.java",
+        "src/main/java/neqsim/thermo/phase/PhaseEos.java",
+        "src/main/java/neqsim/thermo/system/SystemThermo.java",
+        "src/main/java/neqsim/thermodynamicoperations/flashops/Flash.java",
+        "src/main/java/neqsim/thermodynamicoperations/flashops/TPmultiflash.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfile.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterRetainedPhaseSpinodalBranchInitializer.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseStabilityAnalyzer.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseStationaryPointSolver.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashSolver.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedPhaseEquilibriumValidator.java",
+        "src/test/java/neqsim/thermo/mixingrule/EosMixingRulesTest.java",
+        "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfileTest.java",
+        "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterPhaseIdentityConsistencyTest.java"
+      ]
+    },
+    "javadoc": {
+      "exitCode": 0,
+      "files": [
+        "src/main/java/neqsim/thermo/mixingrule/EosMixingRuleHandler.java",
+        "src/main/java/neqsim/thermo/phase/LiquidPhaseClassification.java",
+        "src/main/java/neqsim/thermo/phase/PhaseEos.java",
+        "src/main/java/neqsim/thermo/system/SystemThermo.java",
+        "src/main/java/neqsim/thermodynamicoperations/flashops/Flash.java",
+        "src/main/java/neqsim/thermodynamicoperations/flashops/TPmultiflash.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfile.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterRetainedPhaseSpinodalBranchInitializer.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseStabilityAnalyzer.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseStationaryPointSolver.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashSolver.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedPhaseEquilibriumValidator.java"
+      ]
+    },
+    "checkstyle": {
+      "exitCode": 0,
+      "files": [
+        "src/main/java/neqsim/thermo/mixingrule/EosMixingRuleHandler.java",
+        "src/main/java/neqsim/thermo/phase/LiquidPhaseClassification.java",
+        "src/main/java/neqsim/thermo/phase/PhaseEos.java",
+        "src/main/java/neqsim/thermo/system/SystemThermo.java",
+        "src/main/java/neqsim/thermodynamicoperations/flashops/Flash.java",
+        "src/main/java/neqsim/thermodynamicoperations/flashops/TPmultiflash.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfile.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterRetainedPhaseSpinodalBranchInitializer.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseStabilityAnalyzer.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/IncipientPhaseStationaryPointSolver.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashSolver.java",
+        "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedPhaseEquilibriumValidator.java",
+        "src/test/java/neqsim/thermo/mixingrule/EosMixingRulesTest.java",
+        "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfileTest.java",
+        "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterPhaseIdentityConsistencyTest.java"
+      ]
+    }
+  },
+  "syncWorkflowTests": {
+    "tests": 11,
+    "passed": true
+  },
+  "javaDocNotes": "Scoped generation completed with no errors; existing undocumented members emitted 100 warnings. Not a full-repository JavaDoc check.",
+  "frozenModelResources": "Three SHA256 values verified unchanged by candidate protection gate.",
+  "localEvidenceSha256": {
+    "build/compatibility-audit/focused-after.log": "d1b865f8f5807bd9be218b0c2db5fcc38547cc754f17d4f9ee805f32d30e66c8",
+    "build/compatibility-audit/neutral-test.log": "00580fd8a41bebff2c4e1a45c7f96591df93bc6a1105bf223e181b2f30eafb20",
+    "build/compatibility-audit/runtime-smoke.py": "977841a91afbe63db76bb5447baf486b349adae1cef133f10c44267f38d348e1",
+    "build/compatibility-audit/runtime-smoke.log": "ebce46b8040b261417e96ea14cf6b2f9673beb92b802f27a17f563ffda794618",
+    "build/compatibility-audit/runtime-smoke.json": "ebce46b8040b261417e96ea14cf6b2f9673beb92b802f27a17f563ffda794618",
+    "build/compatibility-audit/python-bindings.log": "3533a412d3d59f19a58d38b37a6ea88561fc984b9aee595a4193d6c55c9cfe5b",
+    "build/compatibility-audit/python-bindings.xml": "3090c8ecc7408654311ed3e8eb51f833957d41dd903ce220467a1e21875d2515",
+    "build/compatibility-audit/thermal-smoke.log": "96a563e06bc4c91a60ab5154e2d1f390db515eb240e65c678e657411c251ae97",
+    "build/compatibility-audit/t2well-smoke.log": "39b6c850a26fb8843ebe997379af69605e8fc19156b28b2a50db66e0b22b7093",
+    "build/compatibility-audit/thermal-alignment.log": "83f8d2d89316ca0378800abf5852019fb44f8e9db6bb8dbdedfc41850f4ca94a",
+    "build/compatibility-audit/sync-tests-final.log": "a947ff10e1f96e8b8565f75487a7f2314c5ceea491904529a2518cc7e39d9c8b",
+    "build/compatibility-audit/java8.log": "df057aa11e8d91f0346d22c43bd7845285e673eb41b04a7ec748b0f7d95ce33b",
+    "build/compatibility-audit/javadoc.log": "475f9417cea51370f50fce29ff87c4f4636b1b1524396ccc4c0f84d5bc543474",
+    "build/compatibility-audit/checkstyle.log": "ac934c7717813712f9d341fe158f1daf73d1c664c16a67909ffe38302cd8a594",
+    "build/shared-thermo/validation/3.23.0-cupbhan.1-rc.3/core.log": "d68fa5e601ae809810b5580a5c51e49e8ad2184a9a6e4f8c768c1a950d9595ef",
+    "build/shared-thermo/validation/3.23.0-cupbhan.1-rc.3/mcp.log": "3eb284d572a9d6ee9b010c2a015dc9b44881dd63983baf85e8c0f4346d5063fc"
+  },
+  "limits": [
+    "Selected regressions and platform smoke checks, not all repository tests or all temperature/pressure/composition domains.",
+    "No full PVTsim rerun or experimental calibration.",
+    "Finite TPD searches do not prove global stability.",
+    "Official default water/light-TBP parameters are restored; explicit historical profile is required to reproduce the previous parameter convention.",
+    "Local versioned runtime; no public Maven publication."
+  ],
+  "commands": {
+    "candidate": "bindings/python/.venv/Scripts/python.exe devtools/build_shared_thermo.py --version 3.23.0-cupbhan.1-rc.3",
+    "activation": "bindings/python/.venv/Scripts/python.exe devtools/activate_shared_thermo.py build/shared-thermo/releases/3.23.0-cupbhan.1-rc.3",
+    "releasedApis": "bindings/python/.venv/Scripts/python.exe build/compatibility-audit/runtime-smoke.py build/shared-thermo/releases/3.23.0-cupbhan.1-rc.3",
+    "pythonBindings": "bindings/python: .venv/Scripts/python.exe -m pytest tests/test_discovery.py tests/test_display.py tests/test_NeqSim.py::test_Viscosity tests/test_NeqSim.py::test_hasComponentDatabase -q",
+    "thermalCandidate": "SAGDFrontend: SAGD_NEQSIM_MCP_JAR=<rc.3 candidate runner>; node scripts/pvt-runtime-smoke.cjs",
+    "thermalDeployment": [
+      "npm run prepare:pvt",
+      "npm run write:neqsim-candidate",
+      "npm run test:engine-adapters",
+      "npm run test:pvt-python"
+    ],
+    "t2well": "build/ui-runtime/Scripts/python.exe tools/pvt/test_complib.py --eos pr --points 4 --jar <rc.3 candidate runner>",
+    "syncWorkflow": "bindings/python/.venv/Scripts/python.exe -m unittest discover -s devtools -p test_sync_upstream.py"
+  }
+}

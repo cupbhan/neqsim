@@ -10,6 +10,8 @@ description: "Integration, acceptance checks, regression coverage and qualificat
 原件保留在 [research-archive](../../distribution/cupbhan/research-archive/README.md)，不修改历史字节和 SHA256。
 三个类已移入正常 Java 编译路径，必要数值回归纳入公共候选包和官方更新流程。
 验证结果见[集成验收记录](../../distribution/cupbhan/research-integration/validation.json)。
+当前公共运行包已更新为 `3.23.0-cupbhan.1-rc.3`，后续油水身份统一、官方行为回归及交付结果见
+[合并后的行为审计](shared-thermo-compatibility-audit.md)。本页末尾的 rc.2 记录保留历史含义。
 
 ## 公共接口
 

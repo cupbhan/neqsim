@@ -79,6 +79,29 @@ description: "官方改动范围、旧补丁处置、相态回归和公共运行
 修复采用恢复官方行为、缩小旧补丁适用范围和显式选择历史模型参数，没有放宽失败断言的数值容差。
 
 这仍是选定的数值与接口回归。完整仓库测试、全部模型温压范围、完整 PVTsim 重跑和实验标定不在本次完成声明内。
-版本切换及最终测试数量由本目录后续的候选验收与交付记录固定，不能用中间诊断替代发行结果。
+
+## rc.3 交付结果
+
+已从干净源码提交 `a1d8ec050ca198609d100e81625e02da29725652` 构建并选择
+`3.23.0-cupbhan.1-rc.3`，热井筒部署副本及其来源记录同步更新。
+旧 `rc.2` 发行目录保留，可用统一激活脚本回退。后续文档和指针提交不改变发行包的源码身份。
+
+| 验证范围 | 结果 |
+| --- | --- |
+| 76 个核心测试类 | 416 项，415 通过、1 项已登记的官方禁用用例，0 失败/错误 |
+| 本次扩展的官方回归（包含在上一行中） | 215 项全部通过；修复前为 17 项失败 |
+| MCP 合同和真实 STDIO | 4 项测试与 6 项调用检查通过，发现 76 个工具 |
+| 仅加载发行 JAR 的研究 API | 6 项通过，含两相/三相验收、分岔拒绝、配置隔离、历史参数选择和水蒸气身份 |
+| Python 绑定 | 13 项通过 |
+| 热井筒接入 | PVT、批处理、缓存、41 点相包络、9 点查表、适配器和 Python 调用通过，运行来源一致 |
+| T2WELL | 8 个 PR 状态点通过，0 相数差异；不同黏度关联式只报告差异 |
+| 同步脚本 | 11 项离线 Git 工作流测试通过 |
+| 代码质量 | 所改 Java 文件通过 Java 8 API/语法编译、Checkstyle；所改生产类 JavaDoc 无错误，既有未注释成员有警告 |
+
+完整证据：[修复后逐套件结果](../../distribution/cupbhan/compatibility-audit/after.json)、
+[候选包验收](../../distribution/cupbhan/compatibility-audit/candidate-validation.json)、
+[版本身份与平台交付](../../distribution/cupbhan/compatibility-audit/delivery.json)。
+候选验收中 `productRuntimeSwitched=false` 记录构建时状态；后续切换见交付记录和 `runtime.json`。
+二进制保存在本地版本目录，未发布到公共 Maven 仓库。接入检查不等于全产品 UI 验收。
 
 相关文档：[官方同步流程](shared-thermo-upstream-sync.md)、[研究接口及验收](shared-thermo-research-integration.md)。

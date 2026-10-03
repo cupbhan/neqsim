@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "version": "3.23.0-cupbhan.1-rc.3",
+  "sourceCommit": "a1d8ec050ca198609d100e81625e02da29725652",
+  "tests": 215,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "suites": [
+    {
+      "name": "neqsim.thermo.mixingrule.ClassicSRKTabulatedTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermo.phase.CPAAssociationInitializationTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermo.phase.PhaseGEInfiniteDilutionTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermo.system.SystemThermoChemicalReactionStaleStateTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermo.system.SystemThermoSerializationInventoryTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermo.system.SystemThermoSetMolarCompositionTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermo.system.SystemThermoSulfurPhaseExtractionTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.PSFlashEntropyClosureTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.PSFlashWarmStartPolicyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.StabilityOptimizationInvariantTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousCrossAlgorithmFallbackTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousEndpointTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousFinalRefinementTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousMaterialBalanceRefinementTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousPhaseRemovalRecoveryTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousResidualRefinementTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootConsistencyTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootTransitionCandidateTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashCpaAqueousStabilityConsistencyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashCpaHydrocarbonLiquidStabilityTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashCubicRootSelectionTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashIncipientPhaseStabilityTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashIonicGasAqueousConsistencyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashIssue3943PumpRegressionTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashLargeVolatilityHydrocarbonConsistencyTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashLiquidLiquidConsistencyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashMissingAqueousNearBubblePointTest",
+      "tests": 86,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashNearCricondenbarConsistencyTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashRichGasBoundaryTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashSourGasConsistencyTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashSrkAqueousLowerGibbsRootTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashTerminalEquilibriumRefinementTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashTraceAqueousRefinementTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashTwuSourFluidConservationTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashWarmStartThreePhaseTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashWellFluidConsistencyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}
