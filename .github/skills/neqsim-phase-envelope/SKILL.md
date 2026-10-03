@@ -309,6 +309,10 @@ Symptoms that a continuation result is truncated:
   component balance and fugacity, not only returned phase labels or lack of an exception.
 - Reject invalid final multiphase statuses. Exclude failed points from accepted boundary estimates and report
   any resulting wider brackets. A high coarse-grid topology agreement does not close boundary failures.
+- Promote newly reproduced conservation failures into mandatory merge/build regressions immediately; a release
+  gate is not a reason to defer a known solver defect. Check cold starts and pressure round trips. Internal phase
+  labels can be provisional before density ordering, so verify compositions and balances rather than assuming
+  that absence of an AQUEOUS or GAS label excludes a water-bearing gas/oil state.
 - Replay failed states on the old personal release and an isolated official release before attributing them
   to a new upstream merge. Compare numerical residuals as well as pass/fail counts; a retained personal patch
   can leave much larger conservation errors than the official result. See

@@ -981,3 +981,15 @@ Three frozen NH3 presets could not run with identical parameters because the SDK
 Overall validation remains failed/incomplete. No solver fix, frozen-data change or runtime activation was made.
 The phase-envelope skill now requires unit/readback checks, explicit coverage gaps, boundary quality gates and version
 replays before attributing a mismatch to an upstream merge. Task data and vendor component exports were not committed.
+
+### 2026-10-02 - Repair water-bearing gas/oil conservation before candidate promotion
+**Type:** A (Software verification, Quick)
+**Keywords:** phase-fraction recovery, provisional phase labels, PVTsim, merge regression
+**Solution:** `TPmultiflash` and `TPflashWaterBearingGasOilBetaRecoveryTest`; aggregate findings in
+`shared-thermo-compatibility-audit.md`.
+**Notes:** Removed the erroneous requirement for an independent aqueous phase from the bounded neutral-water
+two-fluid-phase beta recovery. Gas/oil states can still carry provisional OIL/OIL labels at this stage.
+Five cold starts and five pressure-round-trip regressions failed before the change and passed afterward;
+21 focused tests passed, as did Java 8 compilation, production JavaDoc and changed-file Checkstyle.
+Registered the new regression in the mandatory shared-engine merge/build policy. Frozen NH3 data remain unchanged;
+their missing native PVTsim reference contract is a separate unresolved validation gap.

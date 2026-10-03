@@ -845,21 +845,29 @@ public class TPmultiflash extends TPflash {
    * Recovers an equilibrium neutral-water split whose phase compositions converged but whose beta iterate stalled.
    *
    * <p>
-   * A multiphase stability calculation can finish with two fugacity-equilibrated oil/aqueous compositions while the
-   * retained phase fractions belong to an earlier speculative iterate. The phase fractions then neither sum to one nor
-   * reconstruct the feed, even though a fresh two-phase beta solve converges immediately. Limit the recovery to neutral
-   * water systems with exactly two phases, an aqueous phase, at least one completed beta solve, and already
-   * equilibrated phase compositions. Later stability bookkeeping can invalidate the retained beta vector even when each
-   * individual beta solve reported convergence, so use the current phase-fraction and material-balance state rather
-   * than an individual attempt status. This keeps the fallback from masking a genuine fugacity or chemistry failure.
+   * A multiphase stability calculation can finish with two fugacity-equilibrated compositions while the retained phase
+   * fractions belong to an earlier speculative iterate. The phase fractions then neither sum to one nor reconstruct the
+   * feed, even though a fresh two-phase beta solve converges immediately. Limit the recovery to neutral water systems
+   * with exactly two fluid phases, at least one completed beta solve, and already equilibrated phase compositions.
+   * Water can be dissolved in gas/oil without a separate aqueous phase, and both phases can still have provisional oil
+   * labels before the final density ordering. Later stability bookkeeping can invalidate the retained beta vector even
+   * when each individual beta solve reported convergence, so use the current phase-fraction and material-balance state
+   * rather than an individual attempt status. This keeps the fallback from masking a genuine fugacity or chemistry
+   * failure.
    * </p>
    *
    * @return true when a fresh beta solve restores a validated two-phase state
    */
   private boolean recoverStalledNeutralWaterTwoPhaseBeta() {
     if (solveBetaAttemptCount == 0 || system.getNumberOfPhases() != 2 || system.isChemicalSystem() || system.hasIons()
-        || !system.hasComponent("water") || !system.hasPhaseType(PhaseType.AQUEOUS)) {
+        || !system.hasComponent("water")) {
       return false;
+    }
+    for (int phase = 0; phase < system.getNumberOfPhases(); phase++) {
+      PhaseType type = system.getPhase(phase).getType();
+      if (type != PhaseType.GAS && type != PhaseType.OIL && type != PhaseType.AQUEOUS) {
+        return false;
+      }
     }
 
     double initialMassBalanceResidual = calculateMassBalanceResidual();
