@@ -993,3 +993,10 @@ Five cold starts and five pressure-round-trip regressions failed before the chan
 21 focused tests passed, as did Java 8 compilation, production JavaDoc and changed-file Checkstyle.
 Registered the new regression in the mandatory shared-engine merge/build policy. Frozen NH3 data remain unchanged;
 their missing native PVTsim reference contract is a separate unresolved validation gap.
+Update: selected clean-source rc.4 after 426 selected core cases (425 passed, one registered upstream-disabled case),
+four MCP contract tests and six STDIO checks. Recomputed all 7,470 unique states against the unchanged previously
+run licensed PVTsim reference: zero numerical quality failures or invalid statuses; all five severe failures repaired.
+The five points have maximum material residual 1.25e-16 and phase-fraction difference from PVTsim 1.92e-8.
+There remain 39 topology mismatches and three NH3 reference-contract gaps, so overall PVTsim validation is incomplete.
+Thermal-consumer PVT/batch/cache/envelope/table smoke and source alignment passed. Aggregate evidence is recorded in
+`distribution/cupbhan/compatibility-audit/rc4-validation.json`; raw task and vendor data remain local.

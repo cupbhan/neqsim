@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "version": "3.23.0-cupbhan.1-rc.4",
+  "sourceCommit": "ff4557ea22fcf76c5b5f05a90dc86d356dc3a533",
+  "jarSha256": "18a4b7b85313f81a28034f53b89a0eeb38403d75bc372e258e8635ff49cc6f3a",
+  "specificDefectClosurePassed": true,
+  "overallPVTsimValidationComplete": false,
+  "core": {
+    "suites": [
+      "neqsim.mcp.runners.ComponentQueryTest",
+      "neqsim.mcp.runners.FieldFluidRunnerTest",
+      "neqsim.mcp.runners.HydrocarbonWaterBoundaryRegressionRunnerTest",
+      "neqsim.mcp.runners.HydrocarbonWaterModelIdentityTest",
+      "neqsim.mcp.runners.HydrocarbonWaterTopologyBenchmarkRunnerTest",
+      "neqsim.mcp.runners.WaterIF97RunnerTest",
+      "neqsim.thermo.mixingrule.ClassicSRKTabulatedTest",
+      "neqsim.thermo.mixingrule.EosMixingRulesTest",
+      "neqsim.thermo.phase.CPAAssociationInitializationTest",
+      "neqsim.thermo.phase.PhaseGEInfiniteDilutionTest",
+      "neqsim.thermo.system.HeavyOilMultimediaFluidTest",
+      "neqsim.thermo.system.SystemThermoChemicalReactionStaleStateTest",
+      "neqsim.thermo.system.SystemThermoReactiveCloneTest",
+      "neqsim.thermo.system.SystemThermoSerializationInventoryTest",
+      "neqsim.thermo.system.SystemThermoSetMolarCompositionTest",
+      "neqsim.thermo.system.SystemThermoSulfurPhaseExtractionTest",
+      "neqsim.thermodynamicoperations.flashops.PSFlashEntropyClosureTest",
+      "neqsim.thermodynamicoperations.flashops.PSFlashWarmStartPolicyTest",
+      "neqsim.thermodynamicoperations.flashops.reactiveflash.ReactiveElectrolyteStateConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.StabilityOptimizationInvariantTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousCrossAlgorithmFallbackTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousEndpointTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousFinalRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousMaterialBalanceRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousPhaseRemovalRecoveryTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousResidualRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootTransitionCandidateTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashCpaAqueousStabilityConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashCpaHydrocarbonLiquidStabilityTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashCubicRootSelectionTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashIncipientPhaseStabilityTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashIonicGasAqueousConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashIssue3943PumpRegressionTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashLargeVolatilityHydrocarbonConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashLiquidLiquidConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashMissingAqueousNearBubblePointTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashNearCricondenbarConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashRichGasBoundaryTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSourGasConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSrkAqueousLowerGibbsRootTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSrkWaterRichSeededPhaseSetTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashTerminalEquilibriumRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashTraceAqueousRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashTwuSourFluidConservationTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWarmStartThreePhaseTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterBearingGasOilBetaRecoveryTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterRichColdSeedConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterRichEndpointTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWellFluidConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashHighWaterGasSeedTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashPhaseDisappearanceTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashSolveStatusTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashStrippedIonTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashWaterRichVapourTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryModelProfileTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryRegressionTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterClosedBoundaryLoopAssemblerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterContinuationChainAssemblerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterIsolatedBoundaryRootClassifierTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterOpenBoundaryVerifierTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterPhaseIdentityConsistencyTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterPhaseTopologyTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterRegularPressureBoundaryTracerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterStableRegionTransitionScannerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhasePointFinderTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhaseTopologyFinderTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterTopologyBenchmarkTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeComponentLimitTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeContinuityTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeMichelsenTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeReferenceEosTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeSegmentsTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.RetainedPhaseBifurcationCorrectorTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.SpecifiedMultiphaseFlashAcceptanceTest"
+    ],
+    "tests": 426,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "skippedCases": [
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest#testPureMethane"
+    ]
+  },
+  "mcp": {
+    "suites": [
+      "neqsim.mcp.server.NeqSimToolsContractTest"
+    ],
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "skippedCases": []
+  },
+  "stdio": [
+    {
+      "name": "runtime-version",
+      "passed": true,
+      "version": "3.23.0-cupbhan.1-rc.4"
+    },
+    {
+      "name": "tool-discovery",
+      "passed": true,
+      "count": 76
+    },
+    {
+      "name": "pr-flash",
+      "passed": true
+    },
+    {
+      "name": "nonreactive-cpa-ammonia",
+      "passed": true
+    },
+    {
+      "name": "water-rich-three-phase-recovery",
+      "passed": true
+    },
+    {
+      "name": "water-if97",
+      "passed": true
+    }
+  ],
+  "comparison": {
+    "scope": "Nonreactive SRK dry C7+ and water10/water30/water65; 20-250 C, 1-100 bara",
+    "reference": "Previously computed licensed Open Structure 29.0.47996.0; unchanged inputs and points",
+    "pvtsimRerun": false,
+    "runtimeInputContractUnchanged": true,
+    "uniquePoints": 7470,
+    "qcFailures": 0,
+    "invalidSolverStatuses": 0,
+    "topologyMismatches": 39,
+    "cases": [
+      {
+        "case": "dry",
+        "uniquePoints": 1692,
+        "qcFailures": 0,
+        "invalidSolverStatuses": 0,
+        "topologyMismatches": 0,
+        "solverStatuses": {
+          "NOT_REQUIRED": 1692
+        },
+        "maximumResiduals": {
+          "phaseSumResidual": 0.0,
+          "compositionResidual": 3.3306690738754696e-16,
+          "massBalanceResidual": 3.59393070858971e-12,
+          "logFugacityResidual": 9.471357031998195e-11
+        }
+      },
+      {
+        "case": "water10",
+        "uniquePoints": 1887,
+        "qcFailures": 0,
+        "invalidSolverStatuses": 0,
+        "topologyMismatches": 12,
+        "solverStatuses": {
+          "CONVERGED": 368,
+          "NOT_REQUIRED": 1519
+        },
+        "maximumResiduals": {
+          "phaseSumResidual": 0.0,
+          "compositionResidual": 4.440892098500626e-16,
+          "massBalanceResidual": 5.024980431755921e-12,
+          "logFugacityResidual": 1.0026468544310774e-10
+        }
+      },
+      {
+        "case": "water30",
+        "uniquePoints": 1926,
+        "qcFailures": 0,
+        "invalidSolverStatuses": 0,
+        "topologyMismatches": 27,
+        "solverStatuses": {
+          "CONVERGED": 956,
+          "PHASE_REMOVED_AT_CONVERGENCE": 20,
+          "NOT_REQUIRED": 950
+        },
+        "maximumResiduals": {
+          "phaseSumResidual": 1.1102230246251565e-16,
+          "compositionResidual": 4.440892098500626e-16,
+          "massBalanceResidual": 9.631406783228158e-12,
+          "logFugacityResidual": 6.392397722265741e-11
+        }
+      },
+      {
+        "case": "water65",
+        "uniquePoints": 1965,
+        "qcFailures": 0,
+        "invalidSolverStatuses": 0,
+        "topologyMismatches": 0,
+        "solverStatuses": {
+          "CONVERGED": 1505,
+          "PHASE_REMOVED_AT_CONVERGENCE": 96,
+          "NOT_REQUIRED": 364
+        },
+        "maximumResiduals": {
+          "phaseSumResidual": 2.220446049250313e-16,
+          "compositionResidual": 4.440892098500626e-16,
+          "massBalanceResidual": 1.4247381052712171e-11,
+          "logFugacityResidual": 9.807266110328783e-11
+        }
+      }
+    ]
+  },
+  "fixedStates": {
+    "count": 5,
+    "maxComponentBalanceResidual": 1.249000902703301e-16,
+    "maxPhaseSumResidual": 0.0,
+    "maxLogFugacityResidual": 1.1901590823981678e-12,
+    "maxPhaseFractionDifferenceFromPvtsim": 1.9199491820606068e-08
+  },
+  "thermalConsumer": {
+    "success": true,
+    "runtimeSource": "shared-release:3.23.0-cupbhan.1-rc.4@ff4557ea22fcf76c5b5f05a90dc86d356dc3a533",
+    "flashKeys": [
+      "flash",
+      "fluid"
+    ],
+    "batchKeys": [
+      "summary",
+      "results"
+    ],
+    "cached": true,
+    "phaseEnvelopeQualityGate": "accepted-physical-curve-and-rejected-nonphysical-fixture",
+    "phaseEnvelopePoints": 41,
+    "pvtExperiment": "viscosity",
+    "lookupCandidatePoints": 9
+  },
+  "quality": {
+    "java8": {
+      "exitCode": 0,
+      "files": [
+        "src/main/java/neqsim/thermodynamicoperations/flashops/TPmultiflash.java",
+        "src/test/java/neqsim/thermodynamicoperations/flashops/TPflashWaterBearingGasOilBetaRecoveryTest.java"
+      ]
+    },
+    "javadoc": {
+      "exitCode": 0,
+      "files": [
+        "src/main/java/neqsim/thermodynamicoperations/flashops/TPmultiflash.java"
+      ]
+    },
+    "checkstyle": {
+      "exitCode": 0,
+      "files": [
+        "src/main/java/neqsim/thermodynamicoperations/flashops/TPmultiflash.java",
+        "src/test/java/neqsim/thermodynamicoperations/flashops/TPflashWaterBearingGasOilBetaRecoveryTest.java"
+      ]
+    }
+  },
+  "limitations": [
+    "Three frozen NH3 presets still lack a reproducible native PVTsim reference contract.",
+    "Phase topology differences are reported separately from conservation and fugacity closure.",
+    "This grid does not qualify reactive/electrolyte, PR/CPA or field-fluid accuracy."
+  ]
+}
