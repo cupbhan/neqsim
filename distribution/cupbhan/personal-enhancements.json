@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "purpose": "Personal features that every upstream synchronization must retain and test; hashes freeze model data, not evolving solver code.",
+  "purpose": "Contracts, frozen model data, personal regressions and official thermodynamic compatibility regressions required for every candidate.",
   "requiredFiles": [
     "src/main/java/neqsim/thermo/system/HeavyOilMultimediaFluid.java",
     "src/test/java/neqsim/thermo/system/HeavyOilMultimediaFluidTest.java",
@@ -31,7 +31,9 @@
     "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedPhaseEquilibriumValidator.java",
     "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterBoundaryModelProfileTest.java",
     "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/RetainedPhaseBifurcationCorrectorTest.java",
-    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashAcceptanceTest.java"
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SpecifiedMultiphaseFlashAcceptanceTest.java",
+    "src/main/java/neqsim/thermo/phase/LiquidPhaseClassification.java",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/HydrocarbonWaterPhaseIdentityConsistencyTest.java"
   ],
   "frozenResources": {
     "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-0p1-v1.json": "13412fb89cc1bf901968be8a74368d23890c6c40325331ddf7ed648c93c1fb58",
@@ -114,7 +116,7 @@
     "validateInput",
     "validateResults"
   ],
-  "coreTests": "ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,HeavyOilMultimediaFluidTest,TPmultiflash*Test,HydrocarbonWater*Test,TPflashWaterRich*Test,TPflashSrkWaterRichSeededPhaseSetTest,PTPhaseEnvelopeComponentLimitTest,PTPhaseEnvelopeContinuityTest,PTPhaseEnvelopeMichelsenTest,PTPhaseEnvelopeReferenceEosTest,PTPhaseEnvelopeRobustnessTest,PTPhaseEnvelopeSegmentsTest,SystemThermoReactiveCloneTest,ReactiveElectrolyteStateConsistencyTest,RetainedPhaseBifurcationCorrectorTest,SpecifiedMultiphaseFlashAcceptanceTest",
+  "coreTests": "ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,HeavyOilMultimediaFluidTest,TPmultiflash*Test,HydrocarbonWater*Test,TPflashWaterRich*Test,TPflashSrkWaterRichSeededPhaseSetTest,PTPhaseEnvelopeComponentLimitTest,PTPhaseEnvelopeContinuityTest,PTPhaseEnvelopeMichelsenTest,PTPhaseEnvelopeReferenceEosTest,PTPhaseEnvelopeRobustnessTest,PTPhaseEnvelopeSegmentsTest,SystemThermoReactiveCloneTest,ReactiveElectrolyteStateConsistencyTest,RetainedPhaseBifurcationCorrectorTest,SpecifiedMultiphaseFlashAcceptanceTest,TPflashAqueous*Test,TPflashCpa*Test,TPflashCubicRootSelectionTest,TPflashIncipientPhaseStabilityTest,TPflashIssue3943PumpRegressionTest,TPflashLargeVolatilityHydrocarbonConsistencyTest,TPflashLiquidLiquidConsistencyTest,TPflashMissingAqueousNearBubblePointTest,TPflashNearCricondenbarConsistencyTest,TPflashRichGasBoundaryTest,TPflashSourGasConsistencyTest,TPflashSrkAqueousLowerGibbsRootTest,TPflashTerminalEquilibriumRefinementTest,TPflashTraceAqueousRefinementTest,TPflashTwuSourFluidConservationTest,TPflashWarmStartThreePhaseTest,TPflashWellFluidConsistencyTest,TPflashIonicGasAqueousConsistencyTest,PSFlashEntropyClosureTest,PSFlashWarmStartPolicyTest,StabilityOptimizationInvariantTest,CPAAssociationInitializationTest,PhaseGEInfiniteDilutionTest,SystemThermoSerializationInventoryTest,SystemThermoSetMolarCompositionTest,SystemThermoSulfurPhaseExtractionTest,SystemThermoChemicalReactionStaleStateTest,ClassicSRKTabulatedTest,EosMixingRulesTest",
   "knownUpstreamDisabledTests": {
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest#testPureMethane": "Disabled by upstream v3.23.0: pure-component phase-envelope tracing is not supported by this regression. All other selected cases must execute."
   },
@@ -164,7 +166,45 @@
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeSegmentsTest",
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryModelProfileTest",
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.RetainedPhaseBifurcationCorrectorTest",
-    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.SpecifiedMultiphaseFlashAcceptanceTest"
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.SpecifiedMultiphaseFlashAcceptanceTest",
+    "neqsim.thermo.mixingrule.ClassicSRKTabulatedTest",
+    "neqsim.thermo.phase.CPAAssociationInitializationTest",
+    "neqsim.thermo.phase.PhaseGEInfiniteDilutionTest",
+    "neqsim.thermo.system.SystemThermoChemicalReactionStaleStateTest",
+    "neqsim.thermo.system.SystemThermoSerializationInventoryTest",
+    "neqsim.thermo.system.SystemThermoSetMolarCompositionTest",
+    "neqsim.thermo.system.SystemThermoSulfurPhaseExtractionTest",
+    "neqsim.thermodynamicoperations.flashops.PSFlashEntropyClosureTest",
+    "neqsim.thermodynamicoperations.flashops.PSFlashWarmStartPolicyTest",
+    "neqsim.thermodynamicoperations.flashops.StabilityOptimizationInvariantTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashAqueousCrossAlgorithmFallbackTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashAqueousEndpointTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashAqueousFinalRefinementTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashAqueousMaterialBalanceRefinementTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashAqueousPhaseRemovalRecoveryTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashAqueousResidualRefinementTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootConsistencyTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootTransitionCandidateTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashCpaAqueousStabilityConsistencyTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashCpaHydrocarbonLiquidStabilityTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashCubicRootSelectionTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashIncipientPhaseStabilityTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashIonicGasAqueousConsistencyTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashIssue3943PumpRegressionTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashLargeVolatilityHydrocarbonConsistencyTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashLiquidLiquidConsistencyTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashMissingAqueousNearBubblePointTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashNearCricondenbarConsistencyTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashRichGasBoundaryTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashSourGasConsistencyTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashSrkAqueousLowerGibbsRootTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashTerminalEquilibriumRefinementTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashTraceAqueousRefinementTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashTwuSourFluidConservationTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashWarmStartThreePhaseTest",
+    "neqsim.thermodynamicoperations.flashops.TPflashWellFluidConsistencyTest",
+    "neqsim.thermo.mixingrule.EosMixingRulesTest",
+    "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterPhaseIdentityConsistencyTest"
   ],
   "excludedMavenTags": [
     "slow",

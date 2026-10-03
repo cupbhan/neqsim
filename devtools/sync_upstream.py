@@ -22,6 +22,38 @@ TAG_PATTERN = re.compile(r"v\d+\.\d+\.\d+\Z")
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def thermodynamic_impact(personal_files, official_files):
+    """Flag module-level coupling even when Git reports no overlapping files.
+
+    This is an inspection inventory, not a Java call graph or a compatibility verdict.
+    Data and property changes can affect a personal flash solver without touching its file.
+    """
+    modules = {
+        "eos-and-fluids": ("src/main/java/neqsim/thermo/",),
+        "flash-and-envelopes": ("src/main/java/neqsim/thermodynamicoperations/",),
+        "physical-properties": ("src/main/java/neqsim/physicalproperties/",),
+        "chemical-equilibrium": ("src/main/java/neqsim/chemicalreactions/",),
+        "pvt-experiments": ("src/main/java/neqsim/pvtsimulation/",),
+        "model-data": ("src/main/resources/",),
+        "thermodynamic-tests": ("src/test/java/neqsim/thermo/",
+                                "src/test/java/neqsim/thermodynamicoperations/",
+                                "src/test/java/neqsim/physicalproperties/"),
+    }
+    result = {}
+    for name, prefixes in modules.items():
+        ours = {path for path in personal_files if path.startswith(prefixes)}
+        theirs = {path for path in official_files if path.startswith(prefixes)}
+        if ours or theirs:
+            result[name] = {
+                "personalChangedFiles": sorted(ours),
+                "officialChangedFiles": sorted(theirs),
+                "overlappingFiles": sorted(ours & theirs),
+                "officialOnlyFiles": sorted(theirs - ours),
+                "requiresBehaviorReview": bool(theirs),
+            }
+    return result
+
+
 def git(root, *args, check=True):
     return subprocess.run(["git", *args], cwd=root, check=check, text=True,
                           encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -90,6 +122,7 @@ def inspect(root, upstream_ref, tag):
             "upstreamCommitsToMerge": count, "alreadyIntegrated": count == 0,
             "personalChangedFileCount": len(ours), "upstreamChangedFileCount": len(theirs),
             "overlappingFiles": sorted(ours & theirs),
+            "thermodynamicImpact": thermodynamic_impact(ours, theirs),
             "workingTreeDirty": bool(value(root, "status", "--porcelain"))}
 
 
@@ -143,8 +176,19 @@ def write_report(root, report):
              f"Official commit: `{report['commit']}`", f"Personal starting commit: `{report['before']}`",
              f"Official commits to merge: {report['upstreamCommitsToMerge']}",
              f"Files changed on both sides: {len(report['overlappingFiles'])}", "",
-             "## Files requiring focused review", ""]
+             "## Text overlap and merge conflicts", ""]
     lines += [f"- `{p}`" for p in report.get("conflicts", report["overlappingFiles"])]
+    lines += ["", "## Thermodynamic behavior review", "",
+              "Text overlap is not the compatibility boundary. Review upstream-only changes in the",
+              "affected modules and run official regressions alongside personal regressions.", "",
+              "| Module | Personal paths | Official paths | Overlap | Official-only paths |",
+              "| --- | ---: | ---: | ---: | ---: |"]
+    for name, impact in report.get("thermodynamicImpact", {}).items():
+        counts = [len(impact[key]) for key in ("personalChangedFiles", "officialChangedFiles",
+                                               "overlappingFiles", "officialOnlyFiles")]
+        lines.append("| " + name + " | " + " | ".join(map(str, counts)) + " |")
+    lines += ["", "The JSON report contains the full path inventory. Module counts are an inspection aid,",
+              "not a call graph or proof of compatibility. No automatic phase-physics approval is implied."]
     lines += ["", "Runtime selection is unchanged. Build and test a candidate before promoting it.", ""]
     (folder / "REPORT.md").write_text("\n".join(lines), encoding="utf-8")
     print(json.dumps({key: report.get(key) for key in ("tag", "commit", "status", "alreadyIntegrated",

@@ -115,7 +115,7 @@ public final class IncipientPhaseStationaryPointSolver {
       failureMessage = "maximum stationary-point Newton iteration count reached";
     }
     boolean trivial = isTrivial(evaluation.composition);
-    CandidatePhase physicalPhase = classifyPhysicalPhase(evaluation.composition);
+    CandidatePhase physicalPhase = evaluation.physicalPhase;
     return new Result(candidatePhase, physicalPhase, evaluation.composition, evaluation.tangentPlaneDistance,
         evaluation.maximumResidual, initialResidual, iterations, conditionNumber, converged, trivial, failureMessage);
   }
@@ -173,7 +173,8 @@ public final class IncipientPhaseStationaryPointSolver {
     if (!Double.isFinite(maximumResidual)) {
       throw new IllegalStateException("stationary-point residual is non-finite");
     }
-    return new Evaluation(residual, maximumResidual, -logSumW, composition);
+    return new Evaluation(residual, maximumResidual, -logSumW, composition,
+        IncipientPhaseStabilityAnalyzer.classifyPhysicalPhase(context.trial.getPhase(1)));
   }
 
   private Matrix numericalJacobian(EvaluationContext context, double[] logW, double[] baseResidual) {
@@ -227,16 +228,6 @@ public final class IncipientPhaseStationaryPointSolver {
       }
     }
     return false;
-  }
-
-  private CandidatePhase classifyPhysicalPhase(double[] composition) {
-    for (int componentIndex = 0; componentIndex < composition.length; componentIndex++) {
-      if (reference.getPhase(0).getComponent(componentIndex).getComponentName().equalsIgnoreCase("water")
-          && composition[componentIndex] >= 0.5) {
-        return CandidatePhase.AQUEOUS;
-      }
-    }
-    return candidatePhase;
   }
 
   private static double logSumExp(double[] values) {
@@ -314,8 +305,20 @@ public final class IncipientPhaseStationaryPointSolver {
     private final double maximumResidual;
     private final double tangentPlaneDistance;
     private final double[] composition;
+    private final CandidatePhase physicalPhase;
 
-    private Evaluation(double[] residual, double maximumResidual, double tangentPlaneDistance, double[] composition) {
+    /**
+     * Captures diagnostics and root identity before subsequent Jacobian trials mutate the workspace.
+     *
+     * @param residual stationarity equations
+     * @param maximumResidual largest absolute residual
+     * @param tangentPlaneDistance trial tangent-plane distance
+     * @param composition normalized trial composition
+     * @param physicalPhase evaluated EOS root family
+     */
+    private Evaluation(double[] residual, double maximumResidual, double tangentPlaneDistance, double[] composition,
+        CandidatePhase physicalPhase) {
+      this.physicalPhase = physicalPhase;
       this.residual = residual;
       this.maximumResidual = maximumResidual;
       this.tangentPlaneDistance = tangentPlaneDistance;

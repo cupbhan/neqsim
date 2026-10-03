@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 1,
+  "candidateVersion": "3.23.0-cupbhan.1-rc.2",
+  "candidateSource": "f5db0c33b78d62da3a05130723430db44fff9595",
+  "selection": "TPflashAqueous*Test,TPflashCpa*Test,TPflashCubicRootSelectionTest,TPflashIncipientPhaseStabilityTest,TPflashIssue3943PumpRegressionTest,TPflashLargeVolatilityHydrocarbonConsistencyTest,TPflashLiquidLiquidConsistencyTest,TPflashMissingAqueousNearBubblePointTest,TPflashNearCricondenbarConsistencyTest,TPflashRichGasBoundaryTest,TPflashSourGasConsistencyTest,TPflashSrkAqueousLowerGibbsRootTest,TPflashTerminalEquilibriumRefinementTest,TPflashTraceAqueousRefinementTest,TPflashTwuSourFluidConservationTest,TPflashWarmStartThreePhaseTest,TPflashWellFluidConsistencyTest,TPflashIonicGasAqueousConsistencyTest,PSFlashEntropyClosureTest,PSFlashWarmStartPolicyTest,StabilityOptimizationInvariantTest,CPAAssociationInitializationTest,PhaseGEInfiniteDilutionTest,SystemThermoSerializationInventoryTest,SystemThermoSetMolarCompositionTest,SystemThermoSulfurPhaseExtractionTest,SystemThermoChemicalReactionStaleStateTest,ClassicSRKTabulatedTest",
+  "tests": 215,
+  "failures": 17,
+  "errors": 0,
+  "skipped": 0,
+  "suites": [
+    {
+      "name": "neqsim.thermo.mixingrule.ClassicSRKTabulatedTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermo.phase.CPAAssociationInitializationTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermo.phase.PhaseGEInfiniteDilutionTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermo.system.SystemThermoChemicalReactionStaleStateTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermo.system.SystemThermoSerializationInventoryTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermo.system.SystemThermoSetMolarCompositionTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermo.system.SystemThermoSulfurPhaseExtractionTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.PSFlashEntropyClosureTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.PSFlashWarmStartPolicyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.StabilityOptimizationInvariantTest",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "name": "representativeColdRepeatedAndChangedFlashesPreserveEquilibrium",
+          "message": "pr-near-cricondenbar cold: {\"temperatureK\":273.15,\"pressureBara\":100.0,\"totalMoles\":100.00000000000001,\"massKg\":2.4616961350000004,\"densityKgM3\":243.16196787401987,\"enthalpyJ\":-632303.3917080191,\"entropyJPerK\":-4563.129466260934,\"gibbsEnergyJ\":614115.4220011551,\"maximumMaterialResidual\":6.862709505117692E-6,\"maximumLogFugacityResidual\":0.002241594896362109,\"phaseNormalizationResidual\":3.3306690738754696E-16,\"betaNormalizationResidual\":0.0,\"massRelativeResidual\":0.0,\"molesRelativeResidual\":0.0,\"fugacityComparisons\":30,\"excludedFugacityComparisons\":0,\"finitePhysicalState\":true,\"validationPassed\":false,\"components\":[{\"name\":\"nitrogen\",\"z\":0.0343,\"moles\":3.43},{\"name\":\"CO2\",\"z\":0.0034,\"moles\":0.34},{\"name\":\"methane\",\"z\":0.6250999999999999,\"moles\":62.51},{\"name\":\"ethane\",\"z\":0.15649999999999997,\"moles\":15.65},{\"name\":\"propane\",\"z\":0.13219999999999998,\"moles\":13.22},{\"name\":\"i-butane\",\"z\":0.0161,\"moles\":1.61},{\"name\":\"n-butane\",\"z\":0.024799999999999996,\"moles\":2.48},{\"name\":\"i-pentane\",\"z\":0.003499999999999999,\"moles\":0.35},{\"name\":\"n-pentane\",\"z\":0.0028999999999999994,\"moles\":0.29},{\"name\":\"n-hexane\",\"z\":0.0011999999999999997,\"moles\":0.11999999999999998}],\"phases\":[{\"type\":\"GAS\",\"beta\":0.3502532401598932,\"compressibility\":0.4989337181764326,\"densityKgM3\":200.9545751040411,\"x\":[0.04240924087565393,0.0033738374461259797,0.6838230154160752,0.13949178245824553,0.10011521846855961,0.010843571461511934,0.01586046021614085,0.001973081069032753,0.0015678988516551293,5.418937369988671E-4],\"fugacityCoefficients\":[1.479592636062089,0.5294328445571305,0.8354242830431995,0.30554608447190534,0.13839659203996207,0.07612468602172882,0.06345430394805825,0.03467149649107329,0.029481122564176798,0.013521882213559218]},{\"type\":\"OIL\",\"beta\":9.464777538391507E-13,\"compressibility\":0.4012569582610718,\"densityKgM3\":273.26155784038787,\"x\":[0.032562488093419314,0.0034170424138378532,0.6154122066263494,0.16022014498420378,0.13759565417027167,0.016869048327466933,0.025977987560612138,0.00366714246784891,0.0030336966282017023,0.0012445887277883385],\"fugacityCoefficients\":[1.9287312540159351,0.5229131692430142,0.9288221392649336,0.26603994090911,0.10067166384331964,0.048909172392013506,0.03871767496108456,0.01863897011693747,0.015222552795052609,0.005880017661961555]},{\"type\":\"OIL\",\"beta\":0.6497467598391603,\"compressibility\":0.38038369007997824,\"densityKgM3\":296.48009934022195,\"x\":[0.029927164673833613,0.003414107922252794,0.593434141233688,0.16567152858598588,0.14950143033909033,0.01893448188986252,0.029620566556840058,0.004323377322724951,0.0036183235827905178,0.0015548778929312256],\"fugacityCoefficients\":[2.0967410797681283,0.5233498539745787,0.9628508966646175,0.2573692577449071,0.09273108581658664,0.04362438472815646,0.03400106871301795,0.015835972688405572,0.012785613413147701,0.00471717205736534]}]} ==> expected: <true> but was: <false>"
+        }
+      ]
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousCrossAlgorithmFallbackTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousEndpointTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousFinalRefinementTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousMaterialBalanceRefinementTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousPhaseRemovalRecoveryTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousResidualRefinementTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootConsistencyTest",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "name": "ordinaryAndMultiphaseFlashesRetainSameStableCubicRoot",
+          "message": "expected: <5546.556410051482> but was: <5546.556409948513>"
+        }
+      ]
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootTransitionCandidateTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashCpaAqueousStabilityConsistencyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashCpaHydrocarbonLiquidStabilityTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashCubicRootSelectionTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashIncipientPhaseStabilityTest",
+      "tests": 4,
+      "failures": 3,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "name": "changedReturnedAndRepeatedStatesRemainContinuous",
+          "message": "changed UMR-PRU state beta OIL ==> expected: <0.03687217101213642> but was: <0.9262556580120445>"
+        },
+        {
+          "name": "poorInitializationRecoversReferenceEndpoints",
+          "message": "UMR-PRU poor beta initialization beta OIL ==> expected: <0.033453701420729405> but was: <0.9330925971058994>"
+        },
+        {
+          "name": "subResidualTpdDoesNotOverrideExistingUmrPruSolution",
+          "message": "multiphase topology at 90.03461693 bara ==> expected: <1> but was: <3>"
+        }
+      ]
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashIonicGasAqueousConsistencyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashIssue3943PumpRegressionTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashLargeVolatilityHydrocarbonConsistencyTest",
+      "tests": 4,
+      "failures": 3,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "name": "largeVolatilityEndpointsCloseAndAgreeAcrossAlgorithms",
+          "message": "SRK methane+n-heptane at 220.0 K, 200.0 bar, z(n-heptane)=0.1 ==> expected: <2> but was: <3>"
+        },
+        {
+          "name": "nearbyCompositionsRemainContinuousAcrossAlgorithms",
+          "message": "SRK methane+n-heptane at 220.0 K, 200.0 bar, z(n-heptane)=0.0999 ==> expected: <2> but was: <3>"
+        },
+        {
+          "name": "poorInitializationRepeatsAndChangedPressureRemainDeterministic",
+          "message": "SRK methane+n-heptane at 220.0 K, 200.0 bar, z(n-heptane)=0.1 poor initialization reference fugacity residual 5.800333001817335E-5 ==> expected: <true> but was: <false>"
+        }
+      ]
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashLiquidLiquidConsistencyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashMissingAqueousNearBubblePointTest",
+      "tests": 86,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "name": "aqueousPhaseFoundNextToBubblePoint",
+          "message": "expected: <0.05575417> but was: <0.05650522354405803>"
+        }
+      ]
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashNearCricondenbarConsistencyTest",
+      "tests": 4,
+      "failures": 2,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "name": "nearCricondenbarEndpointsCloseAndAgreeAcrossAlgorithms",
+          "message": "PR rich gas at 273.15 K, 100.0 bara ==> expected: <2> but was: <3>"
+        },
+        {
+          "name": "poorInitializationRepeatsAndChangedStateRemainDeterministic",
+          "message": "PR rich gas at 273.15 K, 100.0 bara poor initialization reference material balance residual 6.862709505117692E-6 ==> expected: <true> but was: <false>"
+        }
+      ]
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashRichGasBoundaryTest",
+      "tests": 2,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "name": "prBoundaryIsClosedAndHistoryIndependent",
+          "message": "PR multiphase at 0.0 C material-balance residual 6.862709505117692E-6 ==> expected: <true> but was: <false>"
+        }
+      ]
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashSourGasConsistencyTest",
+      "tests": 6,
+      "failures": 4,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "name": "enhancedMultiphaseFlashRepairsInvalidOrCollapsedEndpoints",
+          "message": "T=240.0 K, P=100.8 bara ==> expected: <2> but was: <3>"
+        },
+        {
+          "name": "ordinaryAndMultiphaseFlashReachSameStableOneOrTwoPhaseState",
+          "message": "T=210.0 K, P=145.71 bara ==> expected: <1> but was: <3>"
+        },
+        {
+          "name": "ordinaryBoundaryFlashRecoversStableSplitFromColdFeedSeed",
+          "message": "expected: <2> but was: <1>"
+        },
+        {
+          "name": "ordinaryLiquidLiquidBoundaryRetainsAcceptedCandidateRoot",
+          "message": "expected: <2> but was: <1>"
+        }
+      ]
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashSrkAqueousLowerGibbsRootTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashTerminalEquilibriumRefinementTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashTraceAqueousRefinementTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashTwuSourFluidConservationTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashWarmStartThreePhaseTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": []
+    },
+    {
+      "name": "neqsim.thermodynamicoperations.flashops.TPflashWellFluidConsistencyTest",
+      "tests": 2,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failedCases": [
+        {
+          "name": "waterRichEndpointRetainsDensityClosureAndLifecycleContinuity",
+          "message": "water-rich nearby temperature 338.54 K maximum material-balance residual 0.006134159023144665 ==> expected: <true> but was: <false>"
+        }
+      ]
+    }
+  ]
+}

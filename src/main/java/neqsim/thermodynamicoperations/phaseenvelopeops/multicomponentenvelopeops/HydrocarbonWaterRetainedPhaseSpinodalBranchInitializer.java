@@ -1,5 +1,7 @@
 package neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops;
 
+import neqsim.thermo.phase.LiquidPhaseClassification;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -178,19 +180,16 @@ public final class HydrocarbonWaterRetainedPhaseSpinodalBranchInitializer {
     return true;
   }
 
+  /**
+   * Checks the retained liquid family using the same mass convention as the EOS.
+   *
+   * @param composition retained-phase mole fractions
+   * @return true when the requested family matches
+   */
   private boolean matchesConfiguredFamily(double[] composition) {
-    if (!template.getPhase(0).hasComponent("water")) {
-      return true;
-    }
-    int waterIndex = template.getPhase(0).getComponent("water").getComponentNumber();
-    double waterMoleFraction = composition[waterIndex];
-    if (bifurcatingPhase == CandidatePhase.OIL) {
-      return waterMoleFraction < 0.5;
-    }
-    if (bifurcatingPhase == CandidatePhase.AQUEOUS) {
-      return waterMoleFraction >= 0.5;
-    }
-    return true;
+    return bifurcatingPhase == CandidatePhase.GAS || LiquidPhaseClassification.classify(template.getPhase(0),
+        composition) == (bifurcatingPhase == CandidatePhase.OIL ? neqsim.thermo.phase.PhaseType.OIL
+            : neqsim.thermo.phase.PhaseType.AQUEOUS);
   }
 
   private static HydrocarbonWaterRetainedPhaseSpinodalSolver.CurvatureState negativeSide(

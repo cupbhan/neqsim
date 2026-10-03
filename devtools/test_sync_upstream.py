@@ -7,10 +7,27 @@ import unittest
 from unittest import mock
 import urllib.error
 
-from sync_upstream import apply, git, inspect, official_release, value, write_report
+from sync_upstream import apply, git, inspect, official_release, thermodynamic_impact, value, write_report
 
 
 class UpstreamSyncTest(unittest.TestCase):
+    def test_nonoverlapping_thermodynamic_changes_still_require_behavior_review(self):
+        ours = {"src/main/java/neqsim/thermodynamicoperations/flashops/PersonalSolver.java"}
+        theirs = {"src/main/java/neqsim/thermo/phase/PhaseEos.java",
+                  "src/main/resources/data/COMP.csv"}
+        impact = thermodynamic_impact(ours, theirs)
+        self.assertTrue(impact["eos-and-fluids"]["requiresBehaviorReview"])
+        self.assertEqual([], impact["eos-and-fluids"]["overlappingFiles"])
+        self.assertEqual(["src/main/resources/data/COMP.csv"], impact["model-data"]["officialOnlyFiles"])
+        self.assertFalse(impact["flash-and-envelopes"]["requiresBehaviorReview"])
+        report = self.plan()
+        report["thermodynamicImpact"] = impact
+        with mock.patch.dict("os.environ", {"GITHUB_OUTPUT": "", "GITHUB_STEP_SUMMARY": ""}):
+            write_report(self.root, report)
+        rendered = (self.root / "build/upstream-sync/v3.23.0/REPORT.md").read_text(encoding="utf-8")
+        self.assertIn("| eos-and-fluids | 0 | 1 | 0 | 1 |", rendered)
+        self.assertIn("Text overlap is not the compatibility boundary", rendered)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

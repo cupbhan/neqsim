@@ -56,7 +56,6 @@ public abstract class Flash extends BaseOperation {
   private static final double LOG_MIN_EXP = Math.log(Double.MIN_NORMAL);
   private static final double LOG_MAX_EXP = Math.log(Double.MAX_VALUE);
   private static final double SUPPLEMENTARY_TPD_NUMERICAL_FLOOR = -1.0e-6;
-  private static final double WATER_RICH_SUPPLEMENTARY_TRIAL_FEED_FRACTION_LIMIT = 0.01;
   private static final String STABILITY_OUTCOME_NOT_EVALUATED = "not evaluated";
   private String lastStabilityOutcome = STABILITY_OUTCOME_NOT_EVALUATED;
   private boolean lastStabilityAnalysisFailed = false;
@@ -1127,31 +1126,6 @@ public abstract class Flash extends BaseOperation {
         || lowerComponentName.equals("so2");
   }
 
-  private boolean shouldRestorePreTrialKAfterSupplementaryInstability() {
-    if (!system.doMultiPhaseCheck() || system.isChemicalSystem() || system.hasIons()) {
-      return false;
-    }
-    for (int componentIndex = 0; componentIndex < system.getPhase(0).getNumberOfComponents(); componentIndex++) {
-      ComponentInterface component = system.getPhase(0).getComponent(componentIndex);
-      if ("water".equalsIgnoreCase(component.getComponentName())) {
-        return component.getz() >= WATER_RICH_SUPPLEMENTARY_TRIAL_FEED_FRACTION_LIMIT;
-      }
-    }
-    return false;
-  }
-
-  private void restoreKvector(double[] savedKvector) {
-    if (savedKvector == null) {
-      return;
-    }
-    int numberOfComponents = system.getPhase(0).getNumberOfComponents();
-    for (int componentIndex = 0; componentIndex < numberOfComponents
-        && componentIndex < savedKvector.length; componentIndex++) {
-      system.getPhase(0).getComponent(componentIndex).setK(savedKvector[componentIndex]);
-      system.getPhase(1).getComponent(componentIndex).setK(savedKvector[componentIndex]);
-    }
-  }
-
   /**
    * stabilityCheck.
    *
@@ -1215,10 +1189,6 @@ public abstract class Flash extends BaseOperation {
         // molarVolumeAnalytical). If init(1) throws, restore the PRE-trial
         // K-vector and revert to the single-phase declaration.
         double[] savedKvector = preTrialKvector;
-        boolean restoredPreTrialK = shouldRestorePreTrialKAfterSupplementaryInstability() && savedKvector != null;
-        if (restoredPreTrialK) {
-          restoreKvector(savedKvector);
-        }
         try {
           RachfordRice rachfordRice = new RachfordRice();
           try {
@@ -1232,15 +1202,18 @@ public abstract class Flash extends BaseOperation {
           }
           system.calc_x_y();
           system.init(1);
-          recordStabilityOutcome(restoredPreTrialK ? "unstable - supplementary stability trial; pre-trial K restored"
-              : "unstable - supplementary stability trial");
+          recordStabilityOutcome("unstable - supplementary stability trial");
           stable = false;
         } catch (Exception ex) {
           // Supplementary trial seeded a non-physical 2-phase split. Revert.
           logger.debug("Supplementary trial K-values produced non-physical state ({}); reverting to stable",
               ex.getMessage());
           if (savedKvector != null) {
-            restoreKvector(savedKvector);
+            int nComp = system.getPhase(0).getNumberOfComponents();
+            for (int i = 0; i < nComp && i < savedKvector.length; i++) {
+              system.getPhase(0).getComponent(i).setK(savedKvector[i]);
+              system.getPhase(1).getComponent(i).setK(savedKvector[i]);
+            }
           }
           recordStabilityOutcome("stable - supplementary trial reverted (non-physical state)");
           stable = true;

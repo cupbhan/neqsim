@@ -5,6 +5,8 @@ import java.io.Serializable;
 import java.util.EnumMap;
 import java.util.Map;
 import neqsim.thermo.mixingrule.EosMixingRulesInterface;
+import neqsim.thermo.mixingrule.EosMixingRuleHandler;
+import neqsim.thermo.phase.PhaseSrkCPA;
 import neqsim.thermo.phase.PhaseEosInterface;
 import neqsim.thermo.phase.PhaseInterface;
 import neqsim.thermo.system.SystemInterface;
@@ -27,6 +29,8 @@ public final class HydrocarbonWaterBoundaryModelProfile implements Serializable 
   private static final long serialVersionUID = 1000L;
 
   private final String name;
+  /** Explicit selection of the historical light-pseudo water interaction correction. */
+  private boolean lightPseudoWaterCompatibility;
   private final Map<BoundaryFamily, Double> waterKijMultipliers = new EnumMap<BoundaryFamily, Double>(
       BoundaryFamily.class);
 
@@ -40,6 +44,17 @@ public final class HydrocarbonWaterBoundaryModelProfile implements Serializable 
       throw new IllegalArgumentException("a non-empty boundary model profile name is required");
     }
     this.name = name.trim();
+  }
+
+  /**
+   * Selects the historical water/light-pseudo parameter correction on cloned non-CPA fluids.
+   *
+   * @param enabled true to use the historical light-pseudo correlation before family multipliers
+   * @return this explicit research profile
+   */
+  public HydrocarbonWaterBoundaryModelProfile setLightPseudoWaterCompatibility(boolean enabled) {
+    lightPseudoWaterCompatibility = enabled;
+    return this;
   }
 
   /**
@@ -90,7 +105,7 @@ public final class HydrocarbonWaterBoundaryModelProfile implements Serializable 
     }
     double multiplier = getWaterKijMultiplier(family);
     SystemInterface candidate = baseline.clone();
-    if (Math.abs(multiplier - 1.0) <= 1.0e-15) {
+    if (!lightPseudoWaterCompatibility && Math.abs(multiplier - 1.0) <= 1.0e-15) {
       return candidate;
     }
 
@@ -108,6 +123,12 @@ public final class HydrocarbonWaterBoundaryModelProfile implements Serializable 
           continue;
         }
         double baselineKij = sourceRule.getBinaryInteractionParameter(waterIndex, componentIndex);
+        if (lightPseudoWaterCompatibility && !(sourcePhase instanceof PhaseSrkCPA)
+            && sourcePhase.getComponent(componentIndex).isIsTBPfraction()
+            && sourcePhase.getComponent(componentIndex).getMolarMass() <= 0.12826) {
+          baselineKij = EosMixingRuleHandler
+              .waterPseudoComponentKij(sourcePhase.getComponent(componentIndex).getMolarMass());
+        }
         double scaledKij = baselineKij * multiplier;
         if (!Double.isFinite(scaledKij)) {
           throw new IllegalArgumentException("scaled water binary interaction must remain finite");
@@ -130,12 +151,14 @@ public final class HydrocarbonWaterBoundaryModelProfile implements Serializable 
     output.addProperty("name", name);
     output.addProperty("boundaryFamily", family.name());
     output.addProperty("waterKijMultiplier", getWaterKijMultiplier(family));
-    output.addProperty("identity", Math.abs(getWaterKijMultiplier(family) - 1.0) <= 1.0e-15);
+    output.addProperty("lightPseudoWaterCompatibility", lightPseudoWaterCompatibility);
+    output.addProperty("identity",
+        !lightPseudoWaterCompatibility && Math.abs(getWaterKijMultiplier(family) - 1.0) <= 1.0e-15);
     output.addProperty("defaultModelModified", false);
     output.addProperty("experimentalCompatibilityProfile", true);
     output.addProperty("requiresIndependentPhysicalValidation", true);
     output.addProperty("productionPromotionAllowed", false);
-    output.addProperty("calibrationBasis", "user-supplied research multiplier; not experimental validation");
+    output.addProperty("calibrationBasis", "explicit research parameter profile; not experimental validation");
     return output;
   }
 }

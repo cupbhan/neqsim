@@ -685,10 +685,10 @@ public class TPmultiflash extends TPflash {
     } else if (removePhase && err > 1e-6) {
       lastSolveBetaStatus = SolveStatus.INVALID_PHASE_REMOVAL_DURING_ITERATION;
       lastSolveBetaMessage = "phase removal was requested by an unconverged phase-fraction iterate";
-      // The upstream dry-hydrocarbon active-set recovery needs the clamp signal to stop the outer iteration.
-      // It is not permission to purge a phase: the final-state diagnostic gate below still guards cleanup.
-      // Water-bearing and reactive systems retain the conservative personal recovery path.
-      if (!isNeutralHydrocarbonFeed()) {
+      // Upstream active-set recovery needs the clamp signal to stop the outer iteration.
+      // TPflash checks the recovered endpoint before accepting a failed nested solve.
+      // Reactive and ionic systems retain the conservative personal recovery path.
+      if (!usesUpstreamPhaseRemovalRecovery()) {
         removePhase = false;
       }
     } else if (removePhase) {
@@ -707,21 +707,12 @@ public class TPmultiflash extends TPflash {
   }
 
   /**
-   * Checks whether the feed is restricted to neutral hydrocarbons and inert components.
+   * Selects upstream active-set recovery for nonreactive fluids without ions.
    *
-   * @return true when the upstream dry-fluid active-set recovery applies
+   * @return true when upstream phase removal and subsequent endpoint validation apply
    */
-  private boolean isNeutralHydrocarbonFeed() {
-    if (system.isChemicalSystem() || system.hasIons() || system.hasComponent("water")) {
-      return false;
-    }
-    for (int index = 0; index < system.getNumberOfComponents(); index++) {
-      ComponentInterface component = system.getPhase(0).getComponent(index);
-      if (component.getz() > 0.0 && !component.isHydrocarbon() && !component.isInert()) {
-        return false;
-      }
-    }
-    return true;
+  private boolean usesUpstreamPhaseRemovalRecovery() {
+    return !system.isChemicalSystem() && !system.hasIons();
   }
 
   /**
@@ -4019,7 +4010,9 @@ public class TPmultiflash extends TPflash {
       // active state before any phase is removed. Speculative failures remain visible in the counters, but an earlier
       // converged solve may still be accepted when the final material balance and phase fractions are valid.
       finalizeSolveDiagnostics();
-      if (!solveStatus.isConverged()) {
+      // Upstream active-set cleanup must remain available to nonreactive fluids without ions.
+      // TPflash independently checks the recovered endpoint before reporting a failed nested solve as accepted.
+      if (!solveStatus.isConverged() && !usesUpstreamPhaseRemovalRecovery()) {
         phaseCleanupSkipped = true;
         logger.warn("Skipping low-beta phase cleanup after {}: {}", solveStatus, solveStatusMessage);
         return;

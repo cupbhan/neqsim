@@ -279,6 +279,15 @@ Symptoms that a continuation result is truncated:
   research settings, never a default production calibration inferred from software benchmark agreement.
 - Preserve archive originals and migrate assertions, including rejected high-pressure roots. See
   `docs/development/shared-thermo-research-integration.md` and the shared-engine regression policy.
+- Liquid slots must use `LiquidPhaseClassification`, matching this branch's mass-based EOS convention;
+  never infer aqueous identity solely from a water mole-fraction threshold. Read gas identity from the evaluated
+  EOS root, including water vapor. `SystemThermo.init(1, phase)` relabels gas in nonzero slots as oil;
+  stability trials in slot one therefore recover the `PhaseEos` volume/covolume criterion before classifying
+  a liquid. Phase labels are separate from equilibrium acceptance.
+- Upstream merges require official flash regressions as well as personal envelope regressions, including files
+  changed only upstream. Retire superseded recovery patches when differential tests show interference. Keep
+  historical light-pseudo/water parameters explicit through the model profile; CPA and heavy-fraction data are
+  separate models. See `docs/development/shared-thermo-compatibility-audit.md`.
 
 ## Known Limitations
 

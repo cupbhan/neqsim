@@ -94,6 +94,7 @@ NeqSim is distributed under the Apache-2.0 license and can be used via:
 | Developer Setup | [docs/development/DEVELOPER_SETUP.md](development/DEVELOPER_SETUP.md)                                 | Development environment setup |
 | Shared thermodynamics updates | [Official release synchronization](development/shared-thermo-upstream-sync.md) | Preserve personal enhancements, validate official merges, and promote versioned runtimes |
 | Archived phase algorithms | [Compiled research APIs](development/shared-thermo-research-integration.md) | Explicit profiles, bifurcation correction, specified multiphase flash and acceptance checks |
+| Thermodynamic merge audit | [Behavior compatibility](development/shared-thermo-compatibility-audit.md) | Upstream-only impact, superseded patches, phase identity and regression gates |
 | Productization Roadmap | docs/development/PRODUCTIZATION_ROADMAP.md *(planned)*                                       | Adoption, trust, contributor scaling plan |
 | Image Tools, Agents, and Skills | [docs/development/image_tools_agents_skills.md](development/image_tools_agents_skills.md)        | Engineering-image workflow for P&IDs, drawings, scanned PDFs, maps, screenshots, and related agents/skills |
 | Benchmark Gallery | [docs/benchmarks/index.md](benchmarks/index.md)                                                    | Independent references and explicitly labeled deterministic regression evidence |

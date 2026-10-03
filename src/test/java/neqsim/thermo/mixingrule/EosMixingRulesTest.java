@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import neqsim.thermo.phase.PhaseEos;
+import neqsim.thermo.system.SystemInterface;
+import neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryModelProfile;
+import neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryAnchorDiscoverer.BoundaryFamily;
 
 /**
  * Test class for verifying the behavior of EOS (Equation of State) mixing rules in the NeqSim library.
@@ -77,8 +80,9 @@ public class EosMixingRulesTest {
     assertTrue(kij == kij2);
   }
 
+  /** Keeps the official default and applies historical light-pseudo data only on an explicit clone. */
   @Test
-  void waterAgainstALightPseudoMatchesTheDatabaseValueForTheSameMolecule() {
+  void waterAgainstALightPseudoUsesExplicitCompatibilityProfile() {
     neqsim.thermo.system.SystemSrkEos named = new neqsim.thermo.system.SystemSrkEos(298.0, 10.0);
     named.addComponent("water", 0.5);
     named.addComponent("n-heptane", 0.5);
@@ -91,10 +95,17 @@ public class EosMixingRulesTest {
     pseudo.setMixingRule("classic");
     double pseudoKij = ((PhaseEos) pseudo.getPhase(0)).getEosMixingRule().getBinaryInteractionParameter(0, 1);
 
-    // A C7 pseudo is n-heptane by molar mass; it used to take a flat 0.2 purely for lacking a name, which dissolves
-    // all the water into the hydrocarbon liquid and truncates the three-phase locus.
     assertEquals(0.5, namedKij, 1e-9, "database value for the named molecule");
-    assertEquals(namedKij, pseudoKij, 1e-9, "pseudo of the same molar mass must not get a different parameter");
+    assertEquals(0.2, pseudoKij, 1e-9, "ordinary pseudo components retain the official model definition");
+    HydrocarbonWaterBoundaryModelProfile profile = new HydrocarbonWaterBoundaryModelProfile("historical-light-pseudo")
+        .setLightPseudoWaterCompatibility(true);
+    BoundaryFamily family = BoundaryFamily.GO_TO_GOW;
+    SystemInterface configured = profile.createTemplate(pseudo, family);
+    double configuredKij = ((PhaseEos) configured.getPhase(0)).getEosMixingRule().getBinaryInteractionParameter(0, 1);
+    assertEquals(namedKij, configuredKij, 1e-9, "explicit historical compatibility value");
+    assertEquals(pseudoKij, ((PhaseEos) pseudo.getPhase(0)).getEosMixingRule().getBinaryInteractionParameter(0, 1), 0.0,
+        "profile must preserve the official baseline");
+    assertTrue(profile.toJson(family).get("lightPseudoWaterCompatibility").getAsBoolean());
   }
 
   @Test

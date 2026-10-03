@@ -89,7 +89,7 @@ class HydrocarbonWaterBoundaryModelProfileTest {
   @Test
   void preservesBaselineAcrossSerializationAndRejectsScalingOverflow() throws Exception {
     HydrocarbonWaterBoundaryModelProfile profile = new HydrocarbonWaterBoundaryModelProfile("research")
-        .setWaterKijMultiplier(BoundaryFamily.GO_TO_GOW, 0.98);
+        .setWaterKijMultiplier(BoundaryFamily.GO_TO_GOW, 0.98).setLightPseudoWaterCompatibility(true);
     java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
     try (java.io.ObjectOutputStream output = new java.io.ObjectOutputStream(bytes)) {
       output.writeObject(profile);
@@ -100,6 +100,7 @@ class HydrocarbonWaterBoundaryModelProfileTest {
       recovered = (HydrocarbonWaterBoundaryModelProfile) input.readObject();
     }
     assertEquals(0.98, recovered.getWaterKijMultiplier(BoundaryFamily.GO_TO_GOW), 0.0);
+    assertTrue(recovered.toJson(BoundaryFamily.GO_TO_GOW).get("lightPseudoWaterCompatibility").getAsBoolean());
     assertEquals(1.0, recovered.getWaterKijMultiplier(BoundaryFamily.OW_TO_GOW), 0.0);
     SystemInterface baseline = createFluid();
     baseline.setBinaryInteractionParameter("water", "methane", 2.0);
@@ -107,6 +108,32 @@ class HydrocarbonWaterBoundaryModelProfileTest {
         .setWaterKijMultiplier(BoundaryFamily.GO_TO_GOW, Double.MAX_VALUE);
     assertThrows(IllegalArgumentException.class, () -> overflowing.createTemplate(baseline, BoundaryFamily.GO_TO_GOW));
     assertEquals(2.0, kij(baseline, "water", "methane"), 0.0);
+  }
+
+  /** The historical light-pseudo option preserves CPA parameters and custom heavy-fraction data. */
+  @Test
+  void lightPseudoOptionPreservesAssociationAndHeavyFractionModels() {
+    HydrocarbonWaterBoundaryModelProfile profile = new HydrocarbonWaterBoundaryModelProfile("light-pseudo")
+        .setLightPseudoWaterCompatibility(true);
+    SystemInterface cpa = new neqsim.thermo.system.SystemSrkCPAstatoil(298.0, 10.0);
+    cpa.addComponent("water", 0.5);
+    cpa.addTBPfraction("C7", 0.5, 0.096, 0.75);
+    cpa.setMixingRule(2);
+    String lightName = cpa.getPhase(0).getComponent(1).getComponentName();
+    double originalCpaKij = kij(cpa, "water", lightName);
+    SystemInterface configuredCpa = profile.createTemplate(cpa, BoundaryFamily.GO_TO_GOW);
+    assertEquals(originalCpaKij, kij(configuredCpa, "water", lightName), 0.0);
+    assertEquals(originalCpaKij, kij(cpa, "water", lightName), 0.0);
+
+    SystemInterface heavy = new SystemSrkEos(298.0, 10.0);
+    heavy.addComponent("water", 0.5);
+    heavy.addTBPfraction("C30", 0.5, 0.42, 0.95);
+    heavy.setMixingRule("classic");
+    String heavyName = heavy.getPhase(0).getComponent(1).getComponentName();
+    heavy.setBinaryInteractionParameter("water", heavyName, 0.317);
+    SystemInterface configuredHeavy = profile.createTemplate(heavy, BoundaryFamily.GO_TO_GOW);
+    assertEquals(0.317, kij(configuredHeavy, "water", heavyName), 0.0);
+    assertEquals(0.317, kij(heavy, "water", heavyName), 0.0);
   }
 
   /**

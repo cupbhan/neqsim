@@ -1,5 +1,7 @@
 package neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops;
 
+import neqsim.thermo.phase.LiquidPhaseClassification;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -50,14 +52,10 @@ public final class SpecifiedPhaseEquilibriumValidator {
     double balance = 0.0;
     double normalization = 0.0;
     double fractionSum = 0.0;
-    int waterIndex = -1;
     for (int component = 0; component < count; component++) {
       String name = template.getPhase(0).getComponent(component).getComponentName();
       if (!name.equals(state.getPhase(0).getComponent(component).getComponentName())) {
         throw new IllegalArgumentException("component order differs from the original fluid");
-      }
-      if ("water".equalsIgnoreCase(name)) {
-        waterIndex = component;
       }
     }
     for (int phase = 0; phase < slots.length; phase++) {
@@ -81,8 +79,8 @@ public final class SpecifiedPhaseEquilibriumValidator {
       if (state.getPhase(phase).getType() != phaseType(slots[phase])) {
         violations.add("PHASE_TYPE_MISMATCH_" + phase);
       }
-      double water = waterIndex < 0 ? 0.0 : state.getPhase(phase).getComponent(waterIndex).getx();
-      if (slots[phase] == CandidatePhase.OIL && water >= 0.5 || slots[phase] == CandidatePhase.AQUEOUS && water < 0.5) {
+      if (slots[phase] != CandidatePhase.GAS
+          && LiquidPhaseClassification.classify(state.getPhase(phase)) != phaseType(slots[phase])) {
         violations.add("PHASE_IDENTITY_MISMATCH_" + phase);
       }
       for (int previous = 0; previous < phase; previous++) {

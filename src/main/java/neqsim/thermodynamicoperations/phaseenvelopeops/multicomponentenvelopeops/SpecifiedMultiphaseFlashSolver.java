@@ -1,5 +1,7 @@
 package neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops;
 
+import neqsim.thermo.phase.LiquidPhaseClassification;
+
 import neqsim.thermo.phase.PhaseInterface;
 import neqsim.thermo.phase.PhaseType;
 import neqsim.thermo.system.SystemInterface;
@@ -363,11 +365,9 @@ public final class SpecifiedMultiphaseFlashSolver {
    * @return true when the documented condition holds
    */
   private boolean hasPhysicalPhaseIdentity(double[][] compositions) {
-    int waterIndex = waterComponentIndex();
     for (int phaseIndex = 0; phaseIndex < phaseSlots.length; phaseIndex++) {
-      double waterFraction = waterIndex < 0 ? 0.0 : normalized(compositions[phaseIndex])[waterIndex];
-      if (phaseSlots[phaseIndex] == CandidatePhase.OIL && waterFraction >= 0.5
-          || phaseSlots[phaseIndex] == CandidatePhase.AQUEOUS && waterFraction < 0.5) {
+      if (phaseSlots[phaseIndex] != CandidatePhase.GAS && LiquidPhaseClassification.classify(template.getPhase(0),
+          normalized(compositions[phaseIndex])) != toPhaseType(phaseSlots[phaseIndex])) {
         return false;
       }
     }

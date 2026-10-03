@@ -26,12 +26,13 @@ description: "Integration, acceptance checks, regression coverage and qualificat
 - `toValidatedThermodynamicSystem`：全部验收通过后才导出状态；失败抛出带原因的异常。
 
 `isConverged` 只表示数值收敛。结果与产生它的求解器实例绑定，不能换用另一流体解释相组成数组。
-默认闪蒸调用链和冻结的重油资源没有改变。
+三项研究接口不会自动接入默认闪蒸调用链；冻结的重油资源没有改变。
 
 ## 验收和模型资格
 
 物料平衡和归一化残差须不超过 1e-8，对数逸度差不超过 1e-7；每个相的摩尔比例须大于 1e-10，
-相间组成 L1 距离大于 1e-5。油/水身份沿用烃—水研究路径的水摩尔分数 0.5 分类约定。
+相间组成 L1 距离大于 1e-5。油/水身份通过 `LiquidPhaseClassification` 与个人 EOS 的质量贡献约定保持一致；
+水摩尔分数高不自动意味着水相，气相身份由求值后的 EOS 状态决定。
 适用的气、油、水 TPD 搜索须全部收敛，且未发现超出负稳定性阈值的非平凡分相趋势。
 
 有限搜索不能证明数学意义上的全局稳定性，也不代替实验精度验证。
@@ -40,6 +41,10 @@ description: "Integration, acceptance checks, regression coverage and qualificat
 参数配置仍标明 `experimentalCompatibilityProfile`、`requiresIndependentPhysicalValidation`，
 并明确 `productionPromotionAllowed=false`。没有把历史 PVTsim 拟合倍率设为默认值，
 也没有把软件间吻合当成实验标定。
+
+历史水/轻质 TBP 常数交互参数调整也改为显式 `setLightPseudoWaterCompatibility(true)`，
+普通流体沿用官方默认；该选项保留 CPA 参数、自定义重质 TBP 参数和原流体。
+原因与回归见[合并后的行为审计](shared-thermo-compatibility-audit.md)。
 
 ## 回归与来源
 
@@ -52,9 +57,9 @@ description: "Integration, acceptance checks, regression coverage and qualificat
 [原迁移清单](../../distribution/cupbhan/migration-inventory.json)保留整理当时的状态，本页记录后续接入。
 本轮不代表完整 PVTsim 重跑、实验标定或高压相边界网络闭合。
 
-## 已交付版本
+## rc.2 历史交付
 
-本地公共运行版本已切换为 `3.23.0-cupbhan.1-rc.2`，构建源码提交为
+研究接口首次交付时，本地公共运行版本切换为 `3.23.0-cupbhan.1-rc.2`，构建源码提交为
 `f5db0c33b78d62da3a05130723430db44fff9595`。后续文档和运行指针提交不改变这个源码身份。
 旧版本 `3.23.0-cupbhan.1-rc.1` 保留在版本目录中，可通过统一激活脚本回退。
 候选包为本地可追溯发行包，未发布到公共 Maven 仓库。

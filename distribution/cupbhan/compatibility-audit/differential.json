@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "method": "Isolated JVM per version, selected ordinary @Test methods from the official-derived v3.23.0 test classes; method invocation through JPype reflection. Not a JUnit lifecycle or parameterized run. Final candidate validation uses Maven/JUnit.",
+  "testsUnmodified": true,
+  "scope": "Three flash regression classes, nine methods; not all 215 baseline cases.",
+  "runs": [
+    {
+      "version": "3.23.0",
+      "artifact": "build/upstream-sync/official-v3.23.0/neqsim-3.23.0.jar",
+      "sha256": "2afff2377963e47565b8c473f3f9bbd69fae6fd383b7c0f53399ab2956e3974a",
+      "passed": 9,
+      "failed": 0,
+      "results": [
+        {
+          "suite": "TPflashAqueousRootConsistencyTest",
+          "test": "ordinaryAndMultiphaseFlashesRetainSameStableCubicRoot",
+          "passed": true
+        },
+        {
+          "suite": "TPflashIncipientPhaseStabilityTest",
+          "test": "supplementaryStabilityTrialRetainsIncipientVapor",
+          "passed": true
+        },
+        {
+          "suite": "TPflashIncipientPhaseStabilityTest",
+          "test": "poorInitializationRecoversReferenceEndpoints",
+          "passed": true
+        },
+        {
+          "suite": "TPflashIncipientPhaseStabilityTest",
+          "test": "changedReturnedAndRepeatedStatesRemainContinuous",
+          "passed": true
+        },
+        {
+          "suite": "TPflashIncipientPhaseStabilityTest",
+          "test": "subResidualTpdDoesNotOverrideExistingUmrPruSolution",
+          "passed": true
+        },
+        {
+          "suite": "TPflashLargeVolatilityHydrocarbonConsistencyTest",
+          "test": "nearbyCompositionsRemainContinuousAcrossAlgorithms",
+          "passed": true
+        },
+        {
+          "suite": "TPflashLargeVolatilityHydrocarbonConsistencyTest",
+          "test": "poorInitializationRepeatsAndChangedPressureRemainDeterministic",
+          "passed": true
+        },
+        {
+          "suite": "TPflashLargeVolatilityHydrocarbonConsistencyTest",
+          "test": "screenExcludedControlsRemainClosedAndCrossAlgorithmConsistent",
+          "passed": true
+        },
+        {
+          "suite": "TPflashLargeVolatilityHydrocarbonConsistencyTest",
+          "test": "largeVolatilityEndpointsCloseAndAgreeAcrossAlgorithms",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "version": "3.17.0-cupbhan.1-rc.1",
+      "artifact": "runtime/releases/3.17.0-cupbhan.1-rc.1/neqsim-mcp-server-3.17.0-cupbhan.1-rc.1-runner.jar",
+      "sha256": "a1f58d255325294fe8c3513d4d7c431017ed4dd75312c888b45c759b1992ebfe",
+      "passed": 2,
+      "failed": 7,
+      "results": [
+        {
+          "suite": "TPflashAqueousRootConsistencyTest",
+          "test": "ordinaryAndMultiphaseFlashesRetainSameStableCubicRoot",
+          "passed": false,
+          "error": "org.opentest4j.AssertionFailedError: expected: <5546.5564100512565> but was: <5546.556409948513>"
+        },
+        {
+          "suite": "TPflashIncipientPhaseStabilityTest",
+          "test": "subResidualTpdDoesNotOverrideExistingUmrPruSolution",
+          "passed": false,
+          "error": "org.opentest4j.AssertionFailedError: multiphase topology at 90.03461693 bara ==> expected: <1> but was: <3>"
+        },
+        {
+          "suite": "TPflashIncipientPhaseStabilityTest",
+          "test": "changedReturnedAndRepeatedStatesRemainContinuous",
+          "passed": false,
+          "error": "org.opentest4j.AssertionFailedError: changed UMR-PRU state beta OIL ==> expected: <0.9262556579237918> but was: <0.036872171051826524>"
+        },
+        {
+          "suite": "TPflashIncipientPhaseStabilityTest",
+          "test": "supplementaryStabilityTrialRetainsIncipientVapor",
+          "passed": true
+        },
+        {
+          "suite": "TPflashIncipientPhaseStabilityTest",
+          "test": "poorInitializationRecoversReferenceEndpoints",
+          "passed": false,
+          "error": "org.opentest4j.AssertionFailedError: UMR-PRU poor beta initialization beta OIL ==> expected: <0.9330925972896335> but was: <0.033453701350204486>"
+        },
+        {
+          "suite": "TPflashLargeVolatilityHydrocarbonConsistencyTest",
+          "test": "largeVolatilityEndpointsCloseAndAgreeAcrossAlgorithms",
+          "passed": false,
+          "error": "org.opentest4j.AssertionFailedError: SRK methane+n-heptane at 180.0 K, 50.0 bar, z(n-heptane)=0.05 reference fugacity residual 0.04581278532835078 ==> expected: <true> but was: <false>"
+        },
+        {
+          "suite": "TPflashLargeVolatilityHydrocarbonConsistencyTest",
+          "test": "screenExcludedControlsRemainClosedAndCrossAlgorithmConsistent",
+          "passed": true
+        },
+        {
+          "suite": "TPflashLargeVolatilityHydrocarbonConsistencyTest",
+          "test": "poorInitializationRepeatsAndChangedPressureRemainDeterministic",
+          "passed": false,
+          "error": "org.opentest4j.AssertionFailedError: SRK methane+n-heptane at 180.0 K, 50.0 bar, z(n-heptane)=0.05 poor initialization reference fugacity residual 0.04581278532835078 ==> expected: <true> but was: <false>"
+        },
+        {
+          "suite": "TPflashLargeVolatilityHydrocarbonConsistencyTest",
+          "test": "nearbyCompositionsRemainContinuousAcrossAlgorithms",
+          "passed": false,
+          "error": "org.opentest4j.AssertionFailedError: SRK methane+n-heptane at 180.0 K, 50.0 bar, z(n-heptane)=0.0499 reference fugacity residual 0.04518401086989518 ==> expected: <true> but was: <false>"
+        }
+      ]
+    }
+  ]
+}

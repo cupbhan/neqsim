@@ -386,8 +386,7 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
                 intparam[k][l] = 0.08;
               } else if ((component_name.equals("water") && phase.getComponent(l).isIsTBPfraction())
                   || (component_name2.equals("water") && phase.getComponent(k).isIsTBPfraction())) {
-                intparam[k][l] = waterPseudoComponentKij(
-                    phase.getComponent(phase.getComponent(l).isIsTBPfraction() ? l : k).getMolarMass());
+                intparam[k][l] = 0.2;
 
                 if (phase instanceof PhaseSrkCPA) {
                   // Covers PhaseSrkCPA, PhaseSrkCPAs,
@@ -525,7 +524,7 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
   }
 
   /**
-   * Interaction parameter between water and a pseudo component under a non-associating EOS.
+   * Optional historical interaction parameter between water and a pseudo component under a non-associating EOS.
    *
    * <p>
    * The database carries this pair for named n-alkanes - 0.45 for methane and ethane, 0.53 for propane, 0.52 for
@@ -537,16 +536,19 @@ public class EosMixingRuleHandler extends MixingRuleHandler {
    * </p>
    *
    * <p>
-   * Pseudo components no heavier than n-nonane therefore take the database's plateau value. Heavier fractions keep the
-   * historical 0.2: the database holds no water pair above n-nonane, and the one heavy-fluid comparison available - the
-   * 65 mol% water field fluid against a controlled PVTsim run - gets worse when 0.5 is extrapolated to its C10+
-   * fractions, so there is nothing to justify moving them.
+   * When explicitly selected, pseudo components no heavier than n-nonane take the database's plateau value. Heavier
+   * fractions keep the historical 0.2: the database holds no water pair above n-nonane, and the one heavy-fluid
+   * comparison available - the 65 mol% water field fluid against a controlled PVTsim run - gets worse when 0.5 is
+   * extrapolated to its C10+ fractions, so there is nothing to justify moving them.
    * </p>
+   *
+   * This helper does not alter default mixing rules. Callers must explicitly select and record the compatibility
+   * parameter profile; ordinary fluids retain the official 0.2 fallback.
    *
    * @param pseudoComponentMolarMass molar mass of the pseudo component, in kg/mol
    * @return the interaction parameter to use against water
    */
-  static double waterPseudoComponentKij(double pseudoComponentMolarMass) {
+  public static double waterPseudoComponentKij(double pseudoComponentMolarMass) {
     return pseudoComponentMolarMass <= HEAVIEST_DATABASE_WATER_ALKANE_MOLAR_MASS ? DATABASE_WATER_ALKANE_KIJ_PLATEAU
         : 0.2;
   }

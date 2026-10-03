@@ -732,35 +732,7 @@ public abstract class SystemThermo implements SystemInterface {
      * System.out.println("number of phases " + numberOfPhases); if (maxNumberOfPhases < numberOfPhases) {
      * maxNumberOfPhases = numberOfPhases; } }
      */
-    // The phase being activated must not share a storage slot with a phase that is already live:
-    // callers seed a trial composition into the new phase right after this returns, and on a shared
-    // slot that write lands on the live phase instead. phaseIndex is kept a permutation by the
-    // remove methods, but any caller that rewrites it can leave a duplicate behind, so claim a
-    // genuinely free slot here rather than trusting whatever sits at phaseIndex[numberOfPhases].
-    if (numberOfPhases < phaseIndex.length && isPhaseSlotInUse(phaseIndex[numberOfPhases])) {
-      for (int slot = 0; slot < phaseArray.length; slot++) {
-        if (phaseArray[slot] != null && !isPhaseSlotInUse(slot)) {
-          phaseIndex[numberOfPhases] = slot;
-          break;
-        }
-      }
-    }
     numberOfPhases++;
-  }
-
-  /**
-   * Check whether a phaseArray storage slot is referenced by one of the currently active phases.
-   *
-   * @param slot storage slot index into phaseArray
-   * @return true if an active phase maps to that slot
-   */
-  private boolean isPhaseSlotInUse(int slot) {
-    for (int i = 0; i < numberOfPhases; i++) {
-      if (phaseIndex[i] == slot) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /** {@inheritDoc} */
@@ -2242,17 +2214,10 @@ public abstract class SystemThermo implements SystemInterface {
   /** {@inheritDoc} */
   @Override
   public void deleteFluidPhase(int phaseNum) {
-    // Same slot bookkeeping as removePhaseKeepTotalComposition: shift the active entries down and
-    // park the retired slot at the tail so phaseIndex stays a permutation. The previous loop ran one
-    // step too far and read phaseIndex[numberOfPhases], i.e. outside the active range.
-    int retiredSlot = phaseIndex[phaseNum];
-    for (int i = phaseNum; i < numberOfPhases - 1; i++) {
+    for (int i = phaseNum; i < numberOfPhases; i++) {
       phaseIndex[i] = phaseIndex[i + 1];
     }
     numberOfPhases--;
-    if (numberOfPhases >= 0) {
-      phaseIndex[numberOfPhases] = retiredSlot;
-    }
   }
 
   /** {@inheritDoc} */
@@ -4972,9 +4937,6 @@ public abstract class SystemThermo implements SystemInterface {
       }
     }
 
-    // Park the storage slot of the retired phase past the end of the active range so that
-    // phaseIndex stays a permutation of the slots; see removePhaseKeepTotalComposition.
-    int retiredSlot = phaseIndex[specPhase];
     // phaseArray = new PhaseInterface[numberOfPhases - 1];
     for (int i = 0; i < numberOfPhases - 1; i++) {
       // phaseArray[i] = (PhaseInterface) phaseList.get(i);
@@ -4984,9 +4946,6 @@ public abstract class SystemThermo implements SystemInterface {
       }
     }
     numberOfPhases--;
-    if (numberOfPhases >= 0) {
-      phaseIndex[numberOfPhases] = retiredSlot;
-    }
   }
 
   /** {@inheritDoc} */
@@ -4999,10 +4958,6 @@ public abstract class SystemThermo implements SystemInterface {
       }
     }
 
-    // The storage slot used by the phase being retired. It has to be parked past the end of the
-    // active range, otherwise the shift below leaves the tail entry duplicating an active slot and
-    // the next addPhase() hands out a PhaseInterface that is already in use by a live phase.
-    int retiredSlot = phaseIndex[specPhase];
     // phaseArray = new PhaseInterface[numberOfPhases - 1];
     for (int i = 0; i < numberOfPhases - 1; i++) {
       // phaseArray[i] = (PhaseInterface) phaseList.get(i);
@@ -5012,9 +4967,6 @@ public abstract class SystemThermo implements SystemInterface {
       }
     }
     numberOfPhases--;
-    if (numberOfPhases >= 0) {
-      phaseIndex[numberOfPhases] = retiredSlot;
-    }
   }
 
   /** {@inheritDoc} */

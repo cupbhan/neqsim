@@ -346,20 +346,31 @@ public final class IncipientPhaseStabilityAnalyzer {
     double stabilityFunction = Double.isFinite(sumW) ? 1.0 - sumW : Double.NEGATIVE_INFINITY;
     double tangentPlaneDistance = sumW > 0.0 && Double.isFinite(sumW) ? -Math.log(sumW) : Double.NEGATIVE_INFINITY;
     boolean trivial = isTrivial(reference, composition);
-    CandidatePhase physicalPhase = classifyPhysicalPhase(reference, composition, candidatePhase);
+    CandidatePhase physicalPhase = classifyPhysicalPhase(trialSystem.getPhase(trialPhaseIndex));
     return new Candidate(candidatePhase, physicalPhase, composition, stabilityFunction, tangentPlaneDistance, residual,
         iteration, converged, trivial, failureMessage);
   }
 
-  private static CandidatePhase classifyPhysicalPhase(SystemInterface reference, double[] composition,
-      CandidatePhase seedPhase) {
-    for (int componentIndex = 0; componentIndex < composition.length; componentIndex++) {
-      if (reference.getPhase(0).getComponent(componentIndex).getComponentName().equalsIgnoreCase("water")
-          && composition[componentIndex] >= 0.5) {
-        return CandidatePhase.AQUEOUS;
+  /**
+   * Reads the evaluated EOS root family before interpreting liquid composition.
+   *
+   * <p>
+   * SystemThermo relabels gas roots in nonzero phase slots as oil after initialization. Stability workspaces use slot
+   * one for trials, so recover the PhaseEos volume criterion instead of trusting that storage-slot label.
+   *
+   * @param phase evaluated trial phase
+   * @return gas, oil or aqueous identity assigned by the EOS
+   * @throws IllegalArgumentException when the EOS returned an unsupported family
+   */
+  static CandidatePhase classifyPhysicalPhase(neqsim.thermo.phase.PhaseInterface phase) {
+    if (phase instanceof neqsim.thermo.phase.PhaseEosInterface) {
+      double covolume = ((neqsim.thermo.phase.PhaseEosInterface) phase).getB();
+      if (phase.getVolume() / covolume > 1.75) {
+        return CandidatePhase.GAS;
       }
+      return CandidatePhase.valueOf(neqsim.thermo.phase.LiquidPhaseClassification.classify(phase).name());
     }
-    return seedPhase;
+    return CandidatePhase.valueOf(phase.getType().name());
   }
 
   private static List<Candidate> distinctStationaryPoints(List<Candidate> trials) {

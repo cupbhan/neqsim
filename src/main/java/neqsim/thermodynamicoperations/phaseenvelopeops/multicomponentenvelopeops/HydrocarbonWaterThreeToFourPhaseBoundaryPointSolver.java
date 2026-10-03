@@ -1,6 +1,7 @@
 package neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops;
 
 import neqsim.thermo.phase.PhaseInterface;
+import neqsim.thermo.phase.LiquidPhaseClassification;
 import neqsim.thermo.phase.PhaseType;
 import neqsim.thermo.system.SystemInterface;
 import neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.IncipientPhaseStabilityAnalyzer.CandidatePhase;
@@ -287,27 +288,23 @@ public final class HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver {
     return working;
   }
 
+  /**
+   * Checks that retained and incipient liquid slots follow the EOS liquid-family convention.
+   *
+   * @param retainedCompositions normalized retained phase compositions
+   * @param incipientComposition normalized incipient phase composition
+   * @return true when all requested liquid identities match
+   */
   private boolean phaseIdentity(double[][] retainedCompositions, double[] incipientComposition) {
-    int waterIndex = waterComponentIndex();
-    if (waterIndex < 0) {
-      return true;
-    }
     CandidatePhase[] slots = new CandidatePhase[] {retainedPhaseZero, retainedPhaseOne, bifurcatingPhase};
     for (int phaseIndex = 0; phaseIndex < slots.length; phaseIndex++) {
-      double water = retainedCompositions[phaseIndex][waterIndex];
-      if (slots[phaseIndex] == CandidatePhase.OIL && water >= 0.5
-          || slots[phaseIndex] == CandidatePhase.AQUEOUS && water < 0.5) {
+      if (slots[phaseIndex] != CandidatePhase.GAS && !LiquidPhaseClassification
+          .classify(template.getPhase(0), retainedCompositions[phaseIndex]).name().equals(slots[phaseIndex].name())) {
         return false;
       }
     }
-    double incipientWater = incipientComposition[waterIndex];
-    if (incipientPhase == CandidatePhase.OIL) {
-      return incipientWater < 0.5;
-    }
-    if (incipientPhase == CandidatePhase.AQUEOUS) {
-      return incipientWater >= 0.5;
-    }
-    return true;
+    return incipientPhase == CandidatePhase.GAS || LiquidPhaseClassification
+        .classify(template.getPhase(0), incipientComposition).name().equals(incipientPhase.name());
   }
 
   private void validateInputs(TwoToThreePhaseArcLengthCorrector.State state,
@@ -328,15 +325,6 @@ public final class HydrocarbonWaterThreeToFourPhaseBoundaryPointSolver {
 
   private int componentCount() {
     return template.getPhase(0).getNumberOfComponents();
-  }
-
-  private int waterComponentIndex() {
-    for (int componentIndex = 0; componentIndex < componentCount(); componentIndex++) {
-      if (template.getPhase(0).getComponent(componentIndex).getComponentName().equalsIgnoreCase("water")) {
-        return componentIndex;
-      }
-    }
-    return -1;
   }
 
   private double[] overallComposition() {

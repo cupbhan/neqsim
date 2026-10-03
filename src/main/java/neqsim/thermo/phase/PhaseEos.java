@@ -150,24 +150,10 @@ public abstract class PhaseEos extends Phase implements PhaseEosInterface {
       // the multiphase flash gates aqueous seeding on !hasPhaseType(AQUEOUS) and hydrocarbon-liquid seeding on
       // hasPhaseType(OIL), so a misclassified oil phase makes the solver believe an aqueous phase already exists
       // and skip seeding the real one.
-      double sumHydrocarbons = 0.0;
-      double sumAqueous = 0.0;
-      for (int i = 0; i < numberOfComponents; i++) {
-        double massFraction = getComponent(i).getx() * getComponent(i).getMolarMass();
-        if ((getComponent(i).isHydrocarbon() || getComponent(i).isInert() || getComponent(i).isIsTBPfraction())
-            && !getComponent(i).getName().equals("water") && !getComponent(i).getName().equals("water_PC")) {
-          sumHydrocarbons += massFraction;
-        } else {
-          sumAqueous += massFraction;
-        }
-      }
-
       if (getVolume() / getB() > 1.75) {
         setType(PhaseType.GAS);
-      } else if (sumHydrocarbons > sumAqueous) {
-        setType(PhaseType.OIL);
       } else {
-        setType(PhaseType.AQUEOUS);
+        setType(LiquidPhaseClassification.classify(this));
       }
 
       // if ((hasComponent("water") && getVolume() / getB() < 1.75 &&
