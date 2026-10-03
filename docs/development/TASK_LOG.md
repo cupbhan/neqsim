@@ -13,6 +13,10 @@ description: "Chronological record of engineering tasks solved in the NeqSim rep
 Regressions cover 39 missed splits, repeated flashes, 11 liquid-side boundary round trips and the existing conservation cases.
 Use evaluated roots instead of phase slots, including one-ULP pressure perturbations. Frozen NH3 models remain unchanged;
 native-reference calibration validation remains separate from same-parameter solver verification.
+**Validation:** rc.5 selected core gate: 476 tests, 475 passed and one registered upstream-disabled case; MCP/STDIO passed.
+All 7,470 unchanged same-EOS grid states pass quality and match PVTsim topology. The 90-point NH3 replay is unchanged
+from rc.4, with 87/90 historical precision gates passed. Archived post-blend parameter diagnostics have inconsistent
+dimensions; current-SDK reconstruction differs, so full NH3 reference identity and qualification remain open.
 
 > **Purpose:** Persistent memory across sessions. Every solved task gets an entry here
 > so future sessions can find prior solutions instead of starting from scratch.

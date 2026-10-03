@@ -304,6 +304,10 @@ Symptoms that a continuation result is truncated:
   N2/water tables below -1 cannot pass the installed SDK's greater-than-minus-one BIP requirement unchanged.
 - Keep same-EOS solver verification separate from the accuracy of a model fitted to a different native PVTsim
   reference. Transferring fitted interactions to both solvers does not independently validate that calibration.
+- Audit the complete post-blend reference, not only the imported base fluid. For N components require N(N-1)/2
+  unordered interaction pairs and matching dense-array dimensions. A component inventory, hash or successful flash
+  does not repair an incomplete parameter diagnostic. Preserve archived conditional acceptance separately from
+  ordinary point-gate passes; a new SDK reconstruction remains diagnostic until its full parameter identity is proven.
 - Refine the union of both solvers' phase-transition brackets and keep all topology islands. Count unique
   states separately from repeated coarse/refined evaluations. Gate each point on phase-fraction sum,
   component balance and fugacity, not only returned phase labels or lack of an exception.

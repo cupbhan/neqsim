@@ -1,0 +1,548 @@
+{
+  "schemaVersion": 1,
+  "version": "3.23.0-cupbhan.1-rc.5",
+  "sourceCommit": "2e842096d6c402afeb37d78cc4e2d9d71f9ae6cc",
+  "jarSha256": "7c9af9bfee60f40f6cf48694c0e3b9426b3491b4c9c70df5be000ddbb1e0e7a7",
+  "generatedAtUtc": "2026-10-03T07:49:55.230680+00:00",
+  "specificDefectClosurePassed": true,
+  "sameEosGridValidationPassed": true,
+  "overallPVTsimValidationComplete": false,
+  "scope": "Selected regressions, four unchanged same-EOS development fluids, and audit/replay of three frozen NH3 calibrations.",
+  "core": {
+    "suites": [
+      "neqsim.mcp.runners.ComponentQueryTest",
+      "neqsim.mcp.runners.FieldFluidRunnerTest",
+      "neqsim.mcp.runners.HydrocarbonWaterBoundaryRegressionRunnerTest",
+      "neqsim.mcp.runners.HydrocarbonWaterModelIdentityTest",
+      "neqsim.mcp.runners.HydrocarbonWaterTopologyBenchmarkRunnerTest",
+      "neqsim.mcp.runners.WaterIF97RunnerTest",
+      "neqsim.thermo.mixingrule.ClassicSRKTabulatedTest",
+      "neqsim.thermo.mixingrule.EosMixingRulesTest",
+      "neqsim.thermo.phase.CPAAssociationInitializationTest",
+      "neqsim.thermo.phase.PhaseGEInfiniteDilutionTest",
+      "neqsim.thermo.system.HeavyOilMultimediaFluidTest",
+      "neqsim.thermo.system.SystemThermoChemicalReactionStaleStateTest",
+      "neqsim.thermo.system.SystemThermoReactiveCloneTest",
+      "neqsim.thermo.system.SystemThermoSerializationInventoryTest",
+      "neqsim.thermo.system.SystemThermoSetMolarCompositionTest",
+      "neqsim.thermo.system.SystemThermoSulfurPhaseExtractionTest",
+      "neqsim.thermodynamicoperations.flashops.PSFlashEntropyClosureTest",
+      "neqsim.thermodynamicoperations.flashops.PSFlashWarmStartPolicyTest",
+      "neqsim.thermodynamicoperations.flashops.reactiveflash.ReactiveElectrolyteStateConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.StabilityOptimizationInvariantTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousCrossAlgorithmFallbackTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousEndpointTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousFinalRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousMaterialBalanceRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousPhaseRemovalRecoveryTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousResidualRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashAqueousRootTransitionCandidateTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashCpaAqueousStabilityConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashCpaHydrocarbonLiquidStabilityTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashCubicRootSelectionTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashIncipientPhaseStabilityTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashIonicGasAqueousConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashIssue3943PumpRegressionTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashLargeVolatilityHydrocarbonConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashLiquidLiquidConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashMissingAqueousNearBubblePointTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashNearCricondenbarConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashRichGasBoundaryTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSourGasConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSrkAqueousLowerGibbsRootTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashSrkWaterRichSeededPhaseSetTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashTerminalEquilibriumRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashTraceAqueousRefinementTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashTwuSourFluidConservationTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWarmStartThreePhaseTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterBearingGasOilBetaRecoveryTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterRichColdSeedConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWaterRichEndpointTest",
+      "neqsim.thermodynamicoperations.flashops.TPflashWellFluidConsistencyTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashHighWaterGasSeedTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashPhaseDisappearanceTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashSolveStatusTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashStrippedIonTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashTest",
+      "neqsim.thermodynamicoperations.flashops.TPmultiflashWaterRichVapourTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryModelProfileTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterBoundaryRegressionTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterClosedBoundaryLoopAssemblerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterContinuationChainAssemblerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterIsolatedBoundaryRootClassifierTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterOpenBoundaryVerifierTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterPhaseIdentityConsistencyTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterPhaseTopologyTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterRegularPressureBoundaryTracerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterStableRegionTransitionScannerTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhasePointFinderTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterThreePhaseTopologyFinderTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.HydrocarbonWaterTopologyBenchmarkTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeComponentLimitTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeContinuityTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeMichelsenTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeReferenceEosTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeSegmentsTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.RetainedPhaseBifurcationCorrectorTest",
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.SpecifiedMultiphaseFlashAcceptanceTest"
+    ],
+    "tests": 476,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "skippedCases": [
+      "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest#testPureMethane"
+    ]
+  },
+  "mcp": {
+    "suites": [
+      "neqsim.mcp.server.NeqSimToolsContractTest"
+    ],
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "skippedCases": []
+  },
+  "runtime": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "runtime-version",
+        "passed": true,
+        "version": "3.23.0-cupbhan.1-rc.5"
+      },
+      {
+        "name": "tool-discovery",
+        "passed": true,
+        "count": 76
+      },
+      {
+        "name": "pr-flash",
+        "passed": true
+      },
+      {
+        "name": "nonreactive-cpa-ammonia",
+        "passed": true
+      },
+      {
+        "name": "water-rich-three-phase-recovery",
+        "passed": true
+      },
+      {
+        "name": "water-if97",
+        "passed": true
+      }
+    ],
+    "tools": [
+      "bridgeTaskWorkflow",
+      "calculateStandard",
+      "checkToolAccess",
+      "compareProcesses",
+      "compareSimulationStates",
+      "composeMultiServerWorkflow",
+      "composeWorkflow",
+      "crossValidateModels",
+      "designUtilities",
+      "diagnoseAutomation",
+      "generateReport",
+      "generateVisualization",
+      "getAdjustableParameters",
+      "getAutomationLearningReport",
+      "getBenchmarkTrust",
+      "getCapabilities",
+      "getExample",
+      "getPhaseEnvelope",
+      "getProgress",
+      "getPropertyTable",
+      "getSchema",
+      "getSimulationVariable",
+      "inspectApi",
+      "listSimulationUnits",
+      "listUnitVariables",
+      "manageIndustrialProfile",
+      "manageModel",
+      "manageSecurity",
+      "manageSession",
+      "manageState",
+      "manageValidationProfile",
+      "queryDataCatalog",
+      "runAgenticEngineering",
+      "runBarrierRegister",
+      "runBatch",
+      "runBioprocess",
+      "runCapability",
+      "runChemistry",
+      "runDynamic",
+      "runFieldEconomics",
+      "runFieldFluid",
+      "runFlareNetwork",
+      "runFlash",
+      "runFlowAssurance",
+      "runFluidFlash",
+      "runHAZOP",
+      "runHazopScenario",
+      "runHydrocarbonWaterBoundaryRegression",
+      "runHydrocarbonWaterTopologyBenchmark",
+      "runLOPA",
+      "runMaterialsReview",
+      "runNorsokS001Clause10Review",
+      "runOpenDrainReview",
+      "runOperationalStudy",
+      "runPVT",
+      "runParametricStudy",
+      "runPipeline",
+      "runPlugin",
+      "runProcess",
+      "runProcessLoop",
+      "runRelief",
+      "runReservoir",
+      "runRiskMatrix",
+      "runRootCauseAnalysis",
+      "runSIL",
+      "runSafetySystemPerformance",
+      "runWaterHammer",
+      "runWaterIF97",
+      "saveSimulationState",
+      "searchComponents",
+      "setSimulationVariable",
+      "sizeEquipment",
+      "solveTask",
+      "streamSimulation",
+      "validateInput",
+      "validateResults"
+    ],
+    "notCovered": [
+      "HTTP transport",
+      "full PVTsim rerun",
+      "product UI",
+      "heavy-oil multimedia dedicated MCP endpoints"
+    ]
+  },
+  "thermalConsumer": {
+    "success": true,
+    "runtimeSource": "shared-release:3.23.0-cupbhan.1-rc.5@2e842096d6c402afeb37d78cc4e2d9d71f9ae6cc",
+    "flashKeys": [
+      "flash",
+      "fluid"
+    ],
+    "batchKeys": [
+      "summary",
+      "results"
+    ],
+    "cached": true,
+    "phaseEnvelopeQualityGate": "accepted-physical-curve-and-rejected-nonphysical-fixture",
+    "phaseEnvelopePoints": 41,
+    "pvtExperiment": "viscosity",
+    "lookupCandidatePoints": 9
+  },
+  "solverGrid": {
+    "candidate": "neqsim-rc5",
+    "cases": {
+      "dry": {
+        "points": 1692,
+        "mismatches": 0,
+        "qualityFailures": 0,
+        "solverStatuses": {
+          "NOT_REQUIRED": 1692
+        },
+        "invalidSolverStatuses": 0,
+        "changedTopologyFromRc4": 0,
+        "maxBetaAbs": 6.369315186383062e-09,
+        "maxDensityPct": 0.0033654800843718746
+      },
+      "water10": {
+        "points": 1887,
+        "mismatches": 0,
+        "qualityFailures": 0,
+        "solverStatuses": {
+          "CONVERGED": 365,
+          "NOT_REQUIRED": 1522
+        },
+        "invalidSolverStatuses": 0,
+        "changedTopologyFromRc4": 12,
+        "maxBetaAbs": 3.8431816002174046e-08,
+        "maxDensityPct": 0.003365090825413475
+      },
+      "water30": {
+        "points": 1926,
+        "mismatches": 0,
+        "qualityFailures": 0,
+        "solverStatuses": {
+          "CONVERGED": 953,
+          "PHASE_REMOVED_AT_CONVERGENCE": 20,
+          "NOT_REQUIRED": 953
+        },
+        "invalidSolverStatuses": 0,
+        "changedTopologyFromRc4": 27,
+        "maxBetaAbs": 3.9417195978053154e-07,
+        "maxDensityPct": 0.0033650356152437055
+      },
+      "water65": {
+        "points": 1965,
+        "mismatches": 0,
+        "qualityFailures": 0,
+        "solverStatuses": {
+          "CONVERGED": 1505,
+          "PHASE_REMOVED_AT_CONVERGENCE": 96,
+          "NOT_REQUIRED": 364
+        },
+        "invalidSolverStatuses": 0,
+        "changedTopologyFromRc4": 0,
+        "maxBetaAbs": 6.373239650331319e-07,
+        "maxDensityPct": 0.0033650356152437055
+      }
+    },
+    "mismatches": [],
+    "failures": []
+  },
+  "frozenResourceHashesUnchanged": {
+    "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-0p1-v1.json": true,
+    "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-1-v1.json": true,
+    "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-5-v1.json": true
+  },
+  "runtimeEosContractsUnchangedFromRc4": {
+    "dry": true,
+    "water10": true,
+    "water30": true,
+    "water65": true,
+    "nh3_0p1": true,
+    "nh3_1": true,
+    "nh3_5": true
+  },
+  "nh3Rc4Regression": {
+    "nh3_0p1": {
+      "points": 30,
+      "topologyMismatchesFromRc4": 0,
+      "maxBetaAbsChange": 0.0,
+      "maxDensityAbsoluteChangeKgM3": 0.0
+    },
+    "nh3_1": {
+      "points": 30,
+      "topologyMismatchesFromRc4": 0,
+      "maxBetaAbsChange": 0.0,
+      "maxDensityAbsoluteChangeKgM3": 0.0
+    },
+    "nh3_5": {
+      "points": 30,
+      "topologyMismatchesFromRc4": 0,
+      "maxBetaAbsChange": 0.0,
+      "maxDensityAbsoluteChangeKgM3": 0.0
+    }
+  },
+  "nh3CalibrationAudit": {
+    "nh3_0p1": {
+      "archiveHashesVerified": {
+        "source": true,
+        "raw": true,
+        "normalized": true
+      },
+      "manifestSha256": "3bccaf508de7123d72a7244f4c60ccf32ab9f39684fc9cb88b7ea038058ba8d2",
+      "rawSha256": "e3486bb85bc7109f5f66a8be7f8de57cd8ec63e392efa84420241f623a287dcd",
+      "legacyReference": {
+        "points": 30,
+        "topologyMatches": 30,
+        "pointGatesPassed": 29,
+        "maxima": {
+          "densityPct": 1.636947893668017,
+          "volumeZPct": 1.953189204139516,
+          "betaAbsolute": 0.00828893437110556,
+          "compositionL1": 0.022513833991819207
+        },
+        "failedPoints": [
+          {
+            "tC": 220,
+            "pBara": 74,
+            "neqsim": "GOW",
+            "reference": "GOW",
+            "pass": false
+          }
+        ]
+      },
+      "referenceIdentityFailures": 30,
+      "historicalDiagnosticsExample": {
+        "point": 0,
+        "components": 16,
+        "expectedPairs": 120,
+        "actualPairs": 91,
+        "error": "Index was outside the bounds of the array.",
+        "arrayShapes": {
+          "isel_dims": "2x91",
+          "kij_dims": "21x91",
+          "alpha_dims": "2x91",
+          "hv_dims": "4x14x14"
+        },
+        "identityProven": false
+      },
+      "neqsimQualityFailures": 0,
+      "currentSdkQualityFailures": [
+        {
+          "tC": 220,
+          "pBara": 74,
+          "status": "ok",
+          "topology": "GOW",
+          "qc": {
+            "phaseSumResidual": 0.0,
+            "compositionResidual": 2.220446049250313e-16,
+            "massBalanceResidual": 9.56129664331229e-09,
+            "logFugacityResidual": 1.0526194529347777e-06,
+            "pass": false
+          }
+        }
+      ],
+      "currentSdkVersion": "29.0.47996.0",
+      "currentSdkSha256": "f06abb0149a0cab3369eec5456a8ff53608dc457af2b03a682f6e3e2fc1bc2a6",
+      "currentSdkReconstructionDiagnostic": {
+        "points": 30,
+        "topologyMatches": 23,
+        "pointGatesPassed": 11,
+        "maxima": {
+          "densityPct": 6.084723304936346,
+          "volumeZPct": 3.947834357338409,
+          "betaAbsolute": 0.039929569314194044,
+          "compositionL1": 0.14211782383086638
+        },
+        "acceptedAsHistoricalReference": false,
+        "qualifiedReferencePoints": 29
+      }
+    },
+    "nh3_1": {
+      "archiveHashesVerified": {
+        "source": true,
+        "raw": true,
+        "normalized": true
+      },
+      "manifestSha256": "7bc347c0c0f9b892b4fda4e0ca6c2903da45d3d6c24261783d17bfca9127c930",
+      "rawSha256": "024c45c14ac00d61bed3cb21781838dce094af4787f09cb525026072cf04c823",
+      "legacyReference": {
+        "points": 30,
+        "topologyMatches": 30,
+        "pointGatesPassed": 29,
+        "maxima": {
+          "densityPct": 1.6580849961339905,
+          "volumeZPct": 1.8422993322490422,
+          "betaAbsolute": 0.008662900365058346,
+          "compositionL1": 0.020706193145954756
+        },
+        "failedPoints": [
+          {
+            "tC": 220,
+            "pBara": 74,
+            "neqsim": "GOW",
+            "reference": "GOW",
+            "pass": false
+          }
+        ]
+      },
+      "referenceIdentityFailures": 30,
+      "historicalDiagnosticsExample": {
+        "point": 0,
+        "components": 16,
+        "expectedPairs": 120,
+        "actualPairs": 91,
+        "error": "Index was outside the bounds of the array.",
+        "arrayShapes": {
+          "isel_dims": "2x91",
+          "kij_dims": "21x91",
+          "alpha_dims": "2x91",
+          "hv_dims": "4x14x14"
+        },
+        "identityProven": false
+      },
+      "neqsimQualityFailures": 0,
+      "currentSdkQualityFailures": [],
+      "currentSdkVersion": "29.0.47996.0",
+      "currentSdkSha256": "f06abb0149a0cab3369eec5456a8ff53608dc457af2b03a682f6e3e2fc1bc2a6",
+      "currentSdkReconstructionDiagnostic": {
+        "points": 30,
+        "topologyMatches": 23,
+        "pointGatesPassed": 8,
+        "maxima": {
+          "densityPct": 6.1401739705033265,
+          "volumeZPct": 4.349482120444459,
+          "betaAbsolute": 0.04462476007755534,
+          "compositionL1": 0.14575721545550505
+        },
+        "acceptedAsHistoricalReference": false,
+        "qualifiedReferencePoints": 30
+      }
+    },
+    "nh3_5": {
+      "archiveHashesVerified": {
+        "source": true,
+        "raw": true,
+        "normalized": true
+      },
+      "manifestSha256": "1816ae6de97aaaa54b2723f7cfddd7aab5792f1785e3d6e08b403ec590401b83",
+      "rawSha256": "18ef16c78ff14716189b73ffb0c1020f9823c07c99b3b17bbcdfa45e370d16c9",
+      "legacyReference": {
+        "points": 30,
+        "topologyMatches": 30,
+        "pointGatesPassed": 29,
+        "maxima": {
+          "densityPct": 1.645397447968111,
+          "volumeZPct": 1.785704768349361,
+          "betaAbsolute": 0.0074204155294329555,
+          "compositionL1": 0.020798587018311776
+        },
+        "failedPoints": [
+          {
+            "tC": 220,
+            "pBara": 74,
+            "neqsim": "GOW",
+            "reference": "GOW",
+            "pass": false
+          }
+        ]
+      },
+      "referenceIdentityFailures": 30,
+      "historicalDiagnosticsExample": {
+        "point": 0,
+        "components": 16,
+        "expectedPairs": 120,
+        "actualPairs": 91,
+        "error": "Index was outside the bounds of the array.",
+        "arrayShapes": {
+          "isel_dims": "2x91",
+          "kij_dims": "21x91",
+          "alpha_dims": "2x91",
+          "hv_dims": "4x14x14"
+        },
+        "identityProven": false
+      },
+      "neqsimQualityFailures": 0,
+      "currentSdkQualityFailures": [],
+      "currentSdkVersion": "29.0.47996.0",
+      "currentSdkSha256": "f06abb0149a0cab3369eec5456a8ff53608dc457af2b03a682f6e3e2fc1bc2a6",
+      "currentSdkReconstructionDiagnostic": {
+        "points": 30,
+        "topologyMatches": 23,
+        "pointGatesPassed": 6,
+        "maxima": {
+          "densityPct": 6.752481921098696,
+          "volumeZPct": 6.970277440164185,
+          "betaAbsolute": 0.05870770522127,
+          "compositionL1": 0.2198697621836386
+        },
+        "acceptedAsHistoricalReference": false,
+        "qualifiedReferencePoints": 30
+      }
+    }
+  },
+  "nh3Qualification": "NOT_CLOSED: archived native input evidence recovered, but post-blend full parameter identity is not proven; current-SDK reconstruction differs.",
+  "referenceProvenance": {
+    "sameEosReference": "Previously executed licensed PVTsim SDK 29.0.47996.0 results reused; fresh immutable rc.5 rerun.",
+    "nh3Historical": "Hash-verified archived raw PVTsim runs and manifests, not a new run of the old engine.",
+    "nh3CurrentSdk": "Fresh licensed SDK reconstruction, 90 states; diagnostic-only until identity and quality issues close.",
+    "rawVendorDataCommitted": false
+  },
+  "limits": [
+    "Finite grid agreement does not prove all-state global stability or experimental accuracy.",
+    "Frozen NH3 v1 models remain unchanged and retain legacy calibration limits.",
+    "The historical interaction diagnostic has 16 components but 91 pairs (expected 120), 14x14 HV arrays and an index error. This is an identity-evidence failure, not proof that the vendor calculation was wrong.",
+    "Current SDK reconstruction has 21 topology differences from the archived native reference. One NH3 0.1% point has log-fugacity residual 1.05262e-6 above the unchanged 1e-6 gate.",
+    "PR/CPA external benchmarks, reactions/electrolytes, caloric and viscosity reference accuracy, and experimental validation are outside this grid."
+  ]
+}
