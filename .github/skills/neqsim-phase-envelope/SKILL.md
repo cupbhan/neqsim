@@ -289,6 +289,31 @@ Symptoms that a continuation result is truncated:
   historical light-pseudo/water parameters explicit through the model profile; CPA and heavy-fraction data are
   separate models. See `docs/development/shared-thermo-compatibility-audit.md`.
 
+## Independent PVTsim comparisons
+
+- Run the installed licensed Open Structure engine afresh. Record the actual DLL file version/hash and the
+  selected NeqSim release JAR hash; an adapter's display name is not version evidence. Keep task fluids and
+  raw point results in the task folder, outside code commits.
+- Audit input units independently of field names. In the installed FluidLw SDK, component critical pressure
+  uses atmospheres, while NeqSim uses bara (1 atm = 1.01325 bar); flash-state pressure uses Pa. Inspect the
+  loaded component's unit metadata before conversion. Legacy water-component exports can mix critical-volume
+  units. Do not alter frozen delivery resources to make a benchmark agree.
+- Preserve the requested polar model and explicit interactions. Verify the half-table orientation and complete
+  pair count after import; an ignored interaction must not count as a successful same-parameter comparison.
+  SDK input-range rejection is missing comparison coverage, not numerical agreement. In particular, legacy
+  N2/water tables below -1 cannot pass the installed SDK's greater-than-minus-one BIP requirement unchanged.
+- Keep same-EOS solver verification separate from the accuracy of a model fitted to a different native PVTsim
+  reference. Transferring fitted interactions to both solvers does not independently validate that calibration.
+- Refine the union of both solvers' phase-transition brackets and keep all topology islands. Count unique
+  states separately from repeated coarse/refined evaluations. Gate each point on phase-fraction sum,
+  component balance and fugacity, not only returned phase labels or lack of an exception.
+- Reject invalid final multiphase statuses. Exclude failed points from accepted boundary estimates and report
+  any resulting wider brackets. A high coarse-grid topology agreement does not close boundary failures.
+- Replay failed states on the old personal release and an isolated official release before attributing them
+  to a new upstream merge. Compare numerical residuals as well as pass/fail counts; a retained personal patch
+  can leave much larger conservation errors than the official result. See
+  `docs/development/shared-thermo-compatibility-audit.md` for the bounded rc.3 findings.
+
 ## Known Limitations
 
 - Stored branch labels can differ from physical branch identity for bubble-first tracing.

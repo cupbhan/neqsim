@@ -968,3 +968,16 @@ NIP: SRK-CPA CO2-water Henry constant 19% low at 25 C / 1 atm.
 Update: foundation implemented in `devtools/neqsim_continuous/` (entry-point plugin registry, stop rules, append-only ledger with union merge, watermarks, file adapter; `test_neqsim_continuous.py`) and Word/Markdown briefs for `new-task --prompt-file` (backward compatible). Public-first placement: engine/agent/methods/reference case in neqsim + community; only site adapters in enterprise. SOTA additions planned: EnKF + identifiability, Bayesian/multi-fidelity search, guarded hybrid model, branches + critic, backtesting metrics.
 Update 2: implemented end to end. `neqsim task-living/task-cycle/task-solve/task-backtest/task-schedule/task-promote/task-ledger/task-status/task-reference-case`; Java `neqsim.process.operations.continuous` (ModelDriftMonitor, BaselineComparator, ImprovementCycle); core agent `continuous-improvement` + skill `neqsim-continuous-task-improvement`; community toolkit (tagreader adapter, GP-EI, EnKF, identifiability) and agent; enterprise OTS/PDM adapters and overlay agent. Public reference case: 3/3 injected faults detected, 0 false alarms, 100 % reproducible. Gotchas: a 30-sample warm-up underestimates sigma - without per-signal `min_sigma` floors white noise gave 3 false alarms in 2 months; start EWMA at the baseline mean, not the first value; make step/criterion triggers fire on crossing only; `os.replace` on Windows/OneDrive needs a retry on PermissionError; plugins resolve by dotted path (`pkg.mod:Class`) so aggregated skill installs need no entry points.
 Update 3: living tasks use the general task root (`neqsim --show-task-root`): every `<task>` argument accepts a folder name inside it, and `task-status` / `task-reference-case` default to it. User guide: `docs/development/CONTINUOUS_TASK_SOLVING.md`, introduced in `TASK_SOLVING_GUIDE.md` § "Keeping a Task Alive".
+
+### 2026-10-02 - Independent PVTsim validation of the shared rc.3 runtime
+**Type:** A (Software verification, Quick)
+**Keywords:** PVTsim Open Structure, SRK, phase removal, material balance, boundary refinement, unit provenance
+**Solution:** local task output retained outside Git; aggregate findings in `shared-thermo-compatibility-audit.md`.
+**Notes:** Fresh licensed SDK runs covered 7,470 unique development-fluid states after auditing FluidLw critical-pressure
+units (atm versus NeqSim bara), interaction-table orientation and model selection. Coarse topology agreed at 4,895/4,896
+points, but boundary refinement exposed five severely unbalanced personal-runtime states. All five reproduced on the old
+personal 3.17 and rc.2 releases; official 3.23 had much smaller conservation residuals at the corresponding points.
+Three frozen NH3 presets could not run with identical parameters because the SDK rejects their N2/water BIPs below -1.
+Overall validation remains failed/incomplete. No solver fix, frozen-data change or runtime activation was made.
+The phase-envelope skill now requires unit/readback checks, explicit coverage gaps, boundary quality gates and version
+replays before attributing a mismatch to an upstream merge. Task data and vendor component exports were not committed.
