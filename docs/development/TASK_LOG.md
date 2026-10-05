@@ -5,6 +5,18 @@ description: "Chronological record of engineering tasks solved in the NeqSim rep
 
 # Task Log
 
+### 2026-10-04 — Keep mixed Huron-Vidal/Classical states independent of initialization level
+**Type:** E (Feature)
+**Keywords:** Huron-Vidal, modified NRTL, nonrandomness, init(1), fugacity, component permutation
+**Solution:** `ComponentGENRTLmodifiedHV` resets Classical-pair alpha before the derivative guard;
+`HuronVidalInitializationConsistencyTest` is mandatory in the shared candidate gate.
+**Notes:** A preceding HV pair could leak nonzero alpha into a Classical pair at initialization level 1.
+This changed EOS attraction and fugacity when only the requested derivative level or component ordering changed.
+The regression uses generic methane/water/heptane models with explicit interactions, both SRK and PR,
+an independent scalar excess-energy calculation, component permutations and the all-Classical quadratic limit.
+**Validation:** Two red regressions reproduced the defect; all 12 focused mixing-rule tests pass after the fix.
+Candidate distribution and product sample-library acceptance are separate validation steps.
+
 ### 2026-10-03 — Restore incipient vapor near water-bearing heavy-oil bubble points
 **Type:** C (PVT)
 **Keywords:** SRK, water, incipient vapor, tangent-plane stability, PVTsim, phase-slot ambiguity

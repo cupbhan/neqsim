@@ -36,6 +36,11 @@ For pure phases backed by independent fundamental EOS models, compare molar chem
 4. For a proposed reduction, add focused tests proving unchanged requested quantities and convergence.
 5. For hot paths, report iterations, flash calls, allocations, or benchmark results; avoid flaky wall-clock CI assertions.
 6. Keep `initProperties()` separate from thermodynamic derivative levels.
+7. For mixed Huron-Vidal/Classical pairs, verify fixed-state EOS attraction and fugacity against an independent
+   excess-energy expression and component permutations at levels 1, 2 and 3. A pair's nonrandomness alpha belongs
+   to the base thermodynamic state and must not be assigned only inside a derivative-level guard. Use
+   `HuronVidalInitializationConsistencyTest` as the regression pattern; do not raise the flash initialization level
+   to conceal a state-dependent mixing-rule error.
 
 ## Audit guidance
 
