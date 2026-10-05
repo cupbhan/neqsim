@@ -1,7 +1,7 @@
 ---
 name: neqsim-electrolyte-systems
 description: "Electrolyte and brine chemistry guidance for NeqSim. USE WHEN: modeling produced water, scale prediction, CO2/H2S in aqueous systems, MEG/DEG injection, hydrate inhibitor dosing, or any system with ions, salts, or electrolytes. Covers SystemElectrolyteCPAstatoil setup, ion components, scale risk assessment, and brine handling patterns."
-last_verified: "2026-09-01"
+last_verified: "2026-10-04"
 ---
 
 # Electrolyte Systems Guide
@@ -26,6 +26,47 @@ Guide for modeling electrolyte/brine systems in NeqSim.
 | MEG/DEG + water + gas | `SystemSrkCPAstatoil` | `10` |
 | Pure water + gas | `SystemSrkCPAstatoil` | `10` |
 | Brine + multiple salts | `SystemElectrolyteCPAstatoil` | `10` |
+
+### Preserve the source model when comparing simulators
+
+The table above selects models for a new study. For a same-model benchmark, first identify the source's
+EOS, mixing rule, salt representation, activity model, and property options. An ordinary cubic-EOS/HV
+salt flash and a Pitzer scale calculation are different models even when both accept the same salt name.
+Do not substitute Electrolyte-CPA or Pitzer merely because a source contains salt.
+
+`addSalt("NaCl", n)` adds separate Na+ and Cl- components through COMPSALT. In contrast,
+`addComponent("NaCl", n)` retains molecular formula units; the database component is marked `ion`
+with zero net charge. `hasIons()` and the nonvolatile flash constraint also honor this explicit marker.
+Preserve it when installing custom component parameters. A neutral volatile cubic placeholder loses
+the aqueous restriction. Source critical/HV parameters must override unrelated database defaults.
+
+Record the source's formula-unit basis, ion multiplicity, bound water, and molecular weight separately.
+If independent source probes establish a particle-based EOS calculation, retain a reversible conversion
+back to the source's formula-unit phase fractions and compositions. For one salt with multiplicity `nu`,
+formula-unit feed fraction `zSalt`, and particle phase fraction `xSalt`, the total-feed factor is
+`F = 1 + (nu - 1)*zSalt` and the phase factor is `D = 1 - xSalt*(1 - 1/nu)`.
+Formula-unit beta is `betaParticle*D*F`; salt composition is `xSalt/(nu*D)` and other compositions
+are `xParticle/D`. Consistent particle molecular weights preserve total mass. This bookkeeping identity
+does not establish that a particular EOS uses that particle model: validate it with a controlled source
+perturbation and independent conditions before applying it. Do not extrapolate to other salts or hydrates.
+
+For constrained nonvolatile salt, check aqueous retention and component conservation. Gas/aqueous
+fugacity equality applies to the transferable molecular species, not the excluded salt. Keep a source's
+ordinary-flash solubility limit distinct from an activity-based scale Ksp; a supersaturated point can be
+outside the source model's domain even when a metastable fluid-only numerical flash converges.
+
+### Keep salt density corrections separate from phase equilibrium
+
+`phase.getWaterDensity("kg/m3")` uses the `Water` physical-property method, including a Laliberte-Cooper
+salt correlation and an IF97 pure-water base. This does not establish parity with a source using a
+translated cubic-EOS density base. Verify the salt-free solvent/dissolved-gas density, salt mass fraction,
+partial specific-volume correlation, and reporting mole basis separately. Never silently replace a selected
+EOS base with IF97 or equate the raw salt-bearing cubic density with a salt-corrected density.
+
+For a fixed-composition aqueous EOS reference, use `system.setPhaseType(index, PhaseType.AQUEOUS)`;
+setting only `phase.setType(...)` does not update the system's stored phase-type array. Use `init(1)`
+for EOS volume/fugacity, preserve explicit parameters, and assert unchanged composition. See
+[thermodynamic initialization](../neqsim-thermodynamic-initialization/SKILL.md) for initialization levels.
 
 ## Basic Electrolyte Setup
 
@@ -348,4 +389,4 @@ double pH = co2Brine.getpH();               // ~3.9 for CO2-saturated water
 4. **Multi-phase check**: Always enable for electrolyte systems (`setMultiPhaseCheck(true)`)
 5. **Temperature limits**: Electrolyte models may have narrower valid T range than HC models
 6. **Convergence**: Electrolyte flashes can be slow — be patient or reduce component count
-7. **Missing counter-ions**: Always add both cation and anion (e.g., Na+ with Cl-)
+7. **Missing counter-ions**: For explicit-ion models, add both cation and anion (e.g., Na+ with Cl-)

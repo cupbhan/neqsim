@@ -5,6 +5,18 @@ description: "Chronological record of engineering tasks solved in the NeqSim rep
 
 # Task Log
 
+### 2026-10-04 — Preserve salt mole basis and density-model identity in simulator comparisons
+**Type:** G (Workflow)
+**Keywords:** salt, Huron-Vidal, formula units, ion multiplicity, nonvolatile constraint, aqueous density
+**Solution:** `neqsim-electrolyte-systems` and `neqsim-thermodynamic-initialization` skill guidance.
+**Notes:** Separate molecular salt from explicit-ion inputs and distinguish ordinary cubic/HV flash from
+scale activity models. Validate particle-to-formula-unit accounting through controlled source perturbations;
+check molecular fugacity equality, salt retention and material balance separately. Verify a salt density
+correlation's solvent base before substituting IF97 for a translated EOS. Fixed-composition reference
+initialization must update the system's phase-type slot, not only the phase object's current type.
+**Validation:** Source/API audit and task-local independent model and property-isolation probes.
+No core implementation change or runtime rebuild was required; vendor data remains outside the code repository.
+
 ### 2026-10-04 — Keep mixed Huron-Vidal/Classical states independent of initialization level
 **Type:** E (Feature)
 **Keywords:** Huron-Vidal, modified NRTL, nonrandomness, init(1), fugacity, component permutation

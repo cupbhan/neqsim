@@ -26,6 +26,12 @@ For fixed-T/P cubic-root selection and fugacity/Gibbs equilibrium checks, prefer
 
 For a retained phase outside the active phase count, do not assume a fluid-only flash has synchronized its temperature, pressure, composition, or EOS state. Set the retained phase state explicitly and initialize it at the minimum level required before reading it. This is especially important for inactive solid phases used by freezing or precipitation searches.
 
+For a fixed-composition reference initialized through a system, set the system's phase-type slot with
+`system.setPhaseType(index, PhaseType.AQUEOUS)` before `init(1)`. Changing only `phase.setType(...)`
+leaves the system's stored phase type unchanged and can select the wrong cubic root on initialization.
+Check the resulting type and composition. For salt-free aqueous density references, also preserve the
+source's EOS and salt reporting basis; see [electrolyte systems](../neqsim-electrolyte-systems/SKILL.md).
+
 For pure phases backed by independent fundamental EOS models, compare molar chemical potentials or Gibbs energies directly at the same temperature and pressure. Do not force the comparison through exponentiated fugacity coefficients when a native Gibbs value is available; large reference offsets can overflow `exp(ln phi)` even though the Gibbs residual is finite. Mixture solid-equilibrium paths may still require logarithmic fugacity or activity expressions.
 
 ## Review checklist
