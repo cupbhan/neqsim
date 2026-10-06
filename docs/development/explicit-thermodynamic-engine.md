@@ -16,6 +16,8 @@ Package: `neqsim.thermo.util.explicit`.
 
 | Entry point | Purpose |
 | --- | --- |
+| `ThermodynamicEngine.compositionFlash(String)` / `compositionFlash(JsonNode)` | Independent PR/SRK database fluid from composition and optional user TBP characterization |
+| `ThermodynamicEngine.compositionEnvelope(String)` / `compositionEnvelope(JsonNode)` | Physical envelope of the independently built database fluid, with explicit projection audit |
 | `ThermodynamicEngine.calculate(String)` | Explicit-component grid flash with validated enthalpy, isobaric heat capacity and viscosity; JSON in and JSON out |
 | `ThermodynamicEngine.envelope(String)` / `envelope(JsonNode)` | Real continuation envelope with physical branch labels, projection audit and incomplete-coverage status |
 | `ThermodynamicEngine.calculate(JsonNode, boolean)` | Same grid; `false` selects flash-only evaluation |
@@ -146,6 +148,76 @@ The enhancement policy requires this suite for every shared candidate. Follow
 validate consumers and activate it. Do not overwrite an existing release or silently retarget a
 consumer's fixed version. The original platform `v1.0.0` tag and sealed comparisons remain historical
 baselines; a new consumer run records the new JAR and thin-adapter hashes.
+
+## Independent composition modeling
+
+New application calculations and realtime cross-engine comparisons use `compositionFlash` and
+`compositionEnvelope`. A sample library supplies component identities and mole fractions only.
+NeqSim constructs a new PR or SRK fluid with its own component database, ordinary property methods,
+Classic mixing rule (2) and database binary interactions. A reference simulator independently constructs
+its own fluid from the same composition. Their parameter sets can differ; numerical differences are
+model differences as well as solver differences. The older explicit-parameter entry points remain
+available for deliberately requested parameter-controlled research and historical replay.
+
+Example composition-only request:
+
+```json
+{
+  "eos": "PR",
+  "volumeCorrection": false,
+  "temperatureC": 30,
+  "pressureMPa": 5,
+  "components": [
+    {"id": "gas", "name": "C1", "z": 0.7},
+    {"id": "middle", "name": "nC4", "z": 0.2},
+    {"id": "heavy", "name": "C10", "z": 0.1}
+  ]
+}
+```
+
+Allowed root fields are exactly `eos`, `volumeCorrection`, `temperatureC`, `pressureMPa`,
+`components`, `interactions` and `envelope`. Components accept exactly `id`, `name`, optional
+`formula`, optional `kind`, `z` and optional `tbp`. Aliases include N2, CO2, H2O, MeOH, C1–C3, iC4/nC4,
+iC5/nC5 and normal C6–C20; other unambiguous NeqSim catalog names are also accepted.
+No source critical constants, molar masses, heat capacities, viscosity parameters or mixing-rule
+profiles are accepted. Contradictory identities and duplicate database bindings fail explicitly.
+
+Unknown fractions such as C10-C13 or C7+ require **user-supplied**
+`tbp: {"molarMassKgMol": 0.17, "densityRelative": 0.79}`. NeqSim's TBP characterization then
+generates its own parameters. These two characterization inputs must not be obtained implicitly
+from the reference model. Supplying TBP parameters for a recognized pure database component fails.
+Ions require a separately qualified electrolyte model and are rejected by this cubic composition API.
+`kind` accepts `pure`, `pseudo`, `plus` or `custom`. Declared `pseudo`/`plus` fractions always require
+user TBP data for a positive mole fraction, even when their name is a pure-compound alias such as C7.
+Exactly zero declared fractions are omitted without inventing physical parameters; their original
+indices remain in `omittedComponents` and their zero entries remain in each phase composition.
+Omitted rows have no entry in the actual modeled `components` bindings. Missing kind, `pure` and
+`custom` retain ordinary catalog lookup semantics.
+Optional `interactions` entries are explicit local constant overrides `{i, j, value}` with zero-based
+input indices. All other pairs retain NeqSim database defaults; the complete applied table and its
+source are returned. Returned pair `i`/`j` index the actual modeled bindings, while `sourceI`/`sourceJ`
+index the caller's original rows. Requests and component order are preserved.
+
+Flash output has `ok`, `phases`, component `bindings` in `components`, `diagnostics` and
+`interactions`. Phase values use density kg/m³, viscosity cP, enthalpy kJ/kg, heat capacity
+J/(kg K), molar mass kg/mol and dimensionless compressibility factor. Formation enthalpy is
+disabled, retaining NeqSim's sensible-enthalpy reference at 273.15 K. `propertyAvailability`
+describes each independently evaluated field; missing fields are null, while remaining valid fields
+survive. `unavailableProperties` retains compatibility entries for density, viscosity and enthalpy.
+Property method classes, independent component provenance, EOS, volume correction, material balance
+and fugacity diagnostics accompany results. This is normal NeqSim property evaluation; the old
+explicit thermal profile's 25–150 °C qualification does not establish accuracy bounds for this API.
+
+Composition envelopes use the same envelope settings and physical segment representation described
+above. Positive water and common inhibitors require `hydrocarbonOnly: true`, which removes them
+from a private normalized copy and records all original indices, including zero-feed entries.
+Pure-fluid saturation, water and three-phase boundaries remain explicitly unavailable. Any reference
+scan must apply the returned `feed` projection exactly before independent fluid construction.
+
+`CompositionThermodynamicEngineTest` is required by the shared release gate. It compares PR/SRK
+results to separately assembled NeqSim database systems, audits aliases and zero-row indices,
+requires user TBP inputs, rejects imported parameters, preserves default BIPs, checks aqueous
+property availability, and traces physical dry envelope branches without modifying caller input.
 
 ### rc.7 consumer acceptance
 

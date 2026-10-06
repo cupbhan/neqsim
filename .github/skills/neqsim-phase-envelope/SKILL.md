@@ -337,6 +337,13 @@ Symptoms that a continuation result is truncated:
 
 ## Known Limitations
 
+- Composition-only application comparisons use `ThermodynamicEngine.compositionFlash` and
+  `compositionEnvelope`: independently build both engines from the same sample composition.
+  Do not import the reference engine's critical constants, BIPs or property correlations. Unknown
+  petroleum fractions require explicitly supplied user TBP molar mass and relative density.
+  Preserve `sourceFeed`/`feed` original indices when applying the same dry projection to the reference.
+  Parameter-controlled research through the older explicit API is a separate, deliberately selected mode.
+
 - Stored branch labels can differ from physical branch identity for bubble-first tracing.
 - Cubic-EOS envelope accuracy depends on heavy-end characterization and binary interaction
   parameters; numerical convergence does not prove physical accuracy.

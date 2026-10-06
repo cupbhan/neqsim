@@ -7,12 +7,13 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * Shared, stateless JSON boundary for explicitly parameterized thermodynamics.
+ * Shared, stateless JSON boundary for independent composition modeling and explicit-parameter thermodynamics.
  *
  * <p>
  * No platform files, reference results or simulator installation are used. The explicit profile is opt-in and does not
- * alter the default NeqSim system property methods. Requests and results use degrees Celsius, MPa, kg/m3, J/mol and Pa
- * s as indicated by their field names.
+ * alter the default NeqSim system property methods. Composition entry points use ordinary NeqSim database and
+ * characterization methods, with density in kg/m3, viscosity in cP, enthalpy in kJ/kg and heat capacity in J/(kg K).
+ * Explicit profile results instead use J/mol and Pa s. State inputs use degrees Celsius and absolute MPa.
  *
  * @author NeqSim development team
  * @version 1.0
@@ -55,6 +56,48 @@ public final class ThermodynamicEngine {
   public static ObjectNode envelope(JsonNode input) {
     validate(input);
     return ExplicitEnvelope.calculate(input);
+  }
+
+  /**
+   * Flash an independent NeqSim model built exclusively from composition and user characterization.
+   *
+   * @param request serialized composition request
+   * @return serialized equilibrium and independently sourced phase properties
+   * @throws JsonProcessingException if JSON parsing or serialization fails
+   */
+  public static String compositionFlash(String request) throws JsonProcessingException {
+    return JSON.writeValueAsString(compositionFlash(JSON.readTree(request)));
+  }
+
+  /**
+   * Flash a composition using NeqSim's own database, TBP characterization and property methods.
+   *
+   * @param input composition, local EOS settings and optional user TBP inputs or constant BIPs
+   * @return independently modeled equilibrium with property availability
+   */
+  public static ObjectNode compositionFlash(JsonNode input) {
+    return CompositionFlash.calculate(input);
+  }
+
+  /**
+   * Trace the physical envelope of an independently built NeqSim composition model.
+   *
+   * @param request serialized composition and envelope settings
+   * @return serialized physical segments and projection audit
+   * @throws JsonProcessingException if JSON parsing or serialization fails
+   */
+  public static String compositionEnvelope(String request) throws JsonProcessingException {
+    return JSON.writeValueAsString(compositionEnvelope(JSON.readTree(request)));
+  }
+
+  /**
+   * Trace a composition envelope without accepting reference-engine thermodynamic parameters.
+   *
+   * @param input composition, local EOS settings and envelope settings
+   * @return physical segments, independent parameter sources and explicit coverage limitations
+   */
+  public static ObjectNode compositionEnvelope(JsonNode input) {
+    return CompositionEnvelope.calculate(input);
   }
 
   /**

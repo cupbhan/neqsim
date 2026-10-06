@@ -49,7 +49,11 @@
     "src/main/java/neqsim/thermo/util/explicit/StandardFlash.java",
     "src/test/java/neqsim/thermo/util/explicit/ThermodynamicEngineTest.java",
     "src/test/resources/neqsim/thermo/explicit/migration-baseline.json",
-    "src/test/resources/neqsim/thermo/explicit/example-request.json"
+    "src/test/resources/neqsim/thermo/explicit/example-request.json",
+    "src/main/java/neqsim/thermo/util/explicit/CompositionModel.java",
+    "src/main/java/neqsim/thermo/util/explicit/CompositionFlash.java",
+    "src/main/java/neqsim/thermo/util/explicit/CompositionEnvelope.java",
+    "src/test/java/neqsim/thermo/util/explicit/CompositionThermodynamicEngineTest.java"
   ],
   "frozenResources": {
     "src/main/resources/neqsim/thermo/fluid/heavy-oil-multimedia-nh3-0p1-v1.json": "13412fb89cc1bf901968be8a74368d23890c6c40325331ddf7ed648c93c1fb58",
@@ -133,7 +137,7 @@
     "validateInput",
     "validateResults"
   ],
-  "coreTests": "ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,HeavyOilMultimediaFluidTest,TPmultiflash*Test,HydrocarbonWater*Test,TPflashWaterRich*Test,TPflashSrkWaterRichSeededPhaseSetTest,PTPhaseEnvelopeComponentLimitTest,PTPhaseEnvelopeContinuityTest,PTPhaseEnvelopeMichelsenTest,PTPhaseEnvelopeReferenceEosTest,PTPhaseEnvelopeRobustnessTest,PTPhaseEnvelopeSegmentsTest,SystemThermoReactiveCloneTest,ReactiveElectrolyteStateConsistencyTest,RetainedPhaseBifurcationCorrectorTest,SpecifiedMultiphaseFlashAcceptanceTest,TPflashAqueous*Test,TPflashCpa*Test,TPflashCubicRootSelectionTest,TPflashIncipientPhaseStabilityTest,TPflashIssue3943PumpRegressionTest,TPflashLargeVolatilityHydrocarbonConsistencyTest,TPflashLiquidLiquidConsistencyTest,TPflashMissingAqueousNearBubblePointTest,TPflashNearCricondenbarConsistencyTest,TPflashRichGasBoundaryTest,TPflashSourGasConsistencyTest,TPflashSrkAqueousLowerGibbsRootTest,TPflashTerminalEquilibriumRefinementTest,TPflashTraceAqueousRefinementTest,TPflashTwuSourFluidConservationTest,TPflashWarmStartThreePhaseTest,TPflashWellFluidConsistencyTest,TPflashIonicGasAqueousConsistencyTest,PSFlashEntropyClosureTest,PSFlashWarmStartPolicyTest,StabilityOptimizationInvariantTest,CPAAssociationInitializationTest,PhaseGEInfiniteDilutionTest,SystemThermoSerializationInventoryTest,SystemThermoSetMolarCompositionTest,SystemThermoSulfurPhaseExtractionTest,SystemThermoChemicalReactionStaleStateTest,ClassicSRKTabulatedTest,EosMixingRulesTest,TPflashWaterBearingGasOilBetaRecoveryTest,HuronVidalInitializationConsistencyTest,ThermodynamicEngineTest,ExplicitRealtimePropertiesTest",
+  "coreTests": "ComponentQueryTest,FieldFluidRunnerTest,WaterIF97RunnerTest,HeavyOilMultimediaFluidTest,TPmultiflash*Test,HydrocarbonWater*Test,TPflashWaterRich*Test,TPflashSrkWaterRichSeededPhaseSetTest,PTPhaseEnvelopeComponentLimitTest,PTPhaseEnvelopeContinuityTest,PTPhaseEnvelopeMichelsenTest,PTPhaseEnvelopeReferenceEosTest,PTPhaseEnvelopeRobustnessTest,PTPhaseEnvelopeSegmentsTest,SystemThermoReactiveCloneTest,ReactiveElectrolyteStateConsistencyTest,RetainedPhaseBifurcationCorrectorTest,SpecifiedMultiphaseFlashAcceptanceTest,TPflashAqueous*Test,TPflashCpa*Test,TPflashCubicRootSelectionTest,TPflashIncipientPhaseStabilityTest,TPflashIssue3943PumpRegressionTest,TPflashLargeVolatilityHydrocarbonConsistencyTest,TPflashLiquidLiquidConsistencyTest,TPflashMissingAqueousNearBubblePointTest,TPflashNearCricondenbarConsistencyTest,TPflashRichGasBoundaryTest,TPflashSourGasConsistencyTest,TPflashSrkAqueousLowerGibbsRootTest,TPflashTerminalEquilibriumRefinementTest,TPflashTraceAqueousRefinementTest,TPflashTwuSourFluidConservationTest,TPflashWarmStartThreePhaseTest,TPflashWellFluidConsistencyTest,TPflashIonicGasAqueousConsistencyTest,PSFlashEntropyClosureTest,PSFlashWarmStartPolicyTest,StabilityOptimizationInvariantTest,CPAAssociationInitializationTest,PhaseGEInfiniteDilutionTest,SystemThermoSerializationInventoryTest,SystemThermoSetMolarCompositionTest,SystemThermoSulfurPhaseExtractionTest,SystemThermoChemicalReactionStaleStateTest,ClassicSRKTabulatedTest,EosMixingRulesTest,TPflashWaterBearingGasOilBetaRecoveryTest,HuronVidalInitializationConsistencyTest,ThermodynamicEngineTest,ExplicitRealtimePropertiesTest,CompositionThermodynamicEngineTest",
   "knownUpstreamDisabledTests": {
     "neqsim.thermodynamicoperations.phaseenvelopeops.multicomponentenvelopeops.PTPhaseEnvelopeRobustnessTest#testPureMethane": "Disabled by upstream v3.23.0: pure-component phase-envelope tracing is not supported by this regression. All other selected cases must execute."
   },
@@ -225,7 +229,8 @@
     "neqsim.thermodynamicoperations.flashops.TPflashWaterBearingGasOilBetaRecoveryTest",
     "neqsim.thermo.mixingrule.HuronVidalInitializationConsistencyTest",
     "neqsim.thermo.util.explicit.ThermodynamicEngineTest",
-    "neqsim.thermo.util.explicit.ExplicitRealtimePropertiesTest"
+    "neqsim.thermo.util.explicit.ExplicitRealtimePropertiesTest",
+    "neqsim.thermo.util.explicit.CompositionThermodynamicEngineTest"
   ],
   "excludedMavenTags": [
     "slow",
