@@ -1,0 +1,1607 @@
+{
+  "source": "Synthetic methane/n-butane inputs; fluid-platform v1.0.0 adapter with NeqSim rc.6. These are migration invariants, not independent accuracy claims.",
+  "cases": [
+    {
+      "input": {
+        "schemaVersion": 1,
+        "eos": "SrkPenelouxTemperatureDependent",
+        "mixingRule": "Classic",
+        "grid": [
+          {
+            "temperatureC": 25,
+            "pressureMPa": 1
+          },
+          {
+            "temperatureC": 150,
+            "pressureMPa": 20
+          }
+        ],
+        "components": [
+          {
+            "name": "C1",
+            "engineName": "C1_PC",
+            "templateName": "methane",
+            "componentType": "HC",
+            "sourceComponentId": 1,
+            "z": 0.5,
+            "tcK": 190.56,
+            "pcBar": 45.99,
+            "mwKgMol": 0.016043,
+            "tbK": 111.65,
+            "acentricFactor": 0.0115,
+            "omegaA": 0.42748,
+            "omegaB": 0.08664,
+            "alpha": "Classic",
+            "penelouxLmol": 0,
+            "penelouxTLmolK": 0,
+            "vcCm3Mol": 98.6,
+            "cpJMolK": [
+              30,
+              0,
+              0,
+              0
+            ],
+            "mwWeightKgMol": 0.016043
+          },
+          {
+            "name": "nC4",
+            "engineName": "nC4_PC",
+            "templateName": "n-butane",
+            "componentType": "HC",
+            "sourceComponentId": 2,
+            "z": 0.5,
+            "tcK": 425.12,
+            "pcBar": 37.96,
+            "mwKgMol": 0.058123,
+            "tbK": 272.65,
+            "acentricFactor": 0.2002,
+            "omegaA": 0.42748,
+            "omegaB": 0.08664,
+            "alpha": "Classic",
+            "penelouxLmol": 0,
+            "penelouxTLmolK": 0,
+            "vcCm3Mol": 255,
+            "cpJMolK": [
+              40,
+              0,
+              0,
+              0
+            ],
+            "mwWeightKgMol": 0.058123
+          }
+        ],
+        "interactions": [
+          {
+            "i": 1,
+            "j": 0,
+            "mixingRule": "Classical",
+            "kij": 0,
+            "kijT": 0.0001
+          }
+        ],
+        "sourceBinding": {
+          "matched": true
+        },
+        "nativeProperties": {
+          "enabled": true,
+          "profile": "native-properties-v1"
+        },
+        "propertyAuditVersion": 4,
+        "transport": {
+          "normalFactors": [
+            1,
+            1
+          ],
+          "heavyFactors": [
+            1,
+            1
+          ],
+          "nativeCandidate": "native-csp-mccarty1974-sdktransition95-v3",
+          "waterCandidate": "iapws2008-if97-region1-pure-water-v1"
+        }
+      },
+      "expected": {
+        "points": [
+          {
+            "temperatureC": 25,
+            "pressureMPa": 1,
+            "status": "ok",
+            "phases": [
+              {
+                "type": "gas",
+                "moleFraction": 0.668585210192087,
+                "densityKgM3": 11.803464626635844,
+                "molarMassKgMol": 0.027570418305258346,
+                "z": 0.9422472548637716,
+                "untranslatedZ": 0.9422472548637716,
+                "mixtureA": 0.07376889765637437,
+                "mixtureB": 0.01765734946369033,
+                "composition": [
+                  0.7260594509206668,
+                  0.27394054907933324
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": 356.56300174962104,
+                "viscosityPaS": 0.000010509385042426302,
+                "propertyDiagnostics": {
+                  "type": "gas",
+                  "composition": [
+                    0.7260594509206668,
+                    0.27394054907933324
+                  ],
+                  "densityKgM3": 11.803464626635844,
+                  "z": 0.9422472548637716,
+                  "enthalpyBoundCpJMol": 359.42323030464445,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 750
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 1000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -459.0619069651889,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -461.9072801988169,
+                  "residualHalfStepJMol": -461.90727899130144,
+                  "pfctViscosityPaS": 0.00001043784465756649,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.000010437842981609129,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.000010509385042426302,
+                    "numberAverageGmol": 27.570418305258347,
+                    "weightAverageGmol": 40.344703613569905,
+                    "cspMolarMassGmol": 27.95037172796208,
+                    "heavyMolarMassGmol": 6.7820171493641155,
+                    "mixtureCriticalTemperatureK": 269.6806361806286,
+                    "mixtureCriticalPressureAtm": 45.51246017134533,
+                    "methaneTemperatureK": 210.65950876451484,
+                    "methanePressureAtm": 9.841475643554318,
+                    "methaneInitialDensityMolL": 0.6027571057878316,
+                    "heavyViscosityPaS": 0.000056367829410901895,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.000010509385042426302,
+                    "initialReferenceTemperatureK": 210.67131127630066,
+                    "initialDensityTemperatureK": 210.67131127630066,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              },
+              {
+                "type": "oil",
+                "moleFraction": 0.33141478980791295,
+                "densityKgM3": 523.3589647168573,
+                "molarMassKgMol": 0.05627336695838008,
+                "z": 0.04337447801414712,
+                "untranslatedZ": 0.04337447801414712,
+                "mixtureA": 0.27409625534289134,
+                "mixtureB": 0.03164263350107277,
+                "composition": [
+                  0.04395515783317303,
+                  0.956044842166827
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": -20060.701696496115,
+                "viscosityPaS": 0.0001558318387246272,
+                "propertyDiagnostics": {
+                  "type": "oil",
+                  "composition": [
+                    0.04395515783317303,
+                    0.956044842166827
+                  ],
+                  "densityKgM3": 523.3589647168573,
+                  "z": 0.04337447801414713,
+                  "enthalpyBoundCpJMol": -20050.125822622766,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 750
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 1000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -21039.137033164472,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -21049.0359525763,
+                  "residualHalfStepJMol": -21049.035929149115,
+                  "pfctViscosityPaS": 0.00014820732989839452,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.00014781207135501547,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.0001558318387246272,
+                    "numberAverageGmol": 56.27336695838007,
+                    "weightAverageGmol": 57.59568726769708,
+                    "cspMolarMassGmol": 56.350309514806604,
+                    "heavyMolarMassGmol": 38.33909692851941,
+                    "mixtureCriticalTemperatureK": 417.2162965646817,
+                    "mixtureCriticalPressureAtm": 37.98258952909336,
+                    "methaneTemperatureK": 121.50583138818769,
+                    "methanePressureAtm": 10.522853342277402,
+                    "methaneInitialDensityMolL": 23.995797485084367,
+                    "heavyViscosityPaS": 0.00011518658049230127,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.0001558318387246272,
+                    "initialReferenceTemperatureK": 136.17390719825832,
+                    "initialDensityTemperatureK": 136.17390719825832,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              }
+            ],
+            "maxMaterialBalanceError": 0,
+            "maxLogFugacityResidual": 2.1376234116109916e-12,
+            "parameterAudit": [
+              {
+                "name": "C1_PC",
+                "tcK": 190.56,
+                "pcBar": 45.99,
+                "omegaA": 0.42747999999999997,
+                "omegaB": 0.08664,
+                "alphaAtT": 0.7657343930472058
+              },
+              {
+                "name": "nC4_PC",
+                "tcK": 425.12,
+                "pcBar": 37.96,
+                "omegaA": 0.4274799999999999,
+                "omegaB": 0.08664,
+                "alphaAtT": 1.2725985271198488
+              }
+            ]
+          },
+          {
+            "temperatureC": 150,
+            "pressureMPa": 20,
+            "status": "ok",
+            "phases": [
+              {
+                "type": "gas",
+                "moleFraction": 1,
+                "densityKgM3": 268.61833289553095,
+                "molarMassKgMol": 0.037083000000000005,
+                "z": 0.7847669490095032,
+                "untranslatedZ": 0.7847669490095031,
+                "mixtureA": 0.9700392220825074,
+                "mixtureB": 0.3141412318587419,
+                "composition": [
+                  0.5,
+                  0.5
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": -2260.3672117263823,
+                "viscosityPaS": 0.00003736006854455189,
+                "propertyDiagnostics": {
+                  "type": "gas",
+                  "composition": [
+                    0.5,
+                    0.5
+                  ],
+                  "densityKgM3": 268.618332895531,
+                  "z": 0.784766949009503,
+                  "enthalpyBoundCpJMol": -2204.196874730271,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 4500
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 6000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -7454.196874730271,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -7510.125679853046,
+                  "residualHalfStepJMol": -7510.125670506187,
+                  "pfctViscosityPaS": 0.000034096379124163866,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.000034084960613895775,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.00003736006854455189,
+                    "numberAverageGmol": 37.083,
+                    "weightAverageGmol": 49.02058865248227,
+                    "cspMolarMassGmol": 37.56620156007943,
+                    "heavyMolarMassGmol": 8.026813927796235,
+                    "mixtureCriticalTemperatureK": 324.6985666155725,
+                    "mixtureCriticalPressureAtm": 43.39675298404908,
+                    "methaneTemperatureK": 240.82664449449646,
+                    "methanePressureAtm": 200.1971251874627,
+                    "methaneInitialDensityMolL": 14.476429356105694,
+                    "heavyViscosityPaS": 0.00016810081734351808,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.00003736006854455189,
+                    "initialReferenceTemperatureK": 248.3329356531038,
+                    "initialDensityTemperatureK": 248.3329356531038,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              }
+            ],
+            "maxMaterialBalanceError": 0,
+            "maxLogFugacityResidual": 0,
+            "parameterAudit": [
+              {
+                "name": "C1_PC",
+                "tcK": 190.56,
+                "pcBar": 45.99,
+                "omegaA": 0.42747999999999997,
+                "omegaB": 0.08664,
+                "alphaAtT": 0.5713318361952284
+              },
+              {
+                "name": "nC4_PC",
+                "tcK": 425.12,
+                "pcBar": 37.96,
+                "omegaA": 0.4274799999999999,
+                "omegaB": 0.08664,
+                "alphaAtT": 1.003659444344709
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "schemaVersion": 1,
+        "eos": "SrkPenelouxTemperatureDependent",
+        "mixingRule": "HV",
+        "grid": [
+          {
+            "temperatureC": 25,
+            "pressureMPa": 1
+          },
+          {
+            "temperatureC": 150,
+            "pressureMPa": 20
+          }
+        ],
+        "components": [
+          {
+            "name": "C1",
+            "engineName": "C1_PC",
+            "templateName": "methane",
+            "componentType": "HC",
+            "sourceComponentId": 1,
+            "z": 0.5,
+            "tcK": 190.56,
+            "pcBar": 45.99,
+            "mwKgMol": 0.016043,
+            "tbK": 111.65,
+            "acentricFactor": 0.0115,
+            "omegaA": 0.42748,
+            "omegaB": 0.08664,
+            "alpha": "Classic",
+            "penelouxLmol": 0,
+            "penelouxTLmolK": 0,
+            "vcCm3Mol": 98.6,
+            "cpJMolK": [
+              30,
+              0,
+              0,
+              0
+            ],
+            "mwWeightKgMol": 0.016043
+          },
+          {
+            "name": "nC4",
+            "engineName": "nC4_PC",
+            "templateName": "n-butane",
+            "componentType": "HC",
+            "sourceComponentId": 2,
+            "z": 0.5,
+            "tcK": 425.12,
+            "pcBar": 37.96,
+            "mwKgMol": 0.058123,
+            "tbK": 272.65,
+            "acentricFactor": 0.2002,
+            "omegaA": 0.42748,
+            "omegaB": 0.08664,
+            "alpha": "Classic",
+            "penelouxLmol": 0,
+            "penelouxTLmolK": 0,
+            "vcCm3Mol": 255,
+            "cpJMolK": [
+              40,
+              0,
+              0,
+              0
+            ],
+            "mwWeightKgMol": 0.058123
+          }
+        ],
+        "interactions": [
+          {
+            "i": 1,
+            "j": 0,
+            "mixingRule": "HuronVidal",
+            "kij": 0,
+            "kijT": 0.0001,
+            "alpha": 0.3,
+            "gij": 125,
+            "gji": 200,
+            "gijT": 0.05,
+            "gjiT": 0.1
+          }
+        ],
+        "sourceBinding": {
+          "matched": true
+        },
+        "nativeProperties": {
+          "enabled": true,
+          "profile": "native-properties-v1"
+        },
+        "propertyAuditVersion": 4,
+        "transport": {
+          "normalFactors": [
+            1,
+            1
+          ],
+          "heavyFactors": [
+            1,
+            1
+          ],
+          "nativeCandidate": "native-csp-mccarty1974-sdktransition95-v3",
+          "waterCandidate": "iapws2008-if97-region1-pure-water-v1"
+        }
+      },
+      "expected": {
+        "points": [
+          {
+            "temperatureC": 25,
+            "pressureMPa": 1,
+            "status": "ok",
+            "phases": [
+              {
+                "type": "gas",
+                "moleFraction": 0.6769909645204742,
+                "densityKgM3": 11.725573392297145,
+                "molarMassKgMol": 0.027577356700495454,
+                "z": 0.9487451647284476,
+                "untranslatedZ": 0.9487451647284476,
+                "mixtureA": 0.06786367953479637,
+                "mixtureB": 0.017660730141728923,
+                "composition": [
+                  0.7258945651022943,
+                  0.2741054348977056
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": 389.7547124764272,
+                "viscosityPaS": 0.000010508804539527044,
+                "propertyDiagnostics": {
+                  "type": "gas",
+                  "composition": [
+                    0.7258945651022943,
+                    0.2741054348977056
+                  ],
+                  "densityKgM3": 11.725573392297152,
+                  "z": 0.948745164728447,
+                  "enthalpyBoundCpJMol": 389.76850315176216,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 750
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 1000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -428.7578555726641,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -428.7578570395582,
+                  "residualHalfStepJMol": -428.75785588922594,
+                  "pfctViscosityPaS": 0.00001043725662034907,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.000010437254943079802,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.000010508804539527044,
+                    "numberAverageGmol": 27.57735670049545,
+                    "weightAverageGmol": 40.353212968701705,
+                    "cspMolarMassGmol": 27.957469290863724,
+                    "heavyMolarMassGmol": 6.787634667329195,
+                    "mixtureCriticalTemperatureK": 269.72365189718624,
+                    "mixtureCriticalPressureAtm": 45.51133173937658,
+                    "methaneTemperatureK": 210.62590172798028,
+                    "methanePressureAtm": 9.841719148473981,
+                    "methaneInitialDensityMolL": 0.6028870960841817,
+                    "heavyViscosityPaS": 0.000056375000792412104,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.000010508804539527044,
+                    "initialReferenceTemperatureK": 210.63771326830636,
+                    "initialDensityTemperatureK": 210.63771326830636,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              },
+              {
+                "type": "oil",
+                "moleFraction": 0.32300903547952575,
+                "densityKgM3": 526.7928531003429,
+                "molarMassKgMol": 0.057005769702605034,
+                "z": 0.04365258512956759,
+                "untranslatedZ": 0.04365258512956759,
+                "mixtureA": 0.2800908801030779,
+                "mixtureB": 0.03199949092821486,
+                "composition": [
+                  0.026550149652922433,
+                  0.9734498503470776
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": -20328.39342069539,
+                "viscosityPaS": 0.0001601986884587111,
+                "propertyDiagnostics": {
+                  "type": "oil",
+                  "composition": [
+                    0.026550149652922433,
+                    0.9734498503470776
+                  ],
+                  "densityKgM3": 526.7928531003429,
+                  "z": 0.0436525851295676,
+                  "enthalpyBoundCpJMol": -20327.707686088554,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 750
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 1000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -21321.070148675324,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -21321.07017997417,
+                  "residualHalfStepJMol": -21321.07015653057,
+                  "pfctViscosityPaS": 0.00015299197775041473,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.0001525747455149812,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.0001601986884587111,
+                    "numberAverageGmol": 57.00576970260502,
+                    "weightAverageGmol": 57.80858049905099,
+                    "cspMolarMassGmol": 57.05298894980689,
+                    "heavyMolarMassGmol": 39.24281128613547,
+                    "mixtureCriticalTemperatureK": 420.36438290020243,
+                    "mixtureCriticalPressureAtm": 37.77651894407592,
+                    "methaneTemperatureK": 120.32369880918773,
+                    "methanePressureAtm": 10.556376041765574,
+                    "methaneInitialDensityMolL": 24.10709474337972,
+                    "heavyViscosityPaS": 0.0001175682647111119,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.0001601986884587111,
+                    "initialReferenceTemperatureK": 135.1541081050343,
+                    "initialDensityTemperatureK": 135.1541081050343,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              }
+            ],
+            "maxMaterialBalanceError": 5.551115123125783e-17,
+            "maxLogFugacityResidual": 6.454836665168577e-13,
+            "parameterAudit": [
+              {
+                "name": "C1_PC",
+                "tcK": 190.56,
+                "pcBar": 45.99,
+                "omegaA": 0.42747999999999997,
+                "omegaB": 0.08664,
+                "alphaAtT": 0.7657343930472058
+              },
+              {
+                "name": "nC4_PC",
+                "tcK": 425.12,
+                "pcBar": 37.96,
+                "omegaA": 0.4274799999999999,
+                "omegaB": 0.08664,
+                "alphaAtT": 1.2725985271198488
+              }
+            ]
+          },
+          {
+            "temperatureC": 150,
+            "pressureMPa": 20,
+            "status": "ok",
+            "phases": [
+              {
+                "type": "gas",
+                "moleFraction": 1,
+                "densityKgM3": 254.56265420134974,
+                "molarMassKgMol": 0.037083000000000005,
+                "z": 0.8280978614707073,
+                "untranslatedZ": 0.8280978614707073,
+                "mixtureA": 0.8945141898639861,
+                "mixtureB": 0.3141412318587419,
+                "composition": [
+                  0.5,
+                  0.5
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": -1556.739369092299,
+                "viscosityPaS": 0.00003736006854455189,
+                "propertyDiagnostics": {
+                  "type": "gas",
+                  "composition": [
+                    0.5,
+                    0.5
+                  ],
+                  "densityKgM3": 254.56265420134974,
+                  "z": 0.8280978614707073,
+                  "enthalpyBoundCpJMol": -1556.5204537453728,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 4500
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 6000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -6806.520453745373,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -6806.52046574646,
+                  "residualHalfStepJMol": -6806.520456779756,
+                  "pfctViscosityPaS": 0.000034096379124163866,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.000034084960613895775,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.00003736006854455189,
+                    "numberAverageGmol": 37.083,
+                    "weightAverageGmol": 49.02058865248227,
+                    "cspMolarMassGmol": 37.56620156007943,
+                    "heavyMolarMassGmol": 8.026813927796235,
+                    "mixtureCriticalTemperatureK": 324.6985666155725,
+                    "mixtureCriticalPressureAtm": 43.39675298404908,
+                    "methaneTemperatureK": 240.82664449449646,
+                    "methanePressureAtm": 200.1971251874627,
+                    "methaneInitialDensityMolL": 14.476429356105694,
+                    "heavyViscosityPaS": 0.00016810081734351808,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.00003736006854455189,
+                    "initialReferenceTemperatureK": 248.3329356531038,
+                    "initialDensityTemperatureK": 248.3329356531038,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              }
+            ],
+            "maxMaterialBalanceError": 0,
+            "maxLogFugacityResidual": 0,
+            "parameterAudit": [
+              {
+                "name": "C1_PC",
+                "tcK": 190.56,
+                "pcBar": 45.99,
+                "omegaA": 0.42747999999999997,
+                "omegaB": 0.08664,
+                "alphaAtT": 0.5713318361952284
+              },
+              {
+                "name": "nC4_PC",
+                "tcK": 425.12,
+                "pcBar": 37.96,
+                "omegaA": 0.4274799999999999,
+                "omegaB": 0.08664,
+                "alphaAtT": 1.003659444344709
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "schemaVersion": 1,
+        "eos": "PengRobinson78Peneloux",
+        "mixingRule": "Classic",
+        "grid": [
+          {
+            "temperatureC": 25,
+            "pressureMPa": 1
+          },
+          {
+            "temperatureC": 150,
+            "pressureMPa": 20
+          }
+        ],
+        "components": [
+          {
+            "name": "C1",
+            "engineName": "C1_PC",
+            "templateName": "methane",
+            "componentType": "HC",
+            "sourceComponentId": 1,
+            "z": 0.5,
+            "tcK": 190.56,
+            "pcBar": 45.99,
+            "mwKgMol": 0.016043,
+            "tbK": 111.65,
+            "acentricFactor": 0.0115,
+            "omegaA": 0.45724,
+            "omegaB": 0.0778,
+            "alpha": "Classic",
+            "penelouxLmol": 0,
+            "penelouxTLmolK": 0,
+            "vcCm3Mol": 98.6,
+            "cpJMolK": [
+              30,
+              0,
+              0,
+              0
+            ],
+            "mwWeightKgMol": 0.016043
+          },
+          {
+            "name": "nC4",
+            "engineName": "nC4_PC",
+            "templateName": "n-butane",
+            "componentType": "HC",
+            "sourceComponentId": 2,
+            "z": 0.5,
+            "tcK": 425.12,
+            "pcBar": 37.96,
+            "mwKgMol": 0.058123,
+            "tbK": 272.65,
+            "acentricFactor": 0.2002,
+            "omegaA": 0.45724,
+            "omegaB": 0.0778,
+            "alpha": "Classic",
+            "penelouxLmol": 0,
+            "penelouxTLmolK": 0,
+            "vcCm3Mol": 255,
+            "cpJMolK": [
+              40,
+              0,
+              0,
+              0
+            ],
+            "mwWeightKgMol": 0.058123
+          }
+        ],
+        "interactions": [
+          {
+            "i": 1,
+            "j": 0,
+            "mixingRule": "Classical",
+            "kij": 0,
+            "kijT": 0.0001
+          }
+        ],
+        "sourceBinding": {
+          "matched": true
+        },
+        "nativeProperties": {
+          "enabled": true,
+          "profile": "native-properties-v1"
+        },
+        "propertyAuditVersion": 4,
+        "transport": {
+          "normalFactors": [
+            1,
+            1
+          ],
+          "heavyFactors": [
+            1,
+            1
+          ],
+          "nativeCandidate": "native-csp-mccarty1974-sdktransition95-v3",
+          "waterCandidate": "iapws2008-if97-region1-pure-water-v1"
+        }
+      },
+      "expected": {
+        "points": [
+          {
+            "temperatureC": 25,
+            "pressureMPa": 1,
+            "status": "ok",
+            "phases": [
+              {
+                "type": "gas",
+                "moleFraction": 0.6687915670976462,
+                "densityKgM3": 11.912825648016572,
+                "molarMassKgMol": 0.027601877181519695,
+                "z": 0.934662593059219,
+                "untranslatedZ": 0.934662593059219,
+                "mixtureA": 0.07981172669670951,
+                "mixtureB": 0.015869509620428338,
+                "composition": [
+                  0.725311854051338,
+                  0.274688145948662
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": 336.155182456987,
+                "viscosityPaS": 0.000010506753010671613,
+                "propertyDiagnostics": {
+                  "type": "gas",
+                  "composition": [
+                    0.725311854051338,
+                    0.274688145948662
+                  ],
+                  "densityKgM3": 11.91282564801657,
+                  "z": 0.9346625930592192,
+                  "enthalpyBoundCpJMol": 339.2617166245532,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 750
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 1000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -479.41031986261237,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -482.50133638684827,
+                  "residualHalfStepJMol": -482.50133520266763,
+                  "pfctViscosityPaS": 0.000010435178707990134,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.000010435177026078057,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.000010506753010671613,
+                    "numberAverageGmol": 27.601877181519697,
+                    "weightAverageGmol": 40.38325099101899,
+                    "cspMolarMassGmol": 27.982551283768856,
+                    "heavyMolarMassGmol": 6.807501765972965,
+                    "mixtureCriticalTemperatureK": 269.87563306755845,
+                    "mixtureCriticalPressureAtm": 45.507336935504,
+                    "methaneTemperatureK": 210.50724861636434,
+                    "methanePressureAtm": 9.842581287314271,
+                    "methaneInitialDensityMolL": 0.6033466479207432,
+                    "heavyViscosityPaS": 0.00005640037065599483,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.000010506753010671613,
+                    "initialReferenceTemperatureK": 210.5190920877901,
+                    "initialDensityTemperatureK": 210.5190920877901,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              },
+              {
+                "type": "oil",
+                "moleFraction": 0.3312084329023538,
+                "densityKgM3": 592.2608818199241,
+                "molarMassKgMol": 0.05622772687803244,
+                "z": 0.03829733079242693,
+                "untranslatedZ": 0.03829733079242692,
+                "mixtureA": 0.2834656188083919,
+                "mixtureB": 0.028394122669705694,
+                "composition": [
+                  0.04503976050303145,
+                  0.9549602394969685
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": -19789.390892798518,
+                "viscosityPaS": 0.00015556148266336066,
+                "propertyDiagnostics": {
+                  "type": "oil",
+                  "composition": [
+                    0.04503976050303145,
+                    0.9549602394969685
+                  ],
+                  "densityKgM3": 592.2608818199244,
+                  "z": 0.0382973307924269,
+                  "enthalpyBoundCpJMol": -19777.72379419427,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 750
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 1000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -20766.463854068512,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -20777.462732231343,
+                  "residualHalfStepJMol": -20777.46271012527,
+                  "pfctViscosityPaS": 0.00014791126600444693,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.0001475173535473632,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.00015556148266336066,
+                    "numberAverageGmol": 56.22772687803243,
+                    "weightAverageGmol": 57.58223713470258,
+                    "cspMolarMassGmol": 56.306489234921614,
+                    "heavyMolarMassGmol": 38.282837813455416,
+                    "mixtureCriticalTemperatureK": 417.0193117107574,
+                    "mixtureCriticalPressureAtm": 37.99545439564788,
+                    "methaneTemperatureK": 121.58042553379666,
+                    "methanePressureAtm": 10.520778718560436,
+                    "methaneInitialDensityMolL": 23.988736230412087,
+                    "heavyViscosityPaS": 0.0001150399185027623,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.00015556148266336066,
+                    "initialReferenceTemperatureK": 136.23823083139587,
+                    "initialDensityTemperatureK": 136.23823083139587,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              }
+            ],
+            "maxMaterialBalanceError": 0,
+            "maxLogFugacityResidual": 2.0348167595309165e-12,
+            "parameterAudit": [
+              {
+                "name": "C1_PC",
+                "tcK": 190.56,
+                "pcBar": 45.99,
+                "omegaA": 0.45723999999999987,
+                "omegaB": 0.0778,
+                "alphaAtT": 0.8128566236840392
+              },
+              {
+                "name": "nC4_PC",
+                "tcK": 425.12,
+                "pcBar": 37.96,
+                "omegaA": 0.45724,
+                "omegaB": 0.07780000000000001,
+                "alphaAtT": 1.2306011645078567
+              }
+            ]
+          },
+          {
+            "temperatureC": 150,
+            "pressureMPa": 20,
+            "status": "ok",
+            "phases": [
+              {
+                "type": "gas",
+                "moleFraction": 1,
+                "densityKgM3": 289.7013415374519,
+                "molarMassKgMol": 0.037083000000000005,
+                "z": 0.7276555518718328,
+                "untranslatedZ": 0.7276555518718327,
+                "mixtureA": 1.0706688286213928,
+                "mixtureB": 0.2820889639728777,
+                "composition": [
+                  0.5,
+                  0.5
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": -2411.428426946677,
+                "viscosityPaS": 0.00003736006854455189,
+                "propertyDiagnostics": {
+                  "type": "gas",
+                  "composition": [
+                    0.5,
+                    0.5
+                  ],
+                  "densityKgM3": 289.7013415374519,
+                  "z": 0.7276555518718328,
+                  "enthalpyBoundCpJMol": -2348.7326519052813,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 4500
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 6000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -7598.732651905281,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -7661.182036975558,
+                  "residualHalfStepJMol": -7661.182027686548,
+                  "pfctViscosityPaS": 0.000034096379124163866,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.000034084960613895775,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.00003736006854455189,
+                    "numberAverageGmol": 37.083,
+                    "weightAverageGmol": 49.02058865248227,
+                    "cspMolarMassGmol": 37.56620156007943,
+                    "heavyMolarMassGmol": 8.026813927796235,
+                    "mixtureCriticalTemperatureK": 324.6985666155725,
+                    "mixtureCriticalPressureAtm": 43.39675298404908,
+                    "methaneTemperatureK": 240.82664449449646,
+                    "methanePressureAtm": 200.1971251874627,
+                    "methaneInitialDensityMolL": 14.476429356105694,
+                    "heavyViscosityPaS": 0.00016810081734351808,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.00003736006854455189,
+                    "initialReferenceTemperatureK": 248.3329356531038,
+                    "initialDensityTemperatureK": 248.3329356531038,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              }
+            ],
+            "maxMaterialBalanceError": 0,
+            "maxLogFugacityResidual": 0,
+            "parameterAudit": [
+              {
+                "name": "C1_PC",
+                "tcK": 190.56,
+                "pcBar": 45.99,
+                "omegaA": 0.45723999999999987,
+                "omegaB": 0.0778,
+                "alphaAtT": 0.6523673962589355
+              },
+              {
+                "name": "nC4_PC",
+                "tcK": 425.12,
+                "pcBar": 37.96,
+                "omegaA": 0.45724,
+                "omegaB": 0.07780000000000001,
+                "alphaAtT": 1.003122788860178
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "schemaVersion": 1,
+        "eos": "PengRobinson78Peneloux",
+        "mixingRule": "HV",
+        "grid": [
+          {
+            "temperatureC": 25,
+            "pressureMPa": 1
+          },
+          {
+            "temperatureC": 150,
+            "pressureMPa": 20
+          }
+        ],
+        "components": [
+          {
+            "name": "C1",
+            "engineName": "C1_PC",
+            "templateName": "methane",
+            "componentType": "HC",
+            "sourceComponentId": 1,
+            "z": 0.5,
+            "tcK": 190.56,
+            "pcBar": 45.99,
+            "mwKgMol": 0.016043,
+            "tbK": 111.65,
+            "acentricFactor": 0.0115,
+            "omegaA": 0.45724,
+            "omegaB": 0.0778,
+            "alpha": "Classic",
+            "penelouxLmol": 0,
+            "penelouxTLmolK": 0,
+            "vcCm3Mol": 98.6,
+            "cpJMolK": [
+              30,
+              0,
+              0,
+              0
+            ],
+            "mwWeightKgMol": 0.016043
+          },
+          {
+            "name": "nC4",
+            "engineName": "nC4_PC",
+            "templateName": "n-butane",
+            "componentType": "HC",
+            "sourceComponentId": 2,
+            "z": 0.5,
+            "tcK": 425.12,
+            "pcBar": 37.96,
+            "mwKgMol": 0.058123,
+            "tbK": 272.65,
+            "acentricFactor": 0.2002,
+            "omegaA": 0.45724,
+            "omegaB": 0.0778,
+            "alpha": "Classic",
+            "penelouxLmol": 0,
+            "penelouxTLmolK": 0,
+            "vcCm3Mol": 255,
+            "cpJMolK": [
+              40,
+              0,
+              0,
+              0
+            ],
+            "mwWeightKgMol": 0.058123
+          }
+        ],
+        "interactions": [
+          {
+            "i": 1,
+            "j": 0,
+            "mixingRule": "HuronVidal",
+            "kij": 0,
+            "kijT": 0.0001,
+            "alpha": 0.3,
+            "gij": 125,
+            "gji": 200,
+            "gijT": 0.05,
+            "gjiT": 0.1
+          }
+        ],
+        "sourceBinding": {
+          "matched": true
+        },
+        "nativeProperties": {
+          "enabled": true,
+          "profile": "native-properties-v1"
+        },
+        "propertyAuditVersion": 4,
+        "transport": {
+          "normalFactors": [
+            1,
+            1
+          ],
+          "heavyFactors": [
+            1,
+            1
+          ],
+          "nativeCandidate": "native-csp-mccarty1974-sdktransition95-v3",
+          "waterCandidate": "iapws2008-if97-region1-pure-water-v1"
+        }
+      },
+      "expected": {
+        "points": [
+          {
+            "temperatureC": 25,
+            "pressureMPa": 1,
+            "status": "ok",
+            "phases": [
+              {
+                "type": "gas",
+                "moleFraction": 0.6777364372383871,
+                "densityKgM3": 11.832855546570347,
+                "molarMassKgMol": 0.027613550354270315,
+                "z": 0.9413772839640462,
+                "untranslatedZ": 0.9413772839640462,
+                "mixtureA": 0.07371851636817466,
+                "mixtureB": 0.015874616961286645,
+                "composition": [
+                  0.7250344497559337,
+                  0.2749655502440663
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": 370.4037236042366,
+                "viscosityPaS": 0.00001050577635621456,
+                "propertyDiagnostics": {
+                  "type": "gas",
+                  "composition": [
+                    0.7250344497559337,
+                    0.2749655502440663
+                  ],
+                  "densityKgM3": 11.832855546570347,
+                  "z": 0.9413772839640462,
+                  "enthalpyBoundCpJMol": 370.41814351725316,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 750
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 1000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -448.32324404376345,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -448.3232455092115,
+                  "residualHalfStepJMol": -448.3232443822141,
+                  "pfctViscosityPaS": 0.000010434189626300207,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.000010434187942174324,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.00001050577635621456,
+                    "numberAverageGmol": 27.613550354270313,
+                    "weightAverageGmol": 40.3975320907006,
+                    "cspMolarMassGmol": 27.994491225885202,
+                    "heavyMolarMassGmol": 6.816967665781714,
+                    "mixtureCriticalTemperatureK": 269.94796436645447,
+                    "mixtureCriticalPressureAtm": 45.505431407498996,
+                    "methaneTemperatureK": 210.45082579260418,
+                    "methanePressureAtm": 9.842992582817422,
+                    "methaneInitialDensityMolL": 0.6035655103614508,
+                    "heavyViscosityPaS": 0.00005641246242473473,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.00001050577635621456,
+                    "initialReferenceTemperatureK": 210.46268447823894,
+                    "initialDensityTemperatureK": 210.46268447823894,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              },
+              {
+                "type": "oil",
+                "moleFraction": 0.32226356276161294,
+                "densityKgM3": 596.297561018301,
+                "molarMassKgMol": 0.056997727592869564,
+                "z": 0.038558979975742584,
+                "untranslatedZ": 0.038558979975742584,
+                "mixtureA": 0.2898593307452617,
+                "mixtureB": 0.028731019603883922,
+                "composition": [
+                  0.026741264428004792,
+                  0.9732587355719953
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": -20061.292070773765,
+                "viscosityPaS": 0.00016015044657899404,
+                "propertyDiagnostics": {
+                  "type": "oil",
+                  "composition": [
+                    0.026741264428004792,
+                    0.9732587355719953
+                  ],
+                  "densityKgM3": 596.2975610183013,
+                  "z": 0.03855897997574257,
+                  "enthalpyBoundCpJMol": -20060.61492898109,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 750
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 1000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -21053.92961287409,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -21053.92964282011,
+                  "residualHalfStepJMol": -21053.929620188876,
+                  "pfctViscosityPaS": 0.0001529390948991605,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.0001525221077770815,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.00016015044657899404,
+                    "numberAverageGmol": 56.99772759286956,
+                    "weightAverageGmol": 57.80627254453821,
+                    "cspMolarMassGmol": 57.045278524490044,
+                    "heavyMolarMassGmol": 39.23287908127623,
+                    "mixtureCriticalTemperatureK": 420.3299477439272,
+                    "mixtureCriticalPressureAtm": 37.778777760165426,
+                    "methaneTemperatureK": 120.3365287056728,
+                    "methanePressureAtm": 10.556005618091563,
+                    "methaneInitialDensityMolL": 24.105892843124877,
+                    "heavyViscosityPaS": 0.00011754182319485564,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.00016015044657899404,
+                    "initialReferenceTemperatureK": 135.1651804848607,
+                    "initialDensityTemperatureK": 135.1651804848607,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              }
+            ],
+            "maxMaterialBalanceError": 0,
+            "maxLogFugacityResidual": 6.512568262449048e-13,
+            "parameterAudit": [
+              {
+                "name": "C1_PC",
+                "tcK": 190.56,
+                "pcBar": 45.99,
+                "omegaA": 0.45723999999999987,
+                "omegaB": 0.0778,
+                "alphaAtT": 0.8128566236840392
+              },
+              {
+                "name": "nC4_PC",
+                "tcK": 425.12,
+                "pcBar": 37.96,
+                "omegaA": 0.45724,
+                "omegaB": 0.07780000000000001,
+                "alphaAtT": 1.2306011645078567
+              }
+            ]
+          },
+          {
+            "temperatureC": 150,
+            "pressureMPa": 20,
+            "status": "ok",
+            "phases": [
+              {
+                "type": "gas",
+                "moleFraction": 1,
+                "densityKgM3": 273.3701707381484,
+                "molarMassKgMol": 0.037083000000000005,
+                "z": 0.7711257924931592,
+                "untranslatedZ": 0.771125792493159,
+                "mixtureA": 0.9927120023962158,
+                "mixtureB": 0.2820889639728777,
+                "composition": [
+                  0.5,
+                  0.5
+                ],
+                "properties": {
+                  "enthalpy": {
+                    "status": "available",
+                    "method": "native-enthalpy-sdk-convention-v1",
+                    "referenceTemperatureK": 273.15,
+                    "basis": "explicit-Cp-and-EOS-residual"
+                  },
+                  "viscosity": {
+                    "status": "available",
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "basis": "hydrocarbon-csp",
+                    "mixtureProperty": true
+                  }
+                },
+                "enthalpyJMol": -1696.658254830004,
+                "viscosityPaS": 0.00003736006854455189,
+                "propertyDiagnostics": {
+                  "type": "gas",
+                  "composition": [
+                    0.5,
+                    0.5
+                  ],
+                  "densityKgM3": 273.37017073814843,
+                  "z": 0.771125792493159,
+                  "enthalpyBoundCpJMol": -1696.4348398843576,
+                  "parameterAudit": [
+                    {
+                      "name": "C1",
+                      "idealEnthalpyJMol": 4500
+                    },
+                    {
+                      "name": "nC4",
+                      "idealEnthalpyJMol": 6000
+                    }
+                  ],
+                  "residualAnalyticFrozenKijJMol": -6946.434839884358,
+                  "penelouxEnthalpyCorrectionJMol": 0,
+                  "residualFiniteDifferenceJMol": -6946.434851721419,
+                  "residualHalfStepJMol": -6946.434842754716,
+                  "pfctViscosityPaS": 0.000034096379124163866,
+                  "pfctClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodMod86",
+                  "pfctHeavyOilViscosityPaS": 0.000034084960613895775,
+                  "pfctHeavyOilClass": "neqsim.physicalproperties.methods.commonphasephysicalproperties.viscosity.PFCTViscosityMethodHeavyOil",
+                  "nativeCsp": {
+                    "method": "native-csp-mccarty1974-sdktransition95-v3",
+                    "viscosityPaS": 0.00003736006854455189,
+                    "numberAverageGmol": 37.083,
+                    "weightAverageGmol": 49.02058865248227,
+                    "cspMolarMassGmol": 37.56620156007943,
+                    "heavyMolarMassGmol": 8.026813927796235,
+                    "mixtureCriticalTemperatureK": 324.6985666155725,
+                    "mixtureCriticalPressureAtm": 43.39675298404908,
+                    "methaneTemperatureK": 240.82664449449646,
+                    "methanePressureAtm": 200.1971251874627,
+                    "methaneInitialDensityMolL": 14.476429356105694,
+                    "heavyViscosityPaS": 0.00016810081734351808,
+                    "denseReferenceExtrapolation": false,
+                    "branch": "csp",
+                    "cspViscosityPaS": 0.00003736006854455189,
+                    "initialReferenceTemperatureK": 248.3329356531038,
+                    "initialDensityTemperatureK": 248.3329356531038,
+                    "initialDensityTemperatureFloorK": 100,
+                    "referenceTransitionCenterK": 95,
+                    "referenceTransitionBasis": "SDK pure-methane control hypothesis; not a physical freezing point"
+                  }
+                }
+              }
+            ],
+            "maxMaterialBalanceError": 0,
+            "maxLogFugacityResidual": 0,
+            "parameterAudit": [
+              {
+                "name": "C1_PC",
+                "tcK": 190.56,
+                "pcBar": 45.99,
+                "omegaA": 0.45723999999999987,
+                "omegaB": 0.0778,
+                "alphaAtT": 0.6523673962589355
+              },
+              {
+                "name": "nC4_PC",
+                "tcK": 425.12,
+                "pcBar": 37.96,
+                "omegaA": 0.45724,
+                "omegaB": 0.07780000000000001,
+                "alphaAtT": 1.003122788860178
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

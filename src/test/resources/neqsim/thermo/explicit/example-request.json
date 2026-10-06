@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "eos": "PengRobinson78Peneloux",
+  "mixingRule": "HV",
+  "grid": [
+    {
+      "temperatureC": 25,
+      "pressureMPa": 1
+    },
+    {
+      "temperatureC": 150,
+      "pressureMPa": 20
+    }
+  ],
+  "components": [
+    {
+      "name": "C1",
+      "engineName": "C1_PC",
+      "templateName": "methane",
+      "componentType": "HC",
+      "sourceComponentId": 1,
+      "z": 0.5,
+      "tcK": 190.56,
+      "pcBar": 45.99,
+      "mwKgMol": 0.016043,
+      "tbK": 111.65,
+      "acentricFactor": 0.0115,
+      "omegaA": 0.45724,
+      "omegaB": 0.0778,
+      "alpha": "Classic",
+      "penelouxLmol": 0,
+      "penelouxTLmolK": 0,
+      "vcCm3Mol": 98.6,
+      "cpJMolK": [
+        30,
+        0,
+        0,
+        0
+      ],
+      "mwWeightKgMol": 0.016043
+    },
+    {
+      "name": "nC4",
+      "engineName": "nC4_PC",
+      "templateName": "n-butane",
+      "componentType": "HC",
+      "sourceComponentId": 2,
+      "z": 0.5,
+      "tcK": 425.12,
+      "pcBar": 37.96,
+      "mwKgMol": 0.058123,
+      "tbK": 272.65,
+      "acentricFactor": 0.2002,
+      "omegaA": 0.45724,
+      "omegaB": 0.0778,
+      "alpha": "Classic",
+      "penelouxLmol": 0,
+      "penelouxTLmolK": 0,
+      "vcCm3Mol": 255,
+      "cpJMolK": [
+        40,
+        0,
+        0,
+        0
+      ],
+      "mwWeightKgMol": 0.058123
+    }
+  ],
+  "interactions": [
+    {
+      "i": 1,
+      "j": 0,
+      "mixingRule": "HuronVidal",
+      "kij": 0,
+      "kijT": 0.0001,
+      "alpha": 0.3,
+      "gij": 125,
+      "gji": 200,
+      "gijT": 0.05,
+      "gjiT": 0.1
+    }
+  ],
+  "sourceBinding": {
+    "matched": true
+  },
+  "nativeProperties": {
+    "enabled": true,
+    "profile": "native-properties-v1"
+  },
+  "propertyAuditVersion": 4,
+  "transport": {
+    "normalFactors": [
+      1,
+      1
+    ],
+    "heavyFactors": [
+      1,
+      1
+    ],
+    "nativeCandidate": "native-csp-mccarty1974-sdktransition95-v3",
+    "waterCandidate": "iapws2008-if97-region1-pure-water-v1"
+  }
+}
