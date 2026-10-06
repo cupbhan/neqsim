@@ -16,7 +16,8 @@ Package: `neqsim.thermo.util.explicit`.
 
 | Entry point | Purpose |
 | --- | --- |
-| `ThermodynamicEngine.calculate(String)` | Explicit-component grid flash with validated enthalpy and viscosity; JSON in and JSON out |
+| `ThermodynamicEngine.calculate(String)` | Explicit-component grid flash with validated enthalpy, isobaric heat capacity and viscosity; JSON in and JSON out |
+| `ThermodynamicEngine.envelope(String)` / `envelope(JsonNode)` | Real continuation envelope with physical branch labels, projection audit and incomplete-coverage status |
 | `ThermodynamicEngine.calculate(JsonNode, boolean)` | Same grid; `false` selects flash-only evaluation |
 | `ThermodynamicEngine.diagnose(JsonNode)` | Fixed-composition phase diagnostics, without another equilibrium calculation |
 | `ThermodynamicEngine.standardFlash(String)` | Database-component PR/SRK flash, constant BIPs and PFCT properties |
@@ -67,9 +68,40 @@ as two positive finite numbers each, `nativeCandidate` as
 
 Results contain `points`; each point has `status`, phase compositions and equilibrium diagnostics.
 Phase values are molar fraction, density in kg/m3, molar mass in kg/mol, dimensionless Z,
-enthalpy in J/mol and dynamic viscosity in Pa s. Failed states remain separate from successful
+enthalpy in J/mol, `cpJMolK` in J/(mol K) and dynamic viscosity in Pa s. Failed states remain separate from successful
 neighbors. Unsupported properties are `null` with explicit availability reasons, never zero.
 Requests are not modified; each call constructs its own thermodynamic state.
+
+## Explicit envelope contract
+
+The envelope entry point consumes the same explicit components and complete unordered interaction table.
+It never reads a simulator reference or a sealed curve. Optional `envelope` settings are
+`temperatureMinC` (default -120), `temperatureMaxC` (250), `pressureMinMPa` (0.01),
+`pressureMaxMPa` (40), `maximumIterations` (1200; range 100–5000) and
+`hydrocarbonOnly` (false). Temperature bounds set the initial tracing temperature; the pressure bounds
+are continuation limits. The actual envelope can extend beyond the requested temperature interval.
+Continuation chooses its own steps; a regular-grid `pointCount` is not an accepted setting.
+
+Without explicit projection, positive water, inhibitor or salt fractions produce an unavailable result.
+With `hydrocarbonOnly: true`, these components are removed from a private model and the remaining
+composition is normalized. `sourceFeed`, `feed` and `omittedComponents` preserve source indices,
+names, original fractions and omission reasons. Numerical-zero fractions below $10^{-12}$ are also
+reported; meaningful trace components are retained. A PVTsim comparison must apply the **same**
+projection to its independently calculated reference, rather than comparing dry and wet envelopes.
+
+Results contain contiguous `segments` with physical `dew`/`bubble` types and arrays of
+`{temperatureC, pressureMPa}` points. Characteristic points, termination reasons, iteration limits,
+engine/model provenance and unavailable water/three-phase boundaries are explicit. `status: partial`
+retains calculated points while identifying incomplete continuation. A complete result requires both
+physical sides, a critical point, normal termination, and independent flashes above the reported
+cricondentherm without a phase split. This check can detect truncation; it is not a proof of global
+stability. No schematic or interpolated substitute curve is returned when calculation fails.
+
+A projected HV model whose remaining pairs are all Classic uses the exactly equivalent Classic
+submodel. Classic linear temperature-dependent interactions are bound to the continuation evaluator.
+HV interaction terms with nonzero Classic `kijT` remain explicitly unavailable for envelopes; they
+are never silently frozen at the initial temperature. Single-component vapor-pressure curves and
+aqueous/three-phase boundaries are outside this entry point's current supported coverage.
 
 ## Algorithms and qualification limits
 
@@ -81,6 +113,11 @@ Requests are not modified; each call constructs its own thermodynamic state.
   temperature-dependent EOS residual derivatives and volume-translation enthalpy correction.
   `native-enthalpy-sdk-convention-v1` retains the 273.15 K reference and compatibility gas constant;
   derivative step agreement and density/Cp closure remain mandatory.
+- `ExplicitHeatCapacity`: the derivative of the qualified phase enthalpy with temperature at fixed
+  composition and pressure. Independent 0.05 K and 0.025 K steps must agree; root changes,
+  negative/nonfinite Cp and failed enthalpy checks produce unavailable metadata. One-sided
+  second-order differences are used at the thermal domain edges. This is phase Cp, not the
+  derivative of total equilibrium enthalpy across changing phase fractions.
 - `CspViscosity`: McCarty (1974), *Cryogenics* 14, 276–280, table 2; Hanley et al. (1977),
   *JPCRD* 6, 597–610, tables 1, 2 and 4. Explicit mixture/heavy-oil equations follow the recorded
   PVTsim Nova 2026 method-manual section 11.1. The 95 K transition is a separately identified SDK
@@ -99,6 +136,10 @@ domain or constitute a new full simulator comparison.
 PR/SRK × Classic/HV migration results, external-consumer JSON calls, repeatability and failure
 isolation. The synthetic snapshots are regression evidence, not independent accuracy evidence.
 Private platform datasets remain outside this repository and are used separately for consumer parity.
+
+`ExplicitRealtimePropertiesTest` compares the new Cp derivative to independent analytic constant-kij
+EOS derivatives, covers HV and temperature-dependent interactions and thermal domain edges, and
+checks real envelope branches, extrema, unchanged inputs, explicit dry projection and missing coverage.
 
 The enhancement policy requires this suite for every shared candidate. Follow
 [shared runtime management](shared-thermo-repository.md) to build a clean immutable candidate,

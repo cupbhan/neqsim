@@ -61,6 +61,7 @@ public final class ExplicitPropertyCalculator {
     ObjectNode info = phase.putObject("properties");
     phase.putNull("enthalpyJMol");
     phase.putNull("viscosityPaS");
+    phase.putNull("cpJMolK");
     String blocked = null;
     for (JsonNode c : input.path("components"))
       if (c.has("saltIonNumber"))
@@ -73,6 +74,7 @@ public final class ExplicitPropertyCalculator {
     if (blocked != null) {
       missing(info, "enthalpy", blocked);
       missing(info, "viscosity", blocked);
+      missing(info, "cp", blocked);
       return;
     }
     try {
@@ -98,8 +100,11 @@ public final class ExplicitPropertyCalculator {
         phase.put("enthalpyJMol", h);
         info.putObject("enthalpy").put("status", "available").put("method", ENTHALPY)
             .put("referenceTemperatureK", 273.15).put("basis", "explicit-Cp-and-EOS-residual");
-      } else
+        ExplicitHeatCapacity.attach(input, point, phase, info);
+      } else {
         missing(info, "enthalpy", "ENTHALPY_CHECK_FAILED");
+        missing(info, "cp", "ENTHALPY_CHECK_FAILED");
+      }
       boolean water = phase.path("type").asText().equals("aqueous");
       JsonNode viscosity = values.path(water ? "waterBaseline" : "nativeCsp");
       String expected = input.path("transport").path(water ? "waterCandidate" : "nativeCandidate").asText();
@@ -115,8 +120,10 @@ public final class ExplicitPropertyCalculator {
     } catch (Exception error) {
       phase.putNull("enthalpyJMol");
       phase.putNull("viscosityPaS");
+      phase.putNull("cpJMolK");
       missing(info, "enthalpy", "PROPERTY_CALCULATION_FAILED");
       missing(info, "viscosity", "PROPERTY_CALCULATION_FAILED");
+      missing(info, "cp", "PROPERTY_CALCULATION_FAILED");
       phase.put("propertyError", error.toString());
     }
   }

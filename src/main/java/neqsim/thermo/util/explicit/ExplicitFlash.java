@@ -134,6 +134,20 @@ public final class ExplicitFlash {
   public static ObjectNode calculateEos(JsonNode input, JsonNode point, boolean fixedAqueous) {
     double t = number(point, "temperatureC") + 273.15;
     double p = number(point, "pressureMPa") * 10;
+    JsonNode components = input.path("components");
+    SystemInterface fluid = system(input, t, p);
+    return flashSystem(input, point, fixedAqueous, t, p, components, fluid);
+  }
+
+  /**
+   * Allocate an isolated EOS system retaining the supplied component and interaction parameters.
+   *
+   * @param input explicit component model
+   * @param t temperature in kelvin
+   * @param p pressure in bara
+   * @return configured system before the equilibrium operation
+   */
+  static SystemInterface system(JsonNode input, double t, double p) {
     String eos = input.path("eos").asText();
     boolean srk = eos.startsWith("Srk");
     JsonNode components = input.path("components");
@@ -221,6 +235,24 @@ public final class ExplicitFlash {
         }
       }
     }
+    return fluid;
+  }
+
+  /**
+   * Flash a configured system and audit its phase equilibrium.
+   *
+   * @param input explicit component model
+   * @param point requested state
+   * @param fixedAqueous whether to retain the supplied aqueous composition
+   * @param t temperature in kelvin
+   * @param p pressure in bara
+   * @param components explicit components in feed order
+   * @param fluid isolated configured EOS system
+   * @return equilibrium result with balance diagnostics
+   */
+  private static ObjectNode flashSystem(JsonNode input, JsonNode point, boolean fixedAqueous, double t, double p,
+      JsonNode components, SystemInterface fluid) {
+    boolean useHv = input.path("mixingRule").asText().equals("HV");
     if (fixedAqueous) {
       fluid.setNumberOfPhases(1);
       fluid.setBeta(0, 1.0);

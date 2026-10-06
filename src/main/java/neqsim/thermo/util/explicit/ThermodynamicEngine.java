@@ -36,6 +36,28 @@ public final class ThermodynamicEngine {
   }
 
   /**
+   * Trace a physically classified phase envelope with explicit model provenance.
+   *
+   * @param request serialized explicit model and envelope settings
+   * @return serialized physical segments, projection audit and availability
+   * @throws JsonProcessingException if request or response serialization fails
+   */
+  public static String envelope(String request) throws JsonProcessingException {
+    return JSON.writeValueAsString(envelope(JSON.readTree(request)));
+  }
+
+  /**
+   * Trace an explicit model on a private clone, with opt-in dry hydrocarbon projection.
+   *
+   * @param input explicit components, interactions and optional envelope settings
+   * @return physically classified segments and coverage diagnostics
+   */
+  public static ObjectNode envelope(JsonNode input) {
+    validate(input);
+    return ExplicitEnvelope.calculate(input);
+  }
+
+  /**
    * Calculate a grid without reading or modifying the caller's model state.
    *
    * @param input explicit components, interactions, grid and optional property profile

@@ -269,6 +269,13 @@ Symptoms that a continuation result is truncated:
 
 ## Explicit specified-phase research APIs
 
+- JSON consumers can use `ThermodynamicEngine.envelope(JsonNode)` with the explicit component model.
+  It delegates `TwoHydrocarbonPhaseEnvelopeSolver`, retains physical segment labels and reports
+  incomplete continuation. Wet-source dry projection must be explicit (`envelope.hydrocarbonOnly`),
+  audited through source indices and applied identically to the comparison engine. Water and
+  three-phase boundaries remain unavailable in this consumer entry point; never call its dry
+  projection a wet-feed envelope. See `docs/development/explicit-thermodynamic-engine.md`.
+
 - `SpecifiedMultiphaseFlashSolver` and `RetainedPhaseBifurcationCorrector` separate numerical roots from physical
   acceptance. `isConverged()` is insufficient: call `validateEquilibrium` or `toValidatedThermodynamicSystem`
   before consuming a finite-phase equilibrium.

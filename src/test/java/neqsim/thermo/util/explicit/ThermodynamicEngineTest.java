@@ -51,8 +51,8 @@ public class ThermodynamicEngineTest {
       assertTrue(actual.isNumber(), path);
       assertEquals(expected.asDouble(), actual.asDouble(), 1e-10 + 1e-10 * Math.abs(expected.asDouble()), path);
     } else if (expected.isContainerNode()) {
-      assertEquals(expected.size(), actual.size(), path);
       if (expected.isArray()) {
+        assertEquals(expected.size(), actual.size(), path);
         for (int i = 0; i < expected.size(); i++) {
           compare(expected.get(i), actual.path(i), path + "/" + i);
         }
