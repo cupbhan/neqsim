@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "version": "3.23.0-cupbhan.1-rc.5",
+  "version": "3.23.0-cupbhan.1-rc.7",
   "status": "tested-candidate",
-  "commit": "2e842096d6c402afeb37d78cc4e2d9d71f9ae6cc",
-  "jar": "runtime/releases/3.23.0-cupbhan.1-rc.5/neqsim-mcp-server-3.23.0-cupbhan.1-rc.5-runner.jar",
-  "sha256": "7c9af9bfee60f40f6cf48694c0e3b9426b3491b4c9c70df5be000ddbb1e0e7a7",
-  "source": "runtime/releases/3.23.0-cupbhan.1-rc.5/SOURCE.json"
+  "commit": "d2869c34a0269b40ff50cdd9f20374e0e01a2fc8",
+  "jar": "runtime/releases/3.23.0-cupbhan.1-rc.7/neqsim-mcp-server-3.23.0-cupbhan.1-rc.7-runner.jar",
+  "sha256": "5344382fbdfb9a9183a4c26a6d7100fd68630b31552841ef2675ea88062cd4ec",
+  "source": "runtime/releases/3.23.0-cupbhan.1-rc.7/SOURCE.json"
 }

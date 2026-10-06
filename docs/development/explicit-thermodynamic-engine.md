@@ -105,3 +105,18 @@ The enhancement policy requires this suite for every shared candidate. Follow
 validate consumers and activate it. Do not overwrite an existing release or silently retarget a
 consumer's fixed version. The original platform `v1.0.0` tag and sealed comparisons remain historical
 baselines; a new consumer run records the new JAR and thin-adapter hashes.
+
+### rc.7 consumer acceptance
+
+`3.23.0-cupbhan.1-rc.7` was built from clean commit
+`d2869c34a0269b40ff50cdd9f20374e0e01a2fc8` and selected in the shared runtime lock after
+consumer validation. The release gate checked 485 core tests (484 passed, one pre-existing upstream
+disabled pure-component envelope test), four MCP tests and a real STDIO runtime smoke test.
+Spotless, Checkstyle, Javadoc and isolated Java 8 source compilation also passed.
+
+The platform replayed 11 sealed production records / 99 states using the released JAR. All 19,836
+numeric comparisons across 199 phases were identical to the original implementation: 98 successful
+states and one expected NaCl supersaturation failure. This is migration parity, not a new SDK run or
+an expansion of the qualification domain. Private models and phase data remain in the consumer's
+ignored local-data directory. The consumer report SHA-256 is
+`ec8a47fcd153fcf518248ac157260307f746904eb303a642785c4fb5f8d1ad0b`.
