@@ -14,7 +14,7 @@ import java.util.List;
 public final class CspViscosity {
   /**
    * Copy the published dilute-reference coefficients.
-   * 
+   *
    * @return independent coefficient array
    */
   public static double[] diluteCoefficients() {
@@ -23,7 +23,7 @@ public final class CspViscosity {
 
   /**
    * Copy the high-temperature dense-reference coefficients.
-   * 
+   *
    * @return independent coefficient array
    */
   public static double[] highDensityCoefficients() {
@@ -32,7 +32,7 @@ public final class CspViscosity {
 
   /**
    * Copy the low-temperature dense-reference coefficients.
-   * 
+   *
    * @return independent coefficient array
    */
   public static double[] lowDensityCoefficients() {
