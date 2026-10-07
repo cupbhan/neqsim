@@ -73,6 +73,18 @@
 - Separator/vessel geometry and internals go through `SeparatorMechanicalDesign`, not `Separator`.
 - New equipment extends `ProcessEquipmentBaseClass`, implements `validateSetup()` with remediation hints.
 
+## Independent raw-data characterization
+
+- Sample libraries provide declared raw composition, amounts and measured heavy-end inputs. Distinguish these from
+  previously generated or fitted EOS, interaction and transport parameters.
+- NeqSim must independently generate missing fraction properties, characterize and calculate with its own methods.
+  Never fill gaps with PVTsim calculation or characterization outputs. PVTsim comparison likewise uses its own fresh
+  model from the same raw inputs, including its own conversion of mass-basis composition.
+- Keep characterization, splitting, lumping and physics in reusable public NeqSim APIs. Consumer platforms handle UI,
+  source/unit adaptation and orchestration; standalone NeqSim calculation must not require PVTsim or an `.nfdb` file.
+- Record method choices, generated-parameter provenance and closure checks. An unavailable interface or an incompatible
+  characterization assumption is not automatically evidence that raw data is absent. Do not substitute historical results.
+
 ## Solving engineering tasks
 
 Use the `solve-task` agent; its workflow is the `neqsim-task-workflow` skill (load per phase).

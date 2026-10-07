@@ -40,6 +40,35 @@ public class PlusFractionModel implements java.io.Serializable {
     this.system = system;
   }
 
+  /**
+   * Read the existing Pedersen single-carbon-number molar-mass correlation.
+   *
+   * @param carbonNumber carbon number from 6 through 200
+   * @return molar mass in kg/mol
+   */
+  public static double scnMolarMassKgMol(int carbonNumber) {
+    if (carbonNumber < 6 || carbonNumber > 200) {
+      throw new IllegalArgumentException("SCN carbon number must lie between 6 and 200");
+    }
+    PlusFractionModel selector = new PlusFractionModel(null);
+    return selector.new PedersenPlusModel().PVTsimMolarMass[carbonNumber - 6] / 1000.0;
+  }
+
+  /**
+   * Read the existing Pedersen reference density used to shape an SCN density curve. The caller must constrain the
+   * generated curve to the supplied bulk density.
+   *
+   * @param carbonNumber carbon number from 6 through 79
+   * @return reference liquid density in g/cm3
+   */
+  public static double scnReferenceDensity(int carbonNumber) {
+    if (carbonNumber < 6 || carbonNumber > 79) {
+      throw new IllegalArgumentException("Reference-density carbon number must lie between 6 and 79");
+    }
+    PlusFractionModel selector = new PlusFractionModel(null);
+    return selector.new PedersenPlusModel().PVTsimDensities[carbonNumber - 6];
+  }
+
   class PedersenPlusModel implements PlusFractionModelInterface, Cloneable {
     /** Serialization version UID. */
     private static final long serialVersionUID = 1000;

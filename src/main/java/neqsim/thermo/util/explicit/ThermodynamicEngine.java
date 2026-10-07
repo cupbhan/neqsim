@@ -76,7 +76,37 @@ public final class ThermodynamicEngine {
    * @return independently modeled equilibrium with property availability
    */
   public static ObjectNode compositionFlash(JsonNode input) {
+    if (input.has("characterization")) {
+      ObjectNode characterized = compositionCharacterize(input);
+      if (!characterized.path("ok").asBoolean()) {
+        return characterized;
+      }
+      ObjectNode result = CompositionFlash.calculate(characterized.path("effectiveInput"));
+      result.set("characterization", characterized.path("characterization"));
+      return result;
+    }
     return CompositionFlash.calculate(input);
+  }
+
+  /**
+   * Independently characterize measured SCN yields using a bulk heavy-end molar mass and density.
+   *
+   * @param request serialized raw assay with declared mole or mass basis
+   * @return serialized effective mole-basis input and closure diagnostics
+   * @throws JsonProcessingException if JSON parsing or serialization fails
+   */
+  public static String compositionCharacterize(String request) throws JsonProcessingException {
+    return JSON.writeValueAsString(compositionCharacterize(JSON.readTree(request)));
+  }
+
+  /**
+   * Resolve an SCN assay using NeqSim correlations and catalog values without any other engine installation.
+   *
+   * @param input raw assay with carbon-number yields and bulk input measurements
+   * @return generated effective input and explicit bulk closure or a structured failure
+   */
+  public static ObjectNode compositionCharacterize(JsonNode input) {
+    return CompositionCharacterization.calculate(input);
   }
 
   /**
@@ -97,6 +127,15 @@ public final class ThermodynamicEngine {
    * @return physical segments, independent parameter sources and explicit coverage limitations
    */
   public static ObjectNode compositionEnvelope(JsonNode input) {
+    if (input.has("characterization")) {
+      ObjectNode characterized = compositionCharacterize(input);
+      if (!characterized.path("ok").asBoolean()) {
+        return characterized;
+      }
+      ObjectNode result = CompositionEnvelope.calculate(characterized.path("effectiveInput"));
+      result.set("characterization", characterized.path("characterization"));
+      return result;
+    }
     return CompositionEnvelope.calculate(input);
   }
 
