@@ -108,4 +108,29 @@ class ElectrolyteCompositionTest {
     input.put("eos", "SRK");
     assertFalse(ThermodynamicEngine.compositionFlash(input).path("ok").asBoolean());
   }
+
+  /**
+   * Trace nitrogen and carbon dioxide must retain finite solvent derivatives and neutral fugacity closure.
+   */
+  @Test
+  void nitrogenCarbonDioxideBrinePassesIndependentEquilibriumAudit() {
+    for (double[] state : new double[][] {{80, 20}, {25, 1}}) {
+      ObjectNode input = request(state[0], state[1]);
+      ((ObjectNode) input.path("components").get(2)).put("z", 0.484);
+      ArrayNode rows = (ArrayNode) input.path("components");
+      rows.addObject().put("id", "nitrogen-feed").put("name", "N2").put("z", 0.004);
+      rows.addObject().put("id", "carbon-dioxide-feed").put("name", "CO2").put("z", 0.002);
+      ObjectNode result = ThermodynamicEngine.compositionFlash(input);
+      assertTrue(result.path("ok").asBoolean(), result.toString());
+      assertTrue(result.path("diagnostics").path("maxLogFugacityResidual").asDouble() < 1e-6);
+      assertTrue(result.path("diagnostics").path("maxFormulaUnitBalanceResidual").asDouble() < 1e-7);
+      assertEquals(2, result.path("phases").size());
+      SystemInterface catalog = new SystemElectrolyteCPAstatoil();
+      catalog.addComponent("nitrogen", 1);
+      for (double temperature : new double[] {70.15, 298.15, 353.15}) {
+        assertEquals(1.454, catalog.getPhase(0).getComponent(0).getDielectricConstant(temperature), 1e-12);
+        assertEquals(0, catalog.getPhase(0).getComponent(0).getDielectricConstantdT(temperature), 1e-12);
+      }
+    }
+  }
 }

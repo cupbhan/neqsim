@@ -298,3 +298,14 @@ assembled native systems, checks formula-unit conservation and input immutabilit
 and rejects imported salt parameters or incompatible input. It is required by the
 shared release gate. Comparing this model with a separately built SRK/HV simulator
 model must explicitly identify the different polar and electrolyte methods.
+
+The nitrogen catalog formerly contained a water-like polynomial with erroneous high-order
+coefficients, giving permittivities above one million at ordinary gas/brine temperatures.
+This caused the Furst/CPA Born and long-range derivatives to underflow the aqueous nitrogen
+fugacity and prevented neutral equilibrium closure. The catalog now uses a constant
+liquid-reference solute permittivity of 1.454, from the nitrogen entry at -203 degrees Celsius
+in [NBS Circular 514](https://nvlpubs.nist.gov/nistpubs/Legacy/circ/nbscircular514.pdf).
+This is a nonpolar solute approximation in the existing electrolyte mixing model, not a
+temperature/pressure correlation for pure nitrogen permittivity. No simulator parameters
+or brine comparison results were fitted. The regression includes dilute nitrogen and
+carbon dioxide at both flash states and checks the reference value and derivatives.

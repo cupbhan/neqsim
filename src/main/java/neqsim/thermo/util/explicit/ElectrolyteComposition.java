@@ -157,6 +157,11 @@ final class ElectrolyteComposition {
           }
         }
         binding.put("molarMassKgMol", mass).put("engineMolarMass", mass * 1000);
+        if ("nitrogen".equals(binding.path("nativeName").asText())) {
+          binding.put("solutePermittivityModel", "constant-liquid-reference-approximation")
+              .put("solutePermittivityReferenceTemperatureK", 70.15)
+              .put("solutePermittivitySource", "https://nvlpubs.nist.gov/nistpubs/Legacy/circ/nbscircular514.pdf");
+        }
       }
       ObjectNode diagnostics = (ObjectNode) result.path("diagnostics");
       double balance = 0;
