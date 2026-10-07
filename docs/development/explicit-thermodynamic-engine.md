@@ -16,6 +16,7 @@ Package: `neqsim.thermo.util.explicit`.
 
 | Entry point | Purpose |
 | --- | --- |
+| `ThermodynamicEngine.compositionCharacterize(String)` / `compositionCharacterize(JsonNode)` | Independent raw SCN/GC characterization, effective mole-basis input and bulk-closure diagnostics |
 | `ThermodynamicEngine.compositionFlash(String)` / `compositionFlash(JsonNode)` | Independent PR/SRK database fluid from composition and optional user TBP characterization |
 | `ThermodynamicEngine.compositionEnvelope(String)` / `compositionEnvelope(JsonNode)` | Physical envelope of the independently built database fluid, with explicit projection audit |
 | `ThermodynamicEngine.calculate(String)` | Explicit-component grid flash with validated enthalpy, isobaric heat capacity and viscosity; JSON in and JSON out |
@@ -233,3 +234,39 @@ states and one expected NaCl supersaturation failure. This is migration parity, 
 an expansion of the qualification domain. Private models and phase data remain in the consumer's
 ignored local-data directory. The consumer report SHA-256 is
 `ec8a47fcd153fcf518248ac157260307f746904eb303a642785c4fb5f8d1ad0b`.
+
+## Independent raw SCN and GC characterization
+
+The composition entry points also accept a declared raw heavy-end assay. No source database,
+PVTsim installation or generated PVTsim fraction properties are required. `compositionCharacterize`
+returns `effectiveInput` and a `characterization` audit; `compositionFlash` and
+`compositionEnvelope` independently resolve the same raw input before calculating and return the audit.
+
+| Field | Meaning |
+| --- | --- |
+| `eos` | `PR` or `SRK`; pure-component and EOS data come from NeqSim |
+| `basis` | `mole` or `mass`; ordered component `z` values sum to one on this raw basis |
+| `components` | Identities, raw fractions, `pure`/`pseudo` kinds and identifiable carbon numbers; up to 100 components |
+| `characterization.method` | `pedersen-scn-bulk-closure` |
+| `characterization.startCarbonNumber` / `terminalCarbonNumber` | Declared SCN heavy region, C7 through C79; the terminal entry is aggregate Cn+ |
+| `characterization.molarMassKgMol` | Measured bulk heavy-end molar mass, kg/mol |
+| `characterization.densityRelative` | Measured bulk standard liquid density, numerically g/cm3 |
+| `characterization.includeDefinedHeavy` | Include NeqSim's independently resolved defined heavy components in GC bulk constraints |
+| `characterization.molarMassClosure` | Optional `scale-unmeasured` for the declared GC case; otherwise close with the terminal aggregate |
+| `components[].tbp` | Measured pre-plus fraction `molarMassKgMol` and `densityRelative`; these inputs are retained |
+
+NeqSim generates missing SCN molar masses and densities from its own correlations, applies the bulk
+constraints and obtains thermodynamic parameters from its TBP method. Raw fractions are preserved.
+Mass-basis amounts are converted with NeqSim's own resolved molar masses. Foreign critical properties,
+interaction coefficients, transport parameters and undeclared fields are rejected.
+
+The terminal Cn+ is currently one aggregate TBP fraction; there is no terminal-distribution
+extrapolation. A reference engine may independently extrapolate and lump, so equal raw inputs do not
+imply equal characterized component lists or mole fractions. Each engine must calculate its envelope
+with its own characterized feed. The audit records the terminal convention, generated cuts, bulk
+molar-mass/density closure residuals and `sourceParametersUsed: false`.
+
+Synthetic standalone verification is in `CompositionCharacterizationTest`: both input bases,
+raw and resolved PR/SRK flashes, retained measured cuts, defined GC components, bulk closure,
+physical lower bounds, rejected foreign parameters and input immutability. These five tests are
+required by the shared-distribution regression policy.
