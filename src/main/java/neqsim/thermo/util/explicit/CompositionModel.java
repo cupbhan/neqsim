@@ -14,6 +14,7 @@ import neqsim.thermo.component.ComponentInterface;
 import neqsim.thermo.mixingrule.EosMixingRulesInterface;
 import neqsim.thermo.phase.PhaseEosInterface;
 import neqsim.thermo.system.SystemInterface;
+import neqsim.thermo.system.SystemElectrolyteCPAstatoil;
 import neqsim.thermo.system.SystemPrEos;
 import neqsim.thermo.system.SystemSrkEos;
 import neqsim.util.database.NeqSimDataBase;
@@ -47,8 +48,10 @@ final class CompositionModel {
     validate(input);
     omitted = ExplicitFlash.JSON.createArrayNode();
     this.input = activeInput(input, omitted);
-    fluid = "PR".equals(input.path("eos").asText()) ? new SystemPrEos(temperatureK, pressureBar)
-        : new SystemSrkEos(temperatureK, pressureBar);
+    fluid = "ELECTROLYTE-CPA".equals(input.path("eos").asText())
+        ? new SystemElectrolyteCPAstatoil(temperatureK, pressureBar)
+        : "PR".equals(input.path("eos").asText()) ? new SystemPrEos(temperatureK, pressureBar)
+            : new SystemSrkEos(temperatureK, pressureBar);
     fluid.setUseIdealGasEnthalpyOfFormation(false);
     bindings = ExplicitFlash.JSON.createArrayNode();
     Set<String> nativeNames = new HashSet<String>();
@@ -93,7 +96,7 @@ final class CompositionModel {
     if (hasTbp) {
       fluid.createDatabase(true);
     }
-    fluid.setMixingRule(2);
+    fluid.setMixingRule("ELECTROLYTE-CPA".equals(input.path("eos").asText()) ? 10 : 2);
     fluid.useVolumeCorrection(input.path("volumeCorrection").asBoolean(false));
     fluid.setMultiPhaseCheck(true);
     fluid.init(0);
@@ -109,7 +112,12 @@ final class CompositionModel {
     }
     for (int i = 0; i < bindings.size(); i++) {
       ComponentInterface component = fluid.getPhase(0).getComponent(i);
-      require(!component.isIsIon(), "ELECTROLYTE_MODEL_REQUIRED", "Ionic components require an electrolyte model");
+      require(!component.isIsIon() || "ELECTROLYTE-CPA".equals(input.path("eos").asText()),
+          "ELECTROLYTE_MODEL_REQUIRED", "Ionic components require an electrolyte model");
+      require(
+          !component.isIsIon() || "Na+".equals(component.getComponentName())
+              || "Cl-".equals(component.getComponentName()),
+          "ELECTROLYTE_COMPONENT_SCOPE", "The molecular electrolyte boundary currently supports sodium chloride only");
       require(
           Double.isFinite(component.getTC()) && component.getTC() > 0 && Double.isFinite(component.getPC())
               && component.getPC() > 0 && Double.isFinite(component.getMolarMass()) && component.getMolarMass() > 0,
@@ -128,8 +136,10 @@ final class CompositionModel {
    */
   static void validate(JsonNode input) {
     only(input, "eos", "volumeCorrection", "temperatureC", "pressureMPa", "components", "interactions", "envelope");
-    require("PR".equals(input.path("eos").asText()) || "SRK".equals(input.path("eos").asText()), "UNSUPPORTED_EOS",
-        "Composition calculation requires PR or SRK");
+    require(
+        "PR".equals(input.path("eos").asText()) || "SRK".equals(input.path("eos").asText())
+            || "ELECTROLYTE-CPA".equals(input.path("eos").asText()),
+        "UNSUPPORTED_EOS", "Composition calculation requires PR or SRK");
     require(!input.has("volumeCorrection") || input.path("volumeCorrection").isBoolean(), "INVALID_INPUT",
         "volumeCorrection must be boolean");
     JsonNode components = input.path("components");

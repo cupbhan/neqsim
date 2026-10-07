@@ -106,7 +106,8 @@ final class CompositionFlash {
       response.set("omittedComponents", model.omitted);
       response.set("interactions", model.interactions());
       diagnostics.put("parameterSource", "independent-neqsim-model").put("eos", input.path("eos").asText())
-          .put("mixingRule", "CLASSIC (2)").put("volumeCorrection", input.path("volumeCorrection").asBoolean(false))
+          .put("mixingRule", "ELECTROLYTE-CPA".equals(input.path("eos").asText()) ? "CPA (10)" : "CLASSIC (2)")
+          .put("volumeCorrection", input.path("volumeCorrection").asBoolean(false))
           .put("formationEnthalpyIncluded", false).put("enthalpyReferenceTemperatureK", 273.15)
           .put("javaVersion", System.getProperty("java.version"));
       response.set("diagnostics", diagnostics);
@@ -125,13 +126,13 @@ final class CompositionFlash {
    * @return equilibrium diagnostics
    */
   static ObjectNode audit(SystemInterface fluid, JsonNode input) {
-    double betaTotal = 0, balance = 0, fugacity = 0, total = 0;
+    double betaTotal = 0, balance = 0, fugacity = 0, total = 0, chargeResidual = 0;
     for (JsonNode component : input.path("components")) {
       total += component.path("z").asDouble();
     }
     for (int p = 0; p < fluid.getNumberOfPhases(); p++) {
       PhaseInterface phase = fluid.getPhase(p);
-      double beta = fluid.getBeta(p), xTotal = 0;
+      double beta = fluid.getBeta(p), xTotal = 0, charge = 0;
       CompositionModel.require(Double.isFinite(beta) && beta >= 0 && beta <= 1, "EQUILIBRIUM_CHECK_FAILED",
           "Invalid phase fraction");
       betaTotal += beta;
@@ -142,7 +143,9 @@ final class CompositionFlash {
         CompositionModel.require(!phase.getComponent(i).isUsingIdealGasEnthalpyOfFormation(),
             "ENTHALPY_REFERENCE_CHANGED", "Formation enthalpy must remain disabled");
         xTotal += x;
-        if (p > 0 && input.path("components").get(i).path("z").asDouble() >= 1e-12) {
+        charge += x * phase.getComponent(i).getIonicCharge();
+        if (p > 0 && !phase.getComponent(i).isIsIon()
+            && input.path("components").get(i).path("z").asDouble() >= 1e-12) {
           double first = fluid.getPhase(0).getComponent(i).getx()
               * fluid.getPhase(0).getComponent(i).getFugacityCoefficient();
           double next = x * phase.getComponent(i).getFugacityCoefficient();
@@ -154,6 +157,7 @@ final class CompositionFlash {
       }
       CompositionModel.require(Math.abs(xTotal - 1) < 1e-8, "EQUILIBRIUM_CHECK_FAILED",
           "Phase composition does not sum to one");
+      chargeResidual = Math.max(chargeResidual, Math.abs(charge));
       EosMixingRulesInterface mixing = ((PhaseEosInterface) phase).getEosMixingRule();
       for (JsonNode pair : input.path("interactions")) {
         int i = pair.path("i").asInt(), j = pair.path("j").asInt();
@@ -170,11 +174,13 @@ final class CompositionFlash {
       }
       balance = Math.max(balance, Math.abs(recovered - input.path("components").get(i).path("z").asDouble() / total));
     }
-    CompositionModel.require(Math.abs(betaTotal - 1) < 1e-9 && balance < 1e-7 && fugacity < 1e-6,
+    CompositionModel.require(
+        Math.abs(betaTotal - 1) < 1e-9 && balance < 1e-7 && fugacity < 1e-6 && chargeResidual < 1e-8,
         "EQUILIBRIUM_CHECK_FAILED", "Flash did not pass material balance and fugacity checks");
     return ExplicitFlash.JSON.createObjectNode().put("maxMaterialBalanceResidual", balance)
         .put("maxLogFugacityResidual", fugacity).put("phaseFractionTotal", betaTotal)
-        .put("inputMoleFractionTotal", total).put("fugacityCheckApplicable", fluid.getNumberOfPhases() > 1);
+        .put("maxPhaseChargeResidual", chargeResidual).put("inputMoleFractionTotal", total)
+        .put("fugacityCheckApplicable", fluid.getNumberOfPhases() > 1);
   }
 
   /**

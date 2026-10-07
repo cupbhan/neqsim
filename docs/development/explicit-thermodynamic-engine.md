@@ -270,3 +270,31 @@ Synthetic standalone verification is in `CompositionCharacterizationTest`: both 
 raw and resolved PR/SRK flashes, retained measured cuts, defined GC components, bulk closure,
 physical lower bounds, rejected foreign parameters and input immutability. These five tests are
 required by the shared-distribution regression policy.
+
+## Molecular sodium chloride composition
+
+The same public `compositionFlash` boundary accepts `eos: ELECTROLYTE-CPA`, molecular
+database components and a NaCl formula-unit row. Input `z` remains a molecular mole
+fraction. The engine independently expands NaCl into equal Na+ and Cl- amounts,
+constructs `SystemElectrolyteCPAstatoil` with mixing rule 10, and uses its own ion and
+neutral component database. External salt critical properties, fitted interactions,
+separate ion feeds and petroleum fractions are rejected. Positive NaCl requires water.
+
+Returned phase fractions, compositions, molar masses and compressibility factors are
+converted back to the original formula-unit basis. Density, viscosity and mass-specific
+thermal properties retain their physical units. Ionic phase fractions and component
+bindings are retained in provenance. Both ionic and molecular material balances and
+each phase's charge are checked; fugacity equality checks apply to neutral molecules.
+This interface does not claim a salt precipitation or hydrate boundary calculation.
+
+`compositionEnvelope` requires explicit `hydrocarbonOnly: true` for this wet feed.
+The private projection removes water, salt and inhibitors, records the omissions and
+traces the remaining gas/liquid envelope using the selected CPA system. It is a dry
+oil/gas projection, not the complete brine phase diagram. A comparison engine must
+build its own model from the raw feed and apply this audited projection independently.
+
+`ElectrolyteCompositionTest` compares two synthetic gas/brine states with separately
+assembled native systems, checks formula-unit conservation and input immutability,
+and rejects imported salt parameters or incompatible input. It is required by the
+shared release gate. Comparing this model with a separately built SRK/HV simulator
+model must explicitly identify the different polar and electrolyte methods.

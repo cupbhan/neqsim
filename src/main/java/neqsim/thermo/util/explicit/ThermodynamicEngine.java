@@ -76,6 +76,9 @@ public final class ThermodynamicEngine {
    * @return independently modeled equilibrium with property availability
    */
   public static ObjectNode compositionFlash(JsonNode input) {
+    if ("ELECTROLYTE-CPA".equals(input.path("eos").asText())) {
+      return ElectrolyteComposition.calculate(input);
+    }
     if (input.has("characterization")) {
       ObjectNode characterized = compositionCharacterize(input);
       if (!characterized.path("ok").asBoolean()) {
@@ -127,6 +130,15 @@ public final class ThermodynamicEngine {
    * @return physical segments, independent parameter sources and explicit coverage limitations
    */
   public static ObjectNode compositionEnvelope(JsonNode input) {
+    if ("ELECTROLYTE-CPA".equals(input.path("eos").asText())) {
+      try {
+        ElectrolyteComposition.validate(input);
+      } catch (Exception error) {
+        ObjectNode failure = CompositionFlash.failure(error);
+        failure.put("status", "unavailable").putArray("segments");
+        return failure;
+      }
+    }
     if (input.has("characterization")) {
       ObjectNode characterized = compositionCharacterize(input);
       if (!characterized.path("ok").asBoolean()) {

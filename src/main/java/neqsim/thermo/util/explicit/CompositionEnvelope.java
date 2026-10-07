@@ -59,7 +59,9 @@ final class CompositionEnvelope {
       }
       response.set("components", model.bindings);
       response.set("interactions", model.interactions());
-      response.put("eos", input.path("eos").asText()).put("mixingRule", "Classic").put("effectiveMixingRule", "Classic")
+      String mixingRule = "ELECTROLYTE-CPA".equals(input.path("eos").asText()) ? "CPA (10)" : "Classic";
+      response.put("eos", input.path("eos").asText()).put("mixingRule", mixingRule)
+          .put("effectiveMixingRule", mixingRule)
           .put("volumeCorrection", input.path("volumeCorrection").asBoolean(false));
       ObjectNode availability = response.putObject("availability");
       availability.putObject("waterBoundary").put("status", "unavailable").put("code",
@@ -137,15 +139,16 @@ final class CompositionEnvelope {
       JsonNode component = input.path("components").get(i);
       double z = component.path("z").asDouble();
       String name = CompositionModel.resolve(component);
-      boolean polar = Arrays.asList("water", "methanol", "ethanol", "MEG", "DEG", "TEG").contains(name);
+      boolean salt = "ELECTROLYTE-CPA".equals(input.path("eos").asText()) && ElectrolyteComposition.isSalt(component);
+      boolean polar = salt || Arrays.asList("water", "methanol", "ethanol", "MEG", "DEG", "TEG").contains(name);
       source.addObject().put("sourceIndex", i).put("id", component.path("id").asText())
           .put("name", component.path("name").asText()).put("moleFraction", z);
       if (z < 1e-12 || polar) {
         CompositionModel.require(z < 1e-12 || dry, "POLAR_FEED_REQUIRES_EXPLICIT_DRY_PROJECTION",
             "Water or inhibitor removal requires hydrocarbonOnly=true");
         omitted.addObject().put("sourceIndex", i).put("id", component.path("id").asText())
-            .put("name", component.path("name").asText()).put("moleFraction", z)
-            .put("reason", z < 1e-12 ? "numerical-zero" : "water".equals(name) ? "water" : "polar-inhibitor");
+            .put("name", component.path("name").asText()).put("moleFraction", z).put("reason",
+                z < 1e-12 ? "numerical-zero" : salt ? "salt" : "water".equals(name) ? "water" : "polar-inhibitor");
       } else {
         indices[i] = components.size();
         components.add(component.deepCopy());
