@@ -5,6 +5,21 @@ description: "Chronological record of engineering tasks solved in the NeqSim rep
 
 # Task Log
 
+### 2026-10-19 — Recover PR envelope continuity with accepted-volume root references
+**Type:** G (Workflow)
+**Keywords:** Peng-Robinson, volume root, critical region, phase envelope, regression
+**Solution:** Added isolated recovery after incomplete ordinary traces. Freeze the admissible outer-root
+reference at the last accepted point during Newton retries, and clear it before seeding and after tracing.
+Adopt only engineering-complete recovery; preserve pressure-limited results and the caller's state.
+**Validation:** Public heavy-feed closure and root-relabeling regressions pass. The five-class envelope suite
+reports 64 passed and one existing skip. Java 8 source compilation, Spotless, Checkstyle and JavaDoc pass.
+Application numerical interruptions are recovered; previously successful envelope controls remain successful.
+The full 7,470-state flash replay is point-for-point identical to the immutable baseline.
+**Limitations:** Domain-limited curves remain incomplete. This validates a development overlay, not a new
+runtime release, experimental accuracy, or universal characterization agreement. No tolerances were relaxed.
+**Tooling:** Updated the phase-envelope skill with accepted-root lifetime and isolated-recovery safeguards.
+Private compositions, traces and detailed comparisons remain in the existing local task folder.
+
 ### 2026-10-19 — Harden continuation retries and incomplete-envelope diagnostics
 **Type:** G (Workflow)
 **Keywords:** phase envelope, continuation, stagnation, pressure ceiling, regression

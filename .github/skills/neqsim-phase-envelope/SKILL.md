@@ -156,6 +156,13 @@ Continuation repair diagnostics:
 - Diagnose EOS volume-root switching separately from step stagnation. A root-following candidate that closes one
   sample must also pass synthetic heavy-tail counterexamples before adoption. Never promote experimental classes
   or a development overlay as an immutable release, and keep each probe's outputs separate from baseline evidence.
+- For PR recovery, freeze the volume reference at the last accepted continuation point throughout Newton retries;
+  never update it from a failed iterate. Select only admissible outer cubic roots. Clear references before saturation
+  seeding and after tracing so independent stability flashes keep their ordinary phase-labelled root policy.
+  Try recovery on an isolated clone only after ordinary traces fail, and adopt it only when the existing complete-
+  envelope checks pass. Do not replace an incomplete baseline with a worse incomplete recovery, extend a pressure
+  ceiling implicitly, or apply the PR policy to derived EOS classes. `EnvelopeRootContinuationTest` supplies a public
+  heavy-feed closure regression and a mechanically stable root/phase-relabeling check.
 
 Focused Windows commands:
 

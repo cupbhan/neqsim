@@ -142,6 +142,35 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
 
   /** True if a configured trace limit prevented completion. */
   private boolean reachedTraceLimit = false;
+  /** Opt-in PR root continuation used only on an isolated recovery trace. */
+  private boolean cubicRootContinuationEnabled;
+
+  /**
+   * Configures continuation of PR volume roots from accepted boundary states.
+   *
+   * @param enabled true to enable the isolated root-continuation recovery
+   */
+  public void setCubicRootContinuationEnabled(boolean enabled) {
+    cubicRootContinuationEnabled = enabled;
+  }
+
+  /**
+   * Reports the root policy selected for this trace.
+   *
+   * @return whether this trace uses accepted-volume PR root references
+   */
+  public boolean isCubicRootContinuationEnabled() {
+    return cubicRootContinuationEnabled;
+  }
+
+  /** Clears temporary references before saturation seeding and after completion. */
+  private void clearCubicRootReferences() {
+    for (PhaseInterface phase : system.getPhases()) {
+      if (phase != null && phase.getClass() == neqsim.thermo.phase.PhasePrEos.class) {
+        ((neqsim.thermo.phase.PhasePrEos) phase).setVolumeRootReference(Double.NaN);
+      }
+    }
+  }
 
   // --- Results: dynamic storage ---
   private ArrayList<Double> dewPointTemperatures = new ArrayList<Double>();
@@ -368,6 +397,9 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
     try {
       traceEnvelope();
     } finally {
+      if (cubicRootContinuationEnabled) {
+        clearCubicRootReferences();
+      }
       setReferencePhaseEnvelopeCalculation(system, false);
     }
   }
@@ -428,6 +460,9 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
 
     // === Two-pass loop: primary trace + optional restart ===
     for (int pass = 0; pass < 2; pass++) {
+      if (cubicRootContinuationEnabled) {
+        clearCubicRootReferences();
+      }
       if (pass == 1) {
         if (!needRestart) {
           break;
@@ -556,6 +591,7 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
       SysNewtonRhapsonPhaseEnvelope nonLinSolver = new SysNewtonRhapsonPhaseEnvelope(system, 2,
           system.getPhase(0).getNumberOfComponents());
       nonLinSolver.dTmax = this.dTmax;
+      nonLinSolver.setCubicRootContinuationEnabled(cubicRootContinuationEnabled);
       nonLinSolver.dPmax = this.dPmax;
       nonLinSolver.setu();
       boolean passedCricoT = false;

@@ -199,6 +199,15 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
     if (bubbleFirst.isEngineeringComplete()) {
       return bubbleFirst.toResult();
     }
+    if (sourceSystem.getPhase(0).getClass() == neqsim.thermo.phase.PhasePrEos.class
+        && !dewFirst.stoppedAtPressureCeiling() && !bubbleFirst.stoppedAtPressureCeiling()) {
+      for (boolean bubbleStart : new boolean[] {false, true}) {
+        Attempt recovered = traceAtCeiling(bubbleStart, maximumPressureBara, true);
+        if (recovered.isEngineeringComplete()) {
+          return recovered.toResult();
+        }
+      }
+    }
     if (!topologyFallbackEnabled) {
       return bubbleFirst.score() > dewFirst.score() ? bubbleFirst.toResult() : dewFirst.toResult();
     }
@@ -249,7 +258,26 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
     return attempt;
   }
 
+  /**
+   * Traces an isolated clone using the ordinary phase-labelled volume roots.
+   *
+   * @param bubblePointFirst whether to start at the bubble boundary
+   * @param ceilingBara configured pressure ceiling
+   * @return traced attempt, including any incomplete status
+   */
   private Attempt traceAtCeiling(boolean bubblePointFirst, double ceilingBara) {
+    return traceAtCeiling(bubblePointFirst, ceilingBara, false);
+  }
+
+  /**
+   * Traces an isolated clone, optionally continuing PR roots from accepted states.
+   *
+   * @param bubblePointFirst whether to start at the bubble boundary
+   * @param ceilingBara unchanged pressure ceiling
+   * @param rootContinuation whether to enable accepted-volume root recovery
+   * @return traced attempt, including any incomplete status
+   */
+  private Attempt traceAtCeiling(boolean bubblePointFirst, double ceilingBara, boolean rootContinuation) {
     SystemInterface workingSystem = sourceSystem.clone();
     workingSystem.setMultiPhaseCheck(false);
     workingSystem.setMaxNumberOfPhases(2);
@@ -261,6 +289,7 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
     operation.setDTmax(maximumTemperatureStepK);
     operation.setDPmax(maximumPressureStepBara);
     operation.setMaximumEnvelopeIterations(maximumContinuationIterations);
+    operation.setCubicRootContinuationEnabled(rootContinuation);
     try {
       operation.run();
       if (stabilityAnalysisEnabled && !operation.getSegments().isEmpty()) {
@@ -616,9 +645,12 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
       return new Result(segments, operation.isEnvelopeClosed(), finitePhysicalValues,
           operation.getNumberOfCriticalPoints(), critical, safeArray(operation.getCricondenBar()),
           safeArray(operation.getCricondenTherm()), threePhaseTemperatures == null ? 0 : threePhaseTemperatures.length,
-          bubblePointFirst, failureMessage, "michelsen-predictor-corrector", 0, 0, operation.isIterationLimitReached(),
-          operation.getSecondaryStabilitySamples(), operation.getSecondaryStabilityBrackets(),
-          operation.getThreePhasePointCandidates(), terminationSummary(operation));
+          bubblePointFirst, failureMessage,
+          operation.isCubicRootContinuationEnabled() ? "michelsen-volume-root-continuation"
+              : "michelsen-predictor-corrector",
+          0, 0, operation.isIterationLimitReached(), operation.getSecondaryStabilitySamples(),
+          operation.getSecondaryStabilityBrackets(), operation.getThreePhasePointCandidates(),
+          terminationSummary(operation));
     }
 
     private static String terminationSummary(PTPhaseEnvelopeMichelsen operation) {

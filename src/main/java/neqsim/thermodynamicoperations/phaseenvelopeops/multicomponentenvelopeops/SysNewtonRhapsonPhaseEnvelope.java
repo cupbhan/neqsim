@@ -29,6 +29,18 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
   int npCrit = 0;
   double beta = 0;
   double ds = 0;
+  /** Whether PR outer roots are continued from the last accepted point. */
+  private boolean cubicRootContinuationEnabled;
+
+  /**
+   * Enables private-clone volume-root continuation without changing equilibrium tolerances.
+   *
+   * @param enabled true to hold the accepted root reference during all point retries
+   */
+  public void setCubicRootContinuationEnabled(boolean enabled) {
+    cubicRootContinuationEnabled = enabled;
+  }
+
   double dTmax = 10;
   double dPmax = 10;
   private static final int MAXIMUM_STEP_REDUCTIONS = 15;
@@ -377,6 +389,14 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
    * @param np one-based continuation point index
    */
   public void calcInc(int np) {
+    if (cubicRootContinuationEnabled) {
+      for (int phase = 0; phase < 2; phase++) {
+        if (system.getPhase(phase).getClass() == neqsim.thermo.phase.PhasePrEos.class) {
+          ((neqsim.thermo.phase.PhasePrEos) system.getPhase(phase))
+              .setVolumeRootReference(system.getPhase(phase).getMolarVolume());
+        }
+      }
+    }
     // First we need the sensitivity vector dX/dS
     // calculates the sensitivity vector and stores the xgij matrix
 
