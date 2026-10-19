@@ -5,6 +5,20 @@ description: "Chronological record of engineering tasks solved in the NeqSim rep
 
 # Task Log
 
+### 2026-10-19 — Harden continuation retries and incomplete-envelope diagnostics
+**Type:** G (Workflow)
+**Keywords:** phase envelope, continuation, stagnation, pressure ceiling, regression
+**Solution:** Preserved nonzero floating-point step directions, restarted failed predictors from the accepted
+local tangent, distinguished numerical interruption from normal termination, and retained converged segments
+after domain-limit exceptions. Kept incomplete curves ineligible for closure claims.
+**Validation:** Three focused regressions and the Michelsen, robustness and segment suites passed (62 passed,
+one existing skip). Java 8 compilation, Spotless, Checkstyle and JavaDoc checks passed. The UMRPRU compatibility
+case was checked against the immutable baseline before repairing retry behavior.
+**Limitations:** Application-envelope completeness remains unresolved. Volume-root tracking experiments were
+rejected after synthetic counterexamples; no runtime release, tolerance relaxation or characterization tuning.
+**Tooling:** Added failure classification and predictor/root-isolation guidance to the phase-envelope skill.
+Private source data and diagnostic traces remain in the local task folder.
+
 ### 2026-10-18 — Replay rc.11 and audit independent raw-assay characterization
 **Type:** G (Workflow)
 **Keywords:** immutable runtime, phase envelope, raw assay, independent characterization, Python SDK

@@ -371,6 +371,11 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
     return sign * Math.abs(limited);
   }
 
+  /**
+   * Predicts the next continuation point without rounding away its direction.
+   *
+   * @param np one-based continuation point index
+   */
   public void calcInc(int np) {
     // First we need the sensitivity vector dX/dS
     // calculates the sensitivity vector and stores the xgij matrix
@@ -407,8 +412,7 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
         speceq = speceqOld;
       }
 
-      int intsign = Math.round(Math.round(dxds.get(speceq, 0) * 100000000));
-      int sign1 = Integer.signum(intsign);
+      double sign1 = Math.signum(dxds.get(speceq, 0));
       ds = sign1 * ds;
 
       setfvec();
@@ -439,8 +443,8 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
       }
 
       // Now we check wheater this ds is greater than dTmax and dPmax.
-      intsign = Math.round(Math.round(ds * 100000000));
-      int sign2 = Integer.signum(intsign);
+      // Preserve direction independently of step magnitude: integer rounding silently zeros small steps.
+      double sign2 = Math.signum(ds);
 
       if ((1 + dTmax / system.getTemperature()) < Math.exp(dxds.get(numberOfComponents, 0) * ds)) {
         // logger.info("too high dT");
@@ -763,6 +767,12 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
     return dx.times(damping);
   }
 
+  /**
+   * Corrects a predicted point using the existing residual and physical-domain gates.
+   *
+   * @param np one-based continuation point index
+   * @throws IllegalStateException if correction fails after bounded step reductions
+   */
   public void solve(int np) {
     Matrix previous = Xgij.getMatrix(0, neq - 1, Math.min(np - 1, 3), Math.min(np - 1, 3));
     for (int retry = 0; retry <= 15; retry++) {
@@ -770,11 +780,11 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
         ds *= 0.5;
         u = previous.plus(dxds.times(ds));
         specVal = u.get(speceq, 0);
-        if (np >= 5) {
-          calcInc2(np);
-        }
+        // Rebuild from the accepted state, not the history extrapolation that just failed.
       }
       if (!Double.isFinite(specVal) || Math.abs(specVal - previous.get(speceq, 0)) < 1.0e-12) {
+        logger.debug("Envelope stalled: point={}, retry={}, ds={}, specification={}, value={}, previous={}", np, retry,
+            ds, speceq, specVal, previous.get(speceq, 0));
         break;
       }
       iter = 0;
@@ -809,6 +819,8 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
     }
     u = previous.copy();
     init();
+    logger.debug("Envelope rejected point {} at T={} K, P={} bara, ds={}", np, system.getTemperature(),
+        system.getPressure(), ds);
     throw new IllegalStateException("Phase envelope point " + np + " did not converge after 15 step reductions");
   }
 

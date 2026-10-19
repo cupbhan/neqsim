@@ -538,9 +538,18 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
       return new Attempt(operation, bubblePointFirst, null, output, physical);
     }
 
+    /**
+     * Retains already converged segments while preserving the failed attempt status.
+     *
+     * @param operation interrupted continuation operation
+     * @param bubblePointFirst whether tracing started on the bubble side
+     * @param failureMessage diagnostic describing the interruption
+     * @return incomplete attempt with any available physical points
+     */
     private static Attempt failure(PTPhaseEnvelopeMichelsen operation, boolean bubblePointFirst,
         String failureMessage) {
-      return new Attempt(operation, bubblePointFirst, failureMessage, Collections.<Segment>emptyList(), false);
+      Attempt retained = success(operation, bubblePointFirst);
+      return new Attempt(operation, bubblePointFirst, failureMessage, retained.segments, retained.finitePhysicalValues);
     }
 
     private int pointCount() {
@@ -551,9 +560,13 @@ public final class TwoHydrocarbonPhaseEnvelopeSolver {
       return count;
     }
 
+    /**
+     * Identifies a domain limit even when the native operation threw after retaining its points.
+     *
+     * @return true if a pass reached its pressure ceiling
+     */
     private boolean stoppedAtPressureCeiling() {
-      return failureMessage == null
-          && operation.getTerminationReasons().contains(PTPhaseEnvelopeMichelsen.TerminationReason.PRESSURE_CEILING);
+      return operation.getTerminationReasons().contains(PTPhaseEnvelopeMichelsen.TerminationReason.PRESSURE_CEILING);
     }
 
     private boolean hasBothPhysicalSides() {

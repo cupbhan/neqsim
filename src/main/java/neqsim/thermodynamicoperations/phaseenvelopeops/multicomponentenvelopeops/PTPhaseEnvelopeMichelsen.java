@@ -121,6 +121,8 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
     RESTART_OVERLAP,
     /** The continuation used up its iteration budget. */
     ITERATION_LIMIT,
+    /** The predictor or corrector failed before reaching a physical endpoint. */
+    NUMERICAL_FAILURE,
     /** The continuation stopped on its own without hitting a configured limit. */
     CONTINUATION_END
   }
@@ -531,8 +533,8 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
         // converged before keep converging on exactly the same first point.
         double scanned = scanForFirstSaturationPoint(testOps, phaseFraction);
         if (System.getProperty("neqsim.probe.firstPoint") != null) {
-          System.err.printf("[probe] pass=%d beta=%.3g lowPres=%.4g wilsonTemp=%.2f scan=%s%n", pass, phaseFraction,
-              lowPres, temp, Double.isNaN(scanned) ? "FAILED" : String.format("%.2f K", scanned));
+          logger.debug("Saturation seed: pass={}, beta={}, pressure={}, temperature={}, scan={}", pass, phaseFraction,
+              lowPres, temp, scanned);
         }
         if (!Double.isNaN(scanned)) {
           temp = scanned;
@@ -566,6 +568,7 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
           nonLinSolver.solve(np);
         } catch (Exception e0) {
           logger.debug("Phase envelope pass {} stopped at point {}: {}", pass, np, e0.getMessage());
+          terminationReasons.add(TerminationReason.NUMERICAL_FAILURE);
           if (pass == 0) {
             // Primary trace crashed: schedule restart from opposite side
             needRestart = true;
@@ -766,11 +769,12 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
    * met, which is how a closed envelope finishes.
    * </p>
    *
-   * @return true if a pass stopped at the pressure ceiling or ran out of iterations
+   * @return true if a pass stopped at a numerical, pressure or iteration limit
    */
   public boolean isTruncated() {
     return terminationReasons.contains(TerminationReason.PRESSURE_CEILING)
-        || terminationReasons.contains(TerminationReason.ITERATION_LIMIT);
+        || terminationReasons.contains(TerminationReason.ITERATION_LIMIT)
+        || terminationReasons.contains(TerminationReason.NUMERICAL_FAILURE);
   }
 
   /**

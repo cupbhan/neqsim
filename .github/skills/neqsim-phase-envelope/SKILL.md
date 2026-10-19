@@ -143,6 +143,20 @@ When modifying `PTPhaseEnvelopeMichelsen` or `SysNewtonRhapsonPhaseEnvelope`:
 7. Run the full Michelsen and robustness test classes.
 8. Run Java 8 compilation, Spotless, Checkstyle, and JavaDoc gates.
 
+Continuation repair diagnostics:
+- Preserve a small nonzero signed step with floating-point sign operations; scaling and rounding it to an integer
+  can silently stop continuation. Do not lower residual thresholds to bypass the resulting stagnation.
+- After a failed history predictor, retry from the last accepted state with its local tangent rather than applying
+  the same failed cubic extrapolation again. Include UMRPRU compatibility checks; changing step handling alone can
+  turn previous early stagnation into an iteration-limit failure.
+- A caught predictor/corrector exception is `NUMERICAL_FAILURE`, not `CONTINUATION_END`. Both physical branches
+  plus a critical point do not establish closure if either pass failed numerically.
+- Keep converged segments after a pressure-limit exception, but retain incomplete status and invalid global extrema.
+  Pressure-ceiling extension is opt-in and must recognize the native exception path.
+- Diagnose EOS volume-root switching separately from step stagnation. A root-following candidate that closes one
+  sample must also pass synthetic heavy-tail counterexamples before adoption. Never promote experimental classes
+  or a development overlay as an immutable release, and keep each probe's outputs separate from baseline evidence.
+
 Focused Windows commands:
 
 ```powershell
