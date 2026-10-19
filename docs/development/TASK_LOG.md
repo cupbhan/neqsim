@@ -5,6 +5,17 @@ description: "Chronological record of engineering tasks solved in the NeqSim rep
 
 # Task Log
 
+### 2026-10-18 — Replay rc.11 and audit independent raw-assay characterization
+**Type:** G (Workflow)
+**Keywords:** immutable runtime, phase envelope, raw assay, independent characterization, Python SDK
+**Solution:** Replayed the selected release against preserved same-EOS references and separately executed
+fresh independent raw-input characterization, flash and finite-window envelope comparisons.
+**Validation:** Full state-key coverage and EOS contracts matched the baseline; grid numerical checks passed.
+Independent characterization retained property differences and incomplete envelopes, so it is not qualified
+as universal agreement or experimental accuracy. No thermodynamic algorithm or acceptance limit was changed.
+**Tooling:** Added native-binding preflight and coverage/provenance guidance to `neqsim-phase-envelope`.
+Private inputs, vendor outputs and detailed numerical evidence remain in the local task folder.
+
 ### 2026-10-04 — Preserve salt mole basis and density-model identity in simulator comparisons
 **Type:** G (Workflow)
 **Keywords:** salt, Huron-Vidal, formula units, ion multiplicity, nonvolatile constraint, aqueous density

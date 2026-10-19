@@ -298,6 +298,14 @@ Symptoms that a continuation result is truncated:
 
 ## Independent PVTsim comparisons
 
+- Before reusing a Python SDK worker, check its native bindings against the explicitly selected interpreter.
+  A project-local dependency directory can shadow compatible installed bindings. Do not change interpreters
+  silently; record authorized package changes and validate a fresh SDK calculation before launching a batch.
+- Release replay must compare the complete unique-state key sets and runtime EOS contracts with the baseline,
+  not only successful candidate rows. Separate preserved reference replay from fresh independent characterization.
+  For mass-basis raw assays, each engine must use its own generated molecular weights and mole fractions for
+  both flash and envelope calculations. Report unavailable/partial envelopes and unmatched branches separately
+  from the pressure nodes that can be compared.
 - Run the installed licensed Open Structure engine afresh. Record the actual DLL file version/hash and the
   selected NeqSim release JAR hash; an adapter's display name is not version evidence. Keep task fluids and
   raw point results in the task folder, outside code commits.
