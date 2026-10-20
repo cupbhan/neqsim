@@ -163,6 +163,13 @@ Continuation repair diagnostics:
   envelope checks pass. Do not replace an incomplete baseline with a worse incomplete recovery, extend a pressure
   ceiling implicitly, or apply the PR policy to derived EOS classes. `EnvelopeRootContinuationTest` supplies a public
   heavy-feed closure regression and a mechanically stable root/phase-relabeling check.
+- For pressure-ceiling investigations, distinguish the interface's default domain from measured model-validity
+  limits. Explicitly enlarge only the study request, compare against a second higher ceiling, and cold-flash both
+  sides of the observed pressure maximum. Retain failed points and finite-scan limitations. Removing a pressure
+  truncation can expose a separate low-temperature root/topology failure; this is not a complete envelope.
+- At incipient phases, evaluate the Rachford-Rice denominator as `(1 - beta) + beta * K` and factor its composition
+  derivatives instead of subtracting nearly equal terms. `EnvelopeDerivativeStabilityTest` covers extreme partition
+  coefficients and explicit pressure-ceiling sensitivity. Keep correction and residual acceptance gates unchanged.
 
 Focused Windows commands:
 

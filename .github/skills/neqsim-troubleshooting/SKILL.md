@@ -499,6 +499,13 @@ Load `neqsim-phase-envelope` for the canonical structured segment API, physical 
 classification, numerical-zero component behavior, and solver-change test protocol. Use this
 section for symptom-driven recovery after following that workflow.
 
+For a pressure-truncated envelope, first test explicitly enlarged study bounds and a higher-ceiling control.
+If termination changes from `PRESSURE_CEILING` to `NUMERICAL_FAILURE`, the range issue is removed but closure
+is still unresolved. Check cold-start equilibria near the new interruption, especially at low-temperature root
+transitions, and never splice failed branches into a closed curve. At extreme partition coefficients, avoid
+subtractive cancellation in the composition Jacobian; see `neqsim-phase-envelope` and
+`EnvelopeDerivativeStabilityTest` for the factored derivative regression and unchanged convergence gates.
+
 **Symptom**: When plotting a phase envelope calculated with `calcPTphaseEnvelope(true, 1.0)`,
 the bubble and dew curves appear swapped — the "bubble" array has higher temperatures
 (cricondentherm) which is physically the dew side, and vice versa.

@@ -288,15 +288,14 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
     double[] dyidlnk = new double[numberOfComponents];
     double tempJ = 0.0;
     for (int i = 0; i < numberOfComponents; i++) {
-      dxidlnk[i] = -system.getPhase(1).getComponent(i).getz()
-          * Math.pow(system.getPhase(0).getComponent(i).getK() * system.getBeta() + 1.0 - system.getBeta(), -2.0)
-          * system.getBeta() * system.getPhase(1).getComponent(i).getK();
-      dyidlnk[i] = system.getPhase(1).getComponent(i).getz()
-          / (system.getPhase(0).getComponent(i).getK() * system.getBeta() + 1.0 - system.getBeta())
-          * system.getPhase(1).getComponent(i).getK()
-          - system.getPhase(0).getComponent(i).getK() * system.getPhase(1).getComponent(i).getz()
-              / Math.pow(1.0 - system.getBeta() + system.getBeta() * system.getPhase(0).getComponent(i).getK(), 2.0)
-              * system.getBeta() * system.getPhase(0).getComponent(i).getK();
+      double beta = system.getBeta();
+      double partition = system.getPhase(0).getComponent(i).getK();
+      double denominator = (1.0 - beta) + beta * partition;
+      // Factor the derivatives instead of subtracting nearly equal terms at an incipient phase.
+      // Keep the denominator in the same stable order as the composition calculation.
+      double derivative = system.getPhase(1).getComponent(i).getz() * partition / (denominator * denominator);
+      dxidlnk[i] = -beta * derivative;
+      dyidlnk[i] = (1.0 - beta) * derivative;
     }
     for (int i = 0; i < numberOfComponents; i++) {
       for (int j = 0; j < numberOfComponents; j++) {

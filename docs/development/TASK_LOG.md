@@ -5,6 +5,23 @@ description: "Chronological record of engineering tasks solved in the NeqSim rep
 
 # Task Log
 
+### 2026-10-19 — Validate enlarged envelope pressure domains without relaxing convergence
+**Type:** G (Workflow)
+**Keywords:** phase envelope, pressure ceiling, incipient-phase derivatives, cold flash, incomplete branches
+**Solution:** Compared explicitly enlarged study bounds with a higher-ceiling control and independent cold flashes.
+Preserved the interface default and all convergence gates. Factored the continuation composition derivatives to
+avoid subtractive cancellation for extreme partition coefficients near an incipient phase.
+**Validation:** The derivative regression fails before the algebraic correction and passes afterward. A public
+heavy-feed test distinguishes pressure truncation from closure and verifies higher-ceiling invariance. The six-class
+suite reports 66 passed and one existing skip; Java 8 compilation, Spotless, Checkstyle and JavaDoc pass. Full-grid
+flash outputs and EOS contracts remain identical to the immutable baseline; successful envelope controls remain
+successful. Independent above-peak pressure scans pass the unchanged equilibrium audit.
+**Limitations:** Enlarging the domain removes pressure truncation but exposes an unresolved low-temperature
+numerical branch on one distinct private assay. Its repeated records remain partial; a cold-start audit failure is
+retained as a separate limitation. Neither extra-root/multiphase closure nor experimental accuracy is established.
+**Tooling:** Both phase-envelope and troubleshooting skills now distinguish range recovery from complete closure.
+Private evidence stays in the existing task folder; no runtime release or global-default pressure change.
+
 ### 2026-10-19 — Recover PR envelope continuity with accepted-volume root references
 **Type:** G (Workflow)
 **Keywords:** Peng-Robinson, volume root, critical region, phase envelope, regression
