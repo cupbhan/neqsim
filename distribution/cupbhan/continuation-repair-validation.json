@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "e971533b27e69cb30ffa12c368d1c661235d39d7",
+  "scope": "Focused activity/log-derivative consistency, continuation predictor invariance, UMR rich-gas closure, existing PR recovery and envelope regressions; not field calibration or full repository testing",
+  "passed": true,
+  "focusedJUnit": {
+    "total": 74,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "skip": "PTPhaseEnvelopeRobustnessTest#testPureMethane: known upstream-disabled pure-component case"
+  },
+  "java8ChangedFilesCompiled": true,
+  "checkstyleViolations": 0,
+  "javadoc": {
+    "exitCode": 0,
+    "preexistingMissingCommentWarnings": true
+  },
+  "limitsAndTolerancesUnchanged": true,
+  "sourceSha256": {
+    "src/main/java/neqsim/thermo/component/ComponentGEUnifacUMRPRU.java": "31e85306a86d8400cdd9c14a6a377cd04e1a50e7b095c04afba2930807f319aa",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/SysNewtonRhapsonPhaseEnvelope.java": "c36535e441f3ab5bf034fbd0b5a2caf377156b0180074d00e51ec6d2cc67af7f",
+    "src/main/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/PTPhaseEnvelopeMichelsen.java": "d83490f6a8bbce814d5a4af9e50502ee59b11f525b3c3bc7eb058d1a33e50af8",
+    "src/test/java/neqsim/thermo/component/ComponentGEUnifacUMRPRUContinuityTest.java": "4c662728192460a188df439ef3d4a28112f2dd6b6e63312a190f9d3a55ee3304",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/EnvelopeHistoryPredictionTest.java": "33fe2db0e8abcecc20e3737fff831207d29eb84840285873e8b4a81bcbfebd32",
+    "src/test/java/neqsim/thermodynamicoperations/phaseenvelopeops/multicomponentenvelopeops/PTPhaseEnvelopeContinuityTest.java": "4a0f52048671e0d90b258b689ba1cb606c4da60c10c90e4cf405059bc6cb77e1"
+  },
+  "localEvidenceSha256": {
+    "small-baseline.log": "ee2612d67b70128aabfe183dff1e84e67dfa2f6b73224efe85d41cec45af8189",
+    "capped-baseline.log": "9047a7fde407393ae57e4d34c41720787b29dfb3f2f2c0cc42c2e735168994c2",
+    "actual-state-jacobian.log": "35a03c4494bfa7f51c86c08a943664c0aa8d6671e7261ebd11505a99220f60db",
+    "activity-continuity-fixed.log": "c25defa3e8216368ac9d491e9564c92bef3dec9cf7c9797bd4a09b960989ffc4",
+    "focused-regressions.log": "e8943c0f2cf729b716a022887294fdca9070e1eb4e51aac531ec8171ba4fa014",
+    "component-regression-prefixed-original.log": "ac5f1b5e962d0516f09521b6165ed62848a8954c0170e4a9dd44bffb7e75ac80",
+    "component-regression-postfix.log": "dfbbe5ad4ff5f2f9751f2542d309037bb402e2feda51402ad1f5320392794ea3",
+    "javadoc.log": "d34fd2daa8aa27229d78bd92949424b3399ff131e4bfecd44cd0357ce8398318"
+  }
+}

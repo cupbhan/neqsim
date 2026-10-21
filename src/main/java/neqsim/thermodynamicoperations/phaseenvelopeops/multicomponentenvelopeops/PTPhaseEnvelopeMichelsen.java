@@ -602,6 +602,12 @@ public class PTPhaseEnvelopeMichelsen extends BaseOperation {
         try {
           nonLinSolver.calcInc(np);
           nonLinSolver.solve(np);
+          if (np % 25 == 0) {
+            logger.debug(
+                "Envelope continuation pass={}, point={}, T={}, P={}, step={}, specification={}, iterations={}", pass,
+                np, system.getTemperature(), system.getPressure(), nonLinSolver.ds, nonLinSolver.speceq,
+                nonLinSolver.iter);
+          }
         } catch (Exception e0) {
           logger.debug("Phase envelope pass {} stopped at point {}: {}", pass, np, e0.getMessage());
           terminationReasons.add(TerminationReason.NUMERICAL_FAILURE);

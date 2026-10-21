@@ -515,13 +515,36 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
     sny = ds * dxds.get(speceq, 0) + s.get(0, 3);
     specVal = sny;
 
-    // finds the estimate of the next point of the envelope that corresponds
-    // to all the equations
-    Matrix lastSolvedCoefficients = null;
+    // Fit state increments in a centered, scaled coordinate. Absolute powers of a large specification with
+    // closely spaced history points can make the Vandermonde matrix singular and silently stall the predictor.
+    double origin = s.get(0, 3);
+    double scale = 0.0;
+    for (int i = 0; i < 4; i++) {
+      scale = Math.max(scale, Math.abs(s.get(0, i) - origin));
+    }
+    if (!(scale > 0.0) || !Double.isFinite(scale)) {
+      u = Xgij.getMatrix(0, neq - 1, 3, 3).plus(dxds.times(ds));
+      specVal = u.get(speceq, 0);
+      return;
+    }
+    Matrix normalizedHistory = new Matrix(4, 4);
+    for (int i = 0; i < 4; i++) {
+      double coordinate = (s.get(0, i) - origin) / scale;
+      normalizedHistory.set(i, 0, 1.0);
+      normalizedHistory.set(i, 1, coordinate);
+      normalizedHistory.set(i, 2, coordinate * coordinate);
+      normalizedHistory.set(i, 3, coordinate * coordinate * coordinate);
+    }
+    double nextCoordinate = ds * dxds.get(speceq, 0) / scale;
     for (int j = 0; j < neq; j++) {
-      xg = Xgij.getMatrix(j, j, 0, 3);
+      Matrix increments = new Matrix(4, 1);
+      double accepted = Xgij.get(j, 3);
+      for (int i = 0; i < 4; i++) {
+        increments.set(i, 0, Xgij.get(j, i) - accepted);
+      }
+      Matrix coefficients;
       try {
-        xcoef = a.solve(xg.transpose());
+        coefficients = normalizedHistory.solve(increments);
       } catch (Exception ex) {
         // Repeated specification values can make the cubic history singular. The local tangent remains a valid
         // predictor and does not borrow another variable's polynomial coefficients.
@@ -529,11 +552,16 @@ public class SysNewtonRhapsonPhaseEnvelope implements java.io.Serializable {
         specVal = u.get(speceq, 0);
         return;
       }
-      lastSolvedCoefficients = xcoef;
-      u.set(j, 0, xcoef.get(0, 0) + sny * (xcoef.get(1, 0) + sny * (xcoef.get(2, 0) + sny * xcoef.get(3, 0))));
+      u.set(j, 0, accepted + coefficients.get(0, 0) + nextCoordinate * (coefficients.get(1, 0)
+          + nextCoordinate * (coefficients.get(2, 0) + nextCoordinate * coefficients.get(3, 0))));
     }
-    if (lastSolvedCoefficients != null) {
-      xcoefOld = lastSolvedCoefficients.copy();
+    u.set(speceq, 0, sny);
+    // Critical refinement still interprets its fallback polynomial in absolute specification coordinates.
+    // Never store normalized predictor coefficients in that legacy state.
+    try {
+      xcoefOld = a.solve(Xgij.getMatrix(neq - 1, neq - 1, 0, 3).transpose());
+    } catch (RuntimeException ex) {
+      logger.debug("Absolute critical-point history is singular; retaining the previous refinement fallback");
     }
   }
 

@@ -1094,3 +1094,8 @@ The five points have maximum material residual 1.25e-16 and phase-fraction diffe
 There remain 39 topology mismatches and three NH3 reference-contract gaps, so overall PVTsim validation is incomplete.
 Thermal-consumer PVT/batch/cache/envelope/table smoke and source alignment passed. Aggregate evidence is recorded in
 `distribution/cupbhan/compatibility-audit/rc4-validation.json`; raw task and vendor data remain local.
+
+
+## 2026-10-21 — Preserve UMR-PRU activity and continuation consistency
+
+A clean shared-runtime candidate reproduced a rich-gas envelope limit failure. Removed the reset of representable small UMR-PRU activity coefficients to unity, which disagreed with their stored logarithms and derivatives. Centered and scaled continuation history predictions to avoid absolute-coordinate cancellation. Added binary activity/derivative and affine-history regressions plus a short-budget complete-envelope test. Selected envelope and PR recovery regressions: 74 tests, 0 failures/errors, 1 recorded upstream-disabled case. Changed Java files compile with release 8; Checkstyle and JavaDoc pass (existing missing-comment warnings remain). Evidence: distribution/cupbhan/continuation-repair-validation.json. No private sample data or external SDK results were used. Immutable candidate build and consumer acceptance remain separate gates.

@@ -170,6 +170,11 @@ Continuation repair diagnostics:
 - At incipient phases, evaluate the Rachford-Rice denominator as `(1 - beta) + beta * K` and factor its composition
   derivatives instead of subtracting nearly equal terms. `EnvelopeDerivativeStabilityTest` covers extreme partition
   coefficients and explicit pressure-ceiling sensitivity. Keep correction and residual acceptance gates unchanged.
+- For low-temperature UMR-PRU stalls, compare the returned activity coefficient with `exp(getLnGamma())` and check
+  its temperature derivative by finite differences. Never replace a representable small coefficient with an ideal
+  value while retaining its nonideal logarithm and derivatives. `ComponentGEUnifacUMRPRUContinuityTest` covers this
+  discontinuity. Fit continuation histories in a centered, scaled coordinate; `EnvelopeHistoryPredictionTest` checks
+  affine-coordinate invariance. Keep normalized predictor coefficients separate from legacy critical-point state.
 
 Focused Windows commands:
 

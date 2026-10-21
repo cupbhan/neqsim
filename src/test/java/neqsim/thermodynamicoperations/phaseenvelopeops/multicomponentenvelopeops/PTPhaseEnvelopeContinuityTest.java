@@ -308,6 +308,25 @@ class PTPhaseEnvelopeContinuityTest extends neqsim.NeqSimTest {
   }
 
   /**
+   * Requires the ordinary rich-gas trace to progress without exhausting a short continuation budget.
+   *
+   * @throws IOException if the composition resource cannot be read
+   */
+  @Test
+  void testUmrPruMulticomponentContinuationProgress() throws IOException {
+    SystemInterface fluid = new SystemUMRPRUMCEos(T_K, P_BARA);
+    fill(fluid, 25, 0);
+    fluid.setMixingRule("HV", "UNIFAC_UMRPRU");
+    PTPhaseEnvelopeMichelsen operation = new PTPhaseEnvelopeMichelsen(fluid, "", 1.0 - 1e-10, 1.0, false);
+    operation.setMaximumEnvelopeIterations(250);
+    operation.run();
+    assertTrue(operation.isEnvelopeClosed(), operation.getTerminationReasons().toString());
+    assertFalse(operation.isTruncated());
+    assertEquals(27.44, operation.getCricondenTherm()[0] - 273.15, 2.0);
+    assertEquals(48.58, operation.getCricondenTherm()[1], 3.0);
+  }
+
+  /**
    * More than 100 components trace a continuous envelope.
    *
    * <p>

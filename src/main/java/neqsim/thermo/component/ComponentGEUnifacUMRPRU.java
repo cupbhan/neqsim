@@ -409,9 +409,6 @@ public class ComponentGEUnifacUMRPRU extends ComponentGEUnifac {
     }
 
     gamma = Math.exp(lngamma);
-    if (gamma < 1e-10) {
-      gamma = 1.0; // this code has been added to
-    }
 
     int initType = phase.getInitType();
     if (initType > 1) {
