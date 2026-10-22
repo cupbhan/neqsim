@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "passed": true,
+  "date": "2026-10-21",
+  "scope": "Shared NeqSim rc.12 and native C1 consumer upgrade; synthetic qualification only",
+  "engine": {
+    "schemaVersion": 1,
+    "version": "3.23.0-cupbhan.1-rc.12",
+    "status": "tested-candidate",
+    "commit": "7e7008f71703f9050c5b92baa0b31e49078c6c15",
+    "jar": "neqsim-mcp-server-3.23.0-cupbhan.1-rc.12-runner.jar",
+    "sha256": "f8e4e018c4794c074e7d419b65b66eae7106ef32562fff61d221678ead349136",
+    "licenseSha256": "2d251893c6018883b05a33078ad6e7a55433a75f482353feb716cfc2352b89c1",
+    "javaMajor": 21,
+    "adapterVersion": "tp-flash-v2"
+  },
+  "previous": {
+    "schemaVersion": 1,
+    "version": "3.23.0-cupbhan.1-rc.11",
+    "status": "tested-candidate",
+    "commit": "61c0434940c6e089958cc9537c8c91c1931d7a26",
+    "jar": "neqsim-mcp-server-3.23.0-cupbhan.1-rc.11-runner.jar",
+    "sha256": "d9e4055c8dc91f7bc4195c81c5eba475ef33df9515f337bb4073fe5e68c51fc2",
+    "licenseSha256": "2d251893c6018883b05a33078ad6e7a55433a75f482353feb716cfc2352b89c1",
+    "javaMajor": 21,
+    "adapterVersion": "tp-flash-v2"
+  },
+  "candidate": {
+    "sourceSha256": "277c04d22d888c811add125fd600811a282fb719da1ae15ce2ca3a901902f86a",
+    "validationSha256": "705c9dece2371e2e47100f525e664d6f44e1aa81a28741ce509b05f81481b491",
+    "core": {
+      "tests": 518,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "mcp": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "stdioPassed": true
+  },
+  "platform": {
+    "unitTests": 197,
+    "engineTests": 38,
+    "failed": 0,
+    "skipped": 0,
+    "productionBuildPassed": true,
+    "sourceInterfaceSha256": {
+      "server/calculation-service.mjs": "e3d769a86cdf871eca66cc4136e90db58c48b9edb7deeaf0c202115b574eff63",
+      "server/platform-delivery.mjs": "9b9ee2d96ee390425f515d15594c266dcc17f14d0bdccc48379ca93f50bcf186",
+      "server/neqsim-engine.mjs": "9ad2e38f317d1fb7874d833f0abfbc957989925315356c41421a3637d22da2e1",
+      "engine/neqsim.lock.json": "cfb5b800ca7560bb504f98c7895d7a380cb649dcc8b0ceea9124996f5b3602b2"
+    },
+    "evidenceSha256": {
+      ".tmp/rc12-upgrade/engine.log": "5fb85eb6ebae762b010a92e8a4a54fb221da23b5b042d6a83fc114f092a3d969",
+      ".tmp/rc12-tests.log": "6ccd0b059d3c4ee2133b855712a620e9940ade950b0e78e8a37d3362bc314744"
+    }
+  },
+  "t2well": {
+    "report": "ui/FLUID_PLATFORM_RC12_VALIDATION.json",
+    "sha256": "bac1c95e942d0919db819aa33125d3220704fb9f02b70fd7e3d45274cf41452f",
+    "counts": {
+      "nativePvtComparisons": 12,
+      "fullNonisothermalStudioRuns": 2,
+      "browserChecks": 7,
+      "offlineSolverRuns": 1
+    },
+    "fluidInterfaceAndReferenceTests": 10
+  },
+  "runtimeLockSha256": {
+    "neqsim/distribution/cupbhan/runtime.json": "ffeeac6bf22572d0cdfe8f8a2bfaac6eedcce0633cb0c59a7a5c67d2f6766d88",
+    "fluid-platform/engine/neqsim.lock.json": "cfb5b800ca7560bb504f98c7895d7a380cb649dcc8b0ceea9124996f5b3602b2",
+    "fluid-platform/engine/benchmark.lock.json": "b18ef466da064c274221c2ed099887b8bf666c664f5020d916f446f7c4fc2c7e"
+  },
+  "rollback": {
+    "version": "3.23.0-cupbhan.1-rc.11",
+    "preserved": true,
+    "existingProjectsKeepCapturedPackages": true
+  },
+  "rejectedAttempt": {
+    "sourceCommit": "e971533b27e69cb30ffa12c368d1c661235d39d7",
+    "record": "build/runtime-upgrade-rc12-oct21/rejected-upgrade.json",
+    "sha256": "d2c490af52a9234e190964d883f1b4fefa2e042c7688caea45fa8ddd62d130d7"
+  }
+}
